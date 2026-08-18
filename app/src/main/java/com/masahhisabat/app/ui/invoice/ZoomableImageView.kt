@@ -7,7 +7,7 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import androidx.appcompat.widget.AppCompatImageView
-import kotlin.math.abs
+import kotlin.math.sqrt
 
 /**
  * صورة قابلة للتكبير بالسحب بأصبعين (pinch-to-zoom) ودعم التمرير عند التكبير،
@@ -122,9 +122,11 @@ class ZoomableImageView @JvmOverloads constructor(
         matrix.getValues(values)
         val transX = values[Matrix.MTRANS_X]
         val transY = values[Matrix.MTRANS_Y]
+        val drawableWidth = drawable?.intrinsicWidth?.toFloat() ?: 0f
+        val drawableHeight = drawable?.intrinsicHeight?.toFloat() ?: 0f
 
-        val getFixTransX = getFixTrans(transX, viewWidth.toInt(), width * saveScale)
-        val getFixTransY = getFixTrans(transY, viewHeight.toInt(), height * saveScale)
+        val getFixTransX = getFixTrans(transX, viewWidth.toInt(), drawableWidth * saveScale)
+        val getFixTransY = getFixTrans(transY, viewHeight.toInt(), drawableHeight * saveScale)
 
         if (getFixTransX != 0f || getFixTransY != 0f) matrix.postTranslate(getFixTransX, getFixTransY)
     }
@@ -146,45 +148,43 @@ class ZoomableImageView @JvmOverloads constructor(
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val x = event.x
-        val yPos = event.y
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                if (saveScale < 1.02f) {
-                    // عند عدم التكبير: التعامل مع النقر المزدوج فقط، وتمرير بقية الأحداث للـ ViewPager
+                if (!isZoomed) {
+                    // يسمح للـ ViewPager باعتراض السحب أحادي الإصبع، مع بقاء الصورة مستقبلة للنقر المزدوج والتكبير.
                     val now = System.currentTimeMillis()
                     if (now - lastTapTime < doubleTapThreshold) {
                         // نقرة مزدوجة: تكبير/تصغير
-                        if (saveScale > 1f) {
-                            smoothScaleTo(1f)
+                        if (isZoomed) {
+                            smoothScaleTo(minScale)
                         } else {
-                            smoothScaleTo(2.5f, x, y)
+                            smoothScaleTo(minScale * 2.5f, x, y)
                         }
                         lastTapTime = 0
                         return true
                     }
                     lastTapTime = now
-                    return false // اسمح للـ ViewPager بالسحب للتنقل
                 }
                 mode = Mode.DRAG
                 last.set(event.x, event.y)
-                matrix.set(origMatrix)
+                if (isZoomed) parent?.requestDisallowInterceptTouchEvent(true)
                 return true
             }
 
             MotionEvent.ACTION_POINTER_DOWN -> {
-                if (saveScale < 1.02f) return false
                 oldDist = spacing(event)
                 if (oldDist > 10f) {
                     midPoint(mid, event)
                     origMatrix.set(matrix)
                     mode = Mode.ZOOM
+                    parent?.requestDisallowInterceptTouchEvent(true)
                 }
                 return true
             }
 
             MotionEvent.ACTION_MOVE -> {
-                if (mode == Mode.ZOOM && saveScale >= 1.02f) {
+                if (mode == Mode.ZOOM) {
                     val newDist = spacing(event)
                     if (newDist > 10f) {
                         matrix.set(origMatrix)
@@ -193,14 +193,18 @@ class ZoomableImageView @JvmOverloads constructor(
                         matrix.postScale(newScaleClamped / saveScale, newScaleClamped / saveScale, mid.x, mid.y)
                         scale = newScaleClamped
                         saveScale = newScaleClamped
+                        imageMatrix = matrix
                     }
                     return true
-                } else if (mode == Mode.DRAG && saveScale >= 1.02f) {
+                } else if (mode == Mode.DRAG && isZoomed) {
                     val dx = x - last.x
                     val dy = y - last.y
-                    translateMatrix(getFixDragTrans(dx, viewWidth.toInt(), width * saveScale),
-                                    getFixDragTrans(dy, viewHeight.toInt(), height * saveScale))
+                    val drawableWidth = drawable?.intrinsicWidth?.toFloat() ?: 0f
+                    val drawableHeight = drawable?.intrinsicHeight?.toFloat() ?: 0f
+                    translateMatrix(getFixDragTrans(dx, viewWidth.toInt(), drawableWidth * saveScale),
+                                    getFixDragTrans(dy, viewHeight.toInt(), drawableHeight * saveScale))
                     last.set(x, y)
+                    imageMatrix = matrix
                     return true
                 }
                 return false
@@ -209,10 +213,13 @@ class ZoomableImageView @JvmOverloads constructor(
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 if (mode == Mode.DRAG || mode == Mode.ZOOM) {
                     fixTrans()
+                    imageMatrix = matrix
                     mode = Mode.NONE
+                    parent?.requestDisallowInterceptTouchEvent(false)
                     return true
                 }
                 mode = Mode.NONE
+                parent?.requestDisallowInterceptTouchEvent(false)
                 return false
             }
         }
@@ -232,7 +239,7 @@ class ZoomableImageView @JvmOverloads constructor(
     private fun spacing(event: MotionEvent): Float {
         val x = event.getX(0) - event.getX(1)
         val y = event.getY(0) - event.getY(1)
-        return abs(x * x + y * y)
+        return sqrt(x * x + y * y)
     }
 
     private fun midPoint(point: PointF, event: MotionEvent) {

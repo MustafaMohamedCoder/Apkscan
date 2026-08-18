@@ -3,7 +3,6 @@ package com.masahhisabat.app.ui.invoice
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
@@ -64,16 +63,8 @@ class ImageViewerActivity : AppCompatActivity() {
 
         val pager = findViewById<ViewPager2>(R.id.image_pager)
         pager.adapter = ImagesPagerAdapter()
-        // السحب للتنقل بين الصور مفعّل، وتتعطل مؤقتًا فقط داخل ZoomableImageView عند التكبير
+        // السحب للتنقل بين الصور مفعّل. عند التكبير تتولى الصورة نفسها منع اعتراض الأب للتمرير.
         pager.isUserInputEnabled = true
-        // عند بدء التكبير (أصبعان) نمنع تنقل ViewPager
-        (pager.getChildAt(0) as? RecyclerView)?.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
-            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
-                val current = (pager.getChildAt(0) as RecyclerView).findViewHolderForAdapterPosition(pager.currentItem)
-                val zoomImg = (current as? ImageViewHolder)?.img
-                return zoomImg?.isZoomed == true
-            }
-        })
         pager.setPageTransformer { page, position ->
             page.alpha = 1f - kotlin.math.abs(position) * 0.2f
         }

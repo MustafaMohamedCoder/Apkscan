@@ -23,6 +23,7 @@ import kotlin.math.min
  */
 object DocumentEdgeDetector {
     private const val MAX_PROCESS_DIMENSION = 960
+    private const val MAX_STRAIGHTEN_DIMENSION = 2200
     private const val FALLBACK_INSET = 0.035f
     private const val AUTO_CORRECT_CONFIDENCE = 0.86f
 
@@ -64,10 +65,13 @@ object DocumentEdgeDetector {
         val blurred = Mat()
         val edges = Mat()
         val kernel = Mat.ones(Size(3.0, 3.0), CvType.CV_8U)
+        val hierarchy = Mat()
+        val contours = ArrayList<MatOfPoint>()
+        val clahe = Imgproc.createCLAHE(3.0, Size(8.0, 8.0))
         return try {
             Utils.bitmapToMat(working, input)
             Imgproc.cvtColor(input, grayscale, Imgproc.COLOR_RGBA2GRAY)
-            Imgproc.createCLAHE(3.0, Size(8.0, 8.0)).apply(grayscale, enhanced)
+            clahe.apply(grayscale, enhanced)
             Imgproc.GaussianBlur(enhanced, blurred, Size(5.0, 5.0), 0.0)
             val mean = Core.mean(blurred).`val`[0]
             val lower = (mean * 0.66).coerceIn(22.0, 145.0)
@@ -75,8 +79,7 @@ object DocumentEdgeDetector {
             Imgproc.Canny(blurred, edges, lower, upper)
             Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, kernel, Point(-1.0, -1.0), 2)
 
-            val contours = ArrayList<MatOfPoint>()
-            Imgproc.findContours(edges, contours, Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
+            Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
             val candidate = contours
                 .asSequence()
                 .filter { Imgproc.contourArea(it) >= width * height * 0.06 }
@@ -89,7 +92,9 @@ object DocumentEdgeDetector {
         } catch (_: Throwable) {
             fallback()
         } finally {
-            input.release(); grayscale.release(); enhanced.release(); blurred.release(); edges.release(); kernel.release()
+            contours.forEach { it.release() }
+            clahe.collectGarbage()
+            input.release(); grayscale.release(); enhanced.release(); blurred.release(); edges.release(); kernel.release(); hierarchy.release()
             if (working !== source && !working.isRecycled) working.recycle()
         }
     }
@@ -101,11 +106,14 @@ object DocumentEdgeDetector {
         val targetMat = Mat()
         val sourcePoints = MatOfPoint2f()
         val targetPoints = MatOfPoint2f()
-        var transform = Mat()
+        var transform: Mat? = null
         return try {
             val points = corners.map { Point(it.x.toDouble() * source.width, it.y.toDouble() * source.height) }
-            val targetWidth = max(distance(points[0], points[1]), distance(points[2], points[3])).toInt().coerceIn(140, source.width * 2)
-            val targetHeight = max(distance(points[0], points[3]), distance(points[1], points[2])).toInt().coerceIn(140, source.height * 2)
+            var targetWidth = max(distance(points[0], points[1]), distance(points[2], points[3])).toInt().coerceIn(140, source.width * 2)
+            var targetHeight = max(distance(points[0], points[3]), distance(points[1], points[2])).toInt().coerceIn(140, source.height * 2)
+            val downscale = min(1.0, MAX_STRAIGHTEN_DIMENSION.toDouble() / max(targetWidth, targetHeight).toDouble())
+            targetWidth = max(1, (targetWidth * downscale).toInt())
+            targetHeight = max(1, (targetHeight * downscale).toInt())
             sourcePoints.fromArray(*points.toTypedArray())
             targetPoints.fromArray(
                 Point(0.0, 0.0), Point((targetWidth - 1).toDouble(), 0.0),
@@ -118,7 +126,7 @@ object DocumentEdgeDetector {
         } catch (_: Throwable) {
             null
         } finally {
-            sourceMat.release(); targetMat.release(); sourcePoints.release(); targetPoints.release(); transform.release()
+            sourceMat.release(); targetMat.release(); sourcePoints.release(); targetPoints.release(); transform?.release()
         }
     }
 
@@ -127,14 +135,15 @@ object DocumentEdgeDetector {
     private fun scoreQuadrilateral(contour: MatOfPoint, width: Int, height: Int): Candidate? {
         val contour2f = MatOfPoint2f(*contour.toArray())
         val approx = MatOfPoint2f()
+        val polygon = MatOfPoint()
         return try {
             Imgproc.approxPolyDP(contour2f, approx, Imgproc.arcLength(contour2f, true) * 0.02, true)
             val points = approx.toArray()
             if (points.size != 4) return null
-            val polygon = MatOfPoint(*points)
+            polygon.fromArray(*points)
             if (!Imgproc.isContourConvex(polygon)) return null
             val ordered = orderCorners(points) ?: return null
-            val area = abs(Imgproc.contourArea(MatOfPoint(*ordered.toTypedArray())))
+            val area = abs(Imgproc.contourArea(polygon))
             val areaRatio = area / (width.toDouble() * height.toDouble())
             if (areaRatio !in 0.12..0.98) return null
 
@@ -156,7 +165,7 @@ object DocumentEdgeDetector {
                 confidence
             )
         } finally {
-            contour2f.release(); approx.release()
+            contour2f.release(); approx.release(); polygon.release()
         }
     }
 

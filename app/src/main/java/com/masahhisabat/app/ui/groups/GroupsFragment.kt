@@ -22,6 +22,8 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.ActivityEntry
@@ -100,37 +102,79 @@ class GroupsFragment : Fragment() {
 
     private fun showNewGroupDialog() {
         val ctx = requireContext()
-        val input = EditText(ctx).apply {
+        val padding = (24 * resources.displayMetrics.density).toInt()
+        val container = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(padding, 0, padding, 0)
+        }
+        val inputLayout = TextInputLayout(ctx).apply {
             hint = "اسم المجموعة"
+            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+            setBoxStrokeColor(ThemeHelper.accent(ctx))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val input = TextInputEditText(ctx).apply {
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             setTextColor(ThemeHelper.inputText(ctx))
             setHintTextColor(ThemeHelper.inputHint(ctx))
             setSingleLine(true)
-            setPadding(36, 20, 36, 20)
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            contentDescription = "حقل اسم المجموعة"
         }
+        inputLayout.addView(input)
+        container.addView(inputLayout)
         val dialog = MaterialAlertDialogBuilder(ctx)
             .setTitle("مجموعة جديدة")
             .setMessage("اكتب اسمًا واضحًا للمجموعة قبل إنشائها.")
-            .setView(input)
-            .setPositiveButton("إنشاء", null)
+            .setView(container)
+            .setPositiveButton("✓ تأكيد", null)
             .setNegativeButton(R.string.cancel, null)
             .setCancelable(false)
             .create()
-        dialog.setOnShowListener {
-            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val name = input.text.toString().trim()
-                if (name.isBlank()) {
-                    input.error = "اكتب اسم المجموعة أولًا"
-                    return@setOnClickListener
-                }
+
+        var creating = false
+        fun createGroup() {
+            if (creating) return
+            val name = input.text?.toString()?.trim().orEmpty()
+            if (name.isBlank()) {
+                inputLayout.error = "اكتب اسم المجموعة أولًا"
+                input.requestFocus()
+                return
+            }
+            creating = true
+            try {
                 AppRepository.addGroup(Group(name = name))
                 val user = SessionStore.currentUser(ctx) ?: "?"
                 AppRepository.logActivity(ActivityEntry(user, getString(R.string.log_create_group, user, name)))
                 dialog.dismiss()
                 refresh()
-                Toast.makeText(ctx, "تم إنشاء المجموعة", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, "تم إنشاء المجموعة: $name", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                creating = false
+                inputLayout.error = "تعذر حفظ المجموعة، حاول مرة أخرى"
+                logAndToast(e, "حفظ اسم المجموعة")
             }
-            input.requestFocus()
+        }
+
+        dialog.setOnShowListener {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                createGroup()
+            }
+            input.setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == EditorInfo.IME_ACTION_DONE) {
+                    createGroup()
+                    true
+                } else false
+            }
             dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+            input.postDelayed({
+                input.requestFocus()
+                (ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+                    ?.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
+            }, 180)
         }
         dialog.show()
     }

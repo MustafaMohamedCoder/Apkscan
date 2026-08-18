@@ -15,6 +15,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
@@ -43,7 +44,11 @@ class GroupsFragment : Fragment() {
             applyTheme(view)
 
             recycler = view.findViewById(R.id.groups_list)
-            recycler.layoutManager = LinearLayoutManager(requireContext())
+            // البطاقات تظهر بعمودين على التابلت لتستفيد من العرض المتاح، وبعمود واحد على الهاتف.
+            val columns = if (resources.configuration.smallestScreenWidthDp >= 600) 2 else 1
+            recycler.layoutManager = if (columns == 1) LinearLayoutManager(requireContext())
+            else GridLayoutManager(requireContext(), columns)
+            recycler.setHasFixedSize(true)
 
             val role = SessionStore.currentRole(requireContext())
             val canManage = AppRepository.canEdit(role)

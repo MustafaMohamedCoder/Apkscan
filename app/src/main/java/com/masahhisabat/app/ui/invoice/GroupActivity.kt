@@ -478,10 +478,10 @@ class GroupActivity : AppCompatActivity() {
             val pencil = holder.itemView.findViewById<ImageView>(R.id.item_edit_pencil)
             val share = holder.itemView.findViewById<ImageView>(R.id.item_share)
 
-            // لون الفقاعة: تمييز متباين عند اختيار الرسالة، وخلفية متدرجة في الوضع العادي.
+            // لون الفقاعة: تمييز متباين عند الاختيار، وإيقاع واضح/هادئ بين الرسائل المتجاورة.
             val itemSelected = isSelecting && item.id in selected
+            val isNight = (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
             if (itemSelected) {
-                val isNight = (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
                 bubble.background = GradientDrawable().apply {
                     shape = GradientDrawable.RECTANGLE
                     cornerRadius = 24f * ctx.resources.displayMetrics.density
@@ -493,7 +493,14 @@ class GroupActivity : AppCompatActivity() {
                 }
                 bubble.elevation = 7f * ctx.resources.displayMetrics.density
             } else {
-                val bubbleBg = ctx.getDrawable(ThemeHelper.bubbleBgRes(ctx))
+                // كل فقاعة ثانية أخف قليلًا؛ الموضع داخل القائمة يضمن تناوبًا ثابتًا من رسالة لأخرى.
+                val useSoftBubble = position % 2 != 0
+                val bubbleBgRes = if (useSoftBubble) {
+                    if (isNight) R.drawable.msg_bubble_bg_alt_night else R.drawable.msg_bubble_bg_alt
+                } else {
+                    ThemeHelper.bubbleBgRes(ctx)
+                }
+                val bubbleBg = ctx.getDrawable(bubbleBgRes)
                 if (bubbleBg != null) {
                     bubbleBg.mutate()
                     bubble.background = bubbleBg

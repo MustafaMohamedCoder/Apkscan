@@ -65,7 +65,6 @@ object TrashWarningNotifier {
     }
 
     private fun createChannel(context: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
             CHANNEL_ID,
             context.getString(R.string.trash_warning_channel_name),

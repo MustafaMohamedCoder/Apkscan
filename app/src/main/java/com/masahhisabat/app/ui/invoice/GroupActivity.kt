@@ -466,7 +466,22 @@ class GroupActivity : AppCompatActivity() {
 
     inner class ItemsAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         private var items: List<InvoiceItem> = emptyList()
-        fun submit(list: List<InvoiceItem>) { items = list; notifyDataSetChanged() }
+
+        fun submit(list: List<InvoiceItem>) {
+            val newItems = list.toList()
+            val previousItems = items
+            if (previousItems == newItems) return
+            val diff = androidx.recyclerview.widget.DiffUtil.calculateDiff(object : androidx.recyclerview.widget.DiffUtil.Callback() {
+                override fun getOldListSize(): Int = previousItems.size
+                override fun getNewListSize(): Int = newItems.size
+                override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                    previousItems[oldItemPosition].id == newItems[newItemPosition].id
+                override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                    previousItems[oldItemPosition] == newItems[newItemPosition]
+            })
+            items = newItems
+            diff.dispatchUpdatesTo(this)
+        }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
             val view = LayoutInflater.from(parent.context).inflate(R.layout.item_invoice, parent, false)
@@ -515,7 +530,8 @@ class GroupActivity : AppCompatActivity() {
                 } else {
                     ThemeHelper.bubbleBgRes(ctx)
                 }
-                val bubbleBg = ctx.getDrawable(bubbleBgRes)
+                val bubbleBg = androidx.appcompat.content.res.AppCompatResources
+                    .getDrawable(ctx, bubbleBgRes)
                 if (bubbleBg != null) {
                     bubbleBg.mutate()
                     bubble.background = bubbleBg
@@ -603,7 +619,8 @@ class GroupActivity : AppCompatActivity() {
                 // علامة ✓: بنفس لون نص الشريط عند الإرسال، زرقاء عند مشاهدة مستخدمين آخرين
                 ivSeen.visibility = View.VISIBLE
                 if (item.seen) {
-                    ivSeen.background = ctx.getDrawable(R.drawable.message_seen_badge)
+                    ivSeen.background = androidx.appcompat.content.res.AppCompatResources
+                        .getDrawable(ctx, R.drawable.message_seen_badge)
                     ivSeen.setColorFilter(Color.WHITE)
                 } else {
                     ivSeen.background = null

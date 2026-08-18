@@ -89,7 +89,8 @@ class ImageViewerActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.viewer_counter)?.apply {
             text = "${index + 1} / $total"
             setTextColor(ThemeHelper.counterText(this.context))
-            val bg = getDrawable(ThemeHelper.counterBgRes(this.context))?.mutate()
+            val bg = androidx.appcompat.content.res.AppCompatResources
+                .getDrawable(this.context, ThemeHelper.counterBgRes(this.context))?.mutate()
             background = bg
         }
     }

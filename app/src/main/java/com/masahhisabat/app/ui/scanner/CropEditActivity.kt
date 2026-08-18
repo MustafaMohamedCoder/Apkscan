@@ -609,16 +609,21 @@ class CropEditActivity : AppCompatActivity() {
             canvas.drawBitmap(bmp, 0f, 0f, null)
 
             // منطقة مظلمة خارج الاقتصاص
-            canvas.drawRect(0f, 0f, bmp.width.toFloat(), bmp.height.toFloat(), paintOverlay)
-            // مسح الظل داخل الاقتصاص
-            canvas.drawRect(cropRect.left * bmp.width, cropRect.top * bmp.height,
-                cropRect.right * bmp.width, cropRect.bottom * bmp.height, Paint().apply {
-                    xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
-                })
+            // نرسم الأجزاء الأربعة المحيطة مباشرةً بدل طبقة كاملة ثم مسحها؛
+            // هذا يمنع تخصيص Paint وPorterDuffXfermode جديدين في كل إطار رسم.
+            val left = cropRect.left * bmp.width
+            val top = cropRect.top * bmp.height
+            val right = cropRect.right * bmp.width
+            val bottom = cropRect.bottom * bmp.height
+            val bitmapWidth = bmp.width.toFloat()
+            val bitmapHeight = bmp.height.toFloat()
+            canvas.drawRect(0f, 0f, bitmapWidth, top, paintOverlay)
+            canvas.drawRect(0f, bottom, bitmapWidth, bitmapHeight, paintOverlay)
+            canvas.drawRect(0f, top, left, bottom, paintOverlay)
+            canvas.drawRect(right, top, bitmapWidth, bottom, paintOverlay)
 
             // الإطار
-            canvas.drawRect(cropRect.left * bmp.width, cropRect.top * bmp.height,
-                cropRect.right * bmp.width, cropRect.bottom * bmp.height, paintRect)
+            canvas.drawRect(left, top, right, bottom, paintRect)
 
             // الشبكة
             if (showGrid) {

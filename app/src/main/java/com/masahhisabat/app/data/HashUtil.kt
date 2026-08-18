@@ -31,7 +31,7 @@ object HashUtil {
     /** فك كلمة المرور المشفرة (null إذا كانت بصيغة قديمة غير قابلة للفك) */
     fun decodePlain(stored: String): String? {
         return try {
-            if (!stored.startsWith("v2:")) null
+            if (!stored.startsWith("v2:")) return null
             val raw = android.util.Base64.decode(stored.removePrefix("v2:"), android.util.Base64.NO_WRAP)
             val key = KEY.toByteArray(Charsets.UTF_8)
             val out = ByteArray(raw.size)

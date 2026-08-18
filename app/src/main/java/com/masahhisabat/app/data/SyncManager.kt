@@ -328,7 +328,7 @@ object SyncManager {
     }
 
     private fun buildInstallOrPermissionIntent(context: Context, file: File): Intent {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
+        if (!context.packageManager.canRequestPackageInstalls()) {
             return Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                 data = Uri.parse("package:${context.packageName}")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -359,13 +359,11 @@ object SyncManager {
         ) return
         try {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                manager.createNotificationChannel(NotificationChannel(
-                    UPDATE_NOTIFICATION_CHANNEL,
-                    "تحديثات محلية",
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply { description = "إشعارات اكتمال تحديث التطبيق بين الأجهزة" })
-            }
+            manager.createNotificationChannel(NotificationChannel(
+                UPDATE_NOTIFICATION_CHANNEL,
+                "تحديثات محلية",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply { description = "إشعارات اكتمال تحديث التطبيق بين الأجهزة" })
             val notification = NotificationCompat.Builder(context, UPDATE_NOTIFICATION_CHANNEL)
                 .setSmallIcon(R.drawable.ic_sync)
                 .setContentTitle("تم تنزيل التحديث بنجاح")

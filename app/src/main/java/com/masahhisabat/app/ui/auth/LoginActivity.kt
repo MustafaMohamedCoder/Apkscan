@@ -40,9 +40,9 @@ class LoginActivity : AppCompatActivity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
                 val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
                 intent.data = Uri.parse("package:$packageName")
-                if (intent.resolveActivity(packageManager) != null) {
-                    startActivityForResult(intent, storageRequestCode)
-                }
+                // يعالج catch غياب شاشة الإعدادات على الأنظمة المعدلة، دون أن تمنع
+                // قيود إظهار الحزم فتح الإعدادات النظامية على Android 11+.
+                startActivityForResult(intent, storageRequestCode)
             }
         } catch (_: Exception) { /* لا نعيق التشغيل */ }
     }
@@ -165,7 +165,11 @@ class LoginActivity : AppCompatActivity() {
     private fun applyLoginTheme() {
         val night = com.masahhisabat.app.ui.ThemeHelper.isNight(this)
         // خلفية الشاشة: متدرج Teal داكن في الليلي، فاتح هادئ في النهاري
-        val bg = if (night) getDrawable(R.drawable.login_bg) else getDrawable(R.drawable.login_bg_day)
+        val bg = if (night) {
+            androidx.appcompat.content.res.AppCompatResources.getDrawable(this, R.drawable.login_bg)
+        } else {
+            androidx.appcompat.content.res.AppCompatResources.getDrawable(this, R.drawable.login_bg_day)
+        }
         binding.loginRoot.background = bg?.mutate()
         binding.usernameInput.setTextColor(com.masahhisabat.app.ui.ThemeHelper.inputText(this))
         binding.usernameInput.setHintTextColor(com.masahhisabat.app.ui.ThemeHelper.inputHint(this))
@@ -178,7 +182,8 @@ class LoginActivity : AppCompatActivity() {
         binding.developerText.setTextColor(getColor(if (night) R.color.white else R.color.primary_dark))
         binding.errorText.setTextColor(getColor(R.color.error))
         // تلوين خلفية حقول الإدخال ديناميكيًا (input_fill يتغير مع الوضع)
-        val inputBg = getDrawable(R.drawable.input_bg)?.mutate()
+        val inputBg = androidx.appcompat.content.res.AppCompatResources
+            .getDrawable(this, R.drawable.input_bg)?.mutate()
         (inputBg as? android.graphics.drawable.GradientDrawable)?.apply {
             setColor(com.masahhisabat.app.ui.ThemeHelper.inputFill(this@LoginActivity))
             setStroke(1, com.masahhisabat.app.ui.ThemeHelper.inputStroke(this@LoginActivity))

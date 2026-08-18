@@ -275,8 +275,19 @@ class TrashActivity : AppCompatActivity() {
         private var entries: List<TrashEntry> = emptyList()
 
         fun submit(value: List<TrashEntry>) {
-            entries = value
-            notifyDataSetChanged()
+            val newEntries = value.toList()
+            val previousEntries = entries
+            if (previousEntries == newEntries) return
+            val diff = androidx.recyclerview.widget.DiffUtil.calculateDiff(object : androidx.recyclerview.widget.DiffUtil.Callback() {
+                override fun getOldListSize(): Int = previousEntries.size
+                override fun getNewListSize(): Int = newEntries.size
+                override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                    previousEntries[oldItemPosition].id == newEntries[newItemPosition].id
+                override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                    previousEntries[oldItemPosition] == newEntries[newItemPosition]
+            })
+            entries = newEntries
+            diff.dispatchUpdatesTo(this)
         }
 
         inner class Holder(val card: MaterialCardView, val title: TextView, val detail: TextView, val restore: MaterialButton, val delete: MaterialButton) : RecyclerView.ViewHolder(card)

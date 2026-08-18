@@ -199,6 +199,7 @@ object SessionStore {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString("username", user.username)
             .putString("role", user.role.name)
+            .putBoolean("app_locked", false)
             .apply()
     }
     fun currentRole(ctx: Context): com.masahhisabat.app.data.Role {
@@ -207,6 +208,11 @@ object SessionStore {
     }
     fun currentUser(ctx: Context): String? =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("username", null)
+    fun lock(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("app_locked", true).apply()
+    fun unlock(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("app_locked", false).apply()
+    fun requiresUnlock(ctx: Context): Boolean =
+        AppRepository.hasAppLock() && currentUser(ctx) != null &&
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("app_locked", false)
     fun logout(ctx: Context) = clear(ctx)
     fun clear(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
 }

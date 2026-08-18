@@ -84,6 +84,17 @@ object SyncManager {
                         ?: throw EOFException("انقطع الاتصال قبل اكتمال بيانات المزامنة")
                     val payload = gson.fromJson(payloadJson, SyncPayload::class.java)
                         ?: throw IOException("بيانات المزامنة غير صالحة")
+                    val preview = previewPayload(payload)
+                    AppRepository.logSync(SyncEntry(
+                        "معاينة استقبال",
+                        "من ${client.inetAddress.hostAddress}: ستُضاف ${preview.newItems} عناصر و${preview.newUsers} مستخدمين و${preview.newGroups} مجموعات.",
+                        true
+                    ))
+                    if (preview.hasChanges) {
+                        val backup = try { AppRepository.createSafetyBackup() } catch (_: Throwable) { null }
+                            ?: throw IOException("تعذر إنشاء نسخة احتياطية وقائية قبل المزامنة")
+                        AppRepository.logSync(SyncEntry("نسخة احتياطية تلقائية", "حُفظت نسخة وقائية: ${backup.name}", true))
+                    }
                     val result = applyPayload(context, payload)
                     // رد: عدد العناصر المستقبلة + عدد المستخدمين المستقبلة.
                     val ack = "OK ${result.items} ${result.users}\n"
@@ -319,6 +330,25 @@ object SyncManager {
         )
     }
 
+    /** معاينة غير مدمرة، تستخدم في السجل وقبل حفظ أي بيانات واردة. */
+    private fun previewPayload(payload: SyncPayload): SyncPreview {
+        val localUsers = AppRepository.users().map { it.username }.toSet()
+        val localGroups = AppRepository.groups().associateBy { it.id }
+        var newItems = 0
+        var newGroups = 0
+        payload.items.groupBy { it.groupId }.forEach { (groupId, items) ->
+            if (groupId !in localGroups) newGroups++
+            val localIds = AppRepository.items(groupId).map { it.id }.toSet()
+            newItems += items.count { it.item.id !in localIds }
+        }
+        return SyncPreview(
+            newUsers = payload.users.count { it.username !in localUsers },
+            existingUsers = payload.users.count { it.username in localUsers },
+            newGroups = newGroups,
+            newItems = newItems
+        )
+    }
+
     /** تطبيق بيانات مستقبلة ومزامنتها مع المحلي: المستخدمون يُدمجون (إضافة الجدد، تحديث كلمات المرور)، والبيانات تُضاف. */
     private fun applyPayload(context: Context, payload: SyncPayload): ApplyResult {
         var addedUsers = 0
@@ -437,6 +467,12 @@ object SyncManager {
         val usersReceived: Int,
         val errorMessage: String? = null
     )
+    data class SyncPreview(
+        val newUsers: Int,
+        val existingUsers: Int,
+        val newGroups: Int,
+        val newItems: Int
+    ) { val hasChanges: Boolean get() = newUsers > 0 || newGroups > 0 || newItems > 0 }
     data class NetworkTestCase(val label: String, val success: Boolean, val detail: String)
     data class NetworkSelfTestReport(val results: List<NetworkTestCase>) {
         val passedCount: Int get() = results.count { it.success }

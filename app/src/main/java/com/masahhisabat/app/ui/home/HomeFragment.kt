@@ -50,6 +50,14 @@ class HomeFragment : Fragment() {
         view.findViewById<View>(R.id.card_groups).setOnClickListener(openGroups)
         view.findViewById<TextView>(R.id.groups_label).setOnClickListener(openGroups)
         view.findViewById<TextView>(R.id.groups_count).setOnClickListener(openGroups)
+
+        // الاختصار يبقي إعدادات الشبكة في مكان واحد، ثم يفتح صفحة المزامنة مباشرة للمستخدم.
+        view.findViewById<MaterialButton>(R.id.btn_quick_sync).setOnClickListener {
+            (activity as? com.masahhisabat.app.ui.main.MainActivity)?.let {
+                it.findViewById<View>(R.id.nav_settings)?.performClick()
+            }
+            android.widget.Toast.makeText(requireContext(), "اختر «المزامنة المحلية» لبدء المزامنة", android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun applyTheme(view: View) {
@@ -60,7 +68,7 @@ class HomeFragment : Fragment() {
         val text = ThemeHelper.text(requireContext())
         val textSec = ThemeHelper.textSecondary(requireContext())
 
-        listOf(R.id.card_invoices, R.id.card_groups).forEach { id ->
+        listOf(R.id.card_invoices, R.id.card_groups, R.id.dashboard_info_card).forEach { id ->
             val card = view.findViewById<MaterialCardView>(id)
             card.setCardBackgroundColor(surface)
             card.strokeColor = ThemeHelper.cardStroke(requireContext())
@@ -71,6 +79,9 @@ class HomeFragment : Fragment() {
         view.findViewById<TextView>(R.id.greeting)?.setTextColor(ThemeHelper.accent(requireContext()))
         view.findViewById<ImageView>(R.id.welcome_badge)?.setColorFilter(ThemeHelper.accent(requireContext()))
         view.findViewById<TextView>(R.id.recent_title).setTextColor(text)
+        view.findViewById<TextView>(R.id.dashboard_title).setTextColor(text)
+        view.findViewById<TextView>(R.id.dashboard_last_group).setTextColor(textSec)
+        view.findViewById<TextView>(R.id.dashboard_sync_status).setTextColor(textSec)
         view.findViewById<TextView>(R.id.invoices_label).setTextColor(textSec)
         view.findViewById<TextView>(R.id.groups_label).setTextColor(textSec)
         listOf(R.id.invoices_count, R.id.groups_count).forEach { id ->
@@ -117,6 +128,18 @@ class HomeFragment : Fragment() {
         // عدّاد تصاعدي أنيق عند تغيير القيم
         animateCounter(invView, invCount)
         animateCounter(grpView, grpCount)
+
+        val lastGroup = AppRepository.lastOpenedGroupId()?.let { id ->
+            AppRepository.groups().find { it.id == id }?.name
+        }
+        view.findViewById<TextView>(R.id.dashboard_last_group).text =
+            if (lastGroup == null) "آخر مجموعة: لم تُفتح مجموعة بعد" else "آخر مجموعة: $lastGroup"
+        val lastSync = AppRepository.syncLog().lastOrNull()
+        view.findViewById<TextView>(R.id.dashboard_sync_status).text = when {
+            lastSync == null -> "آخر مزامنة: لا توجد عملية مسجلة"
+            lastSync.success -> "آخر مزامنة: تمت بنجاح"
+            else -> "آخر مزامنة: تحتاج إلى مراجعة"
+        }
 
         val recent = view.findViewById<RecyclerView>(R.id.recent_list)
         recent.layoutManager = LinearLayoutManager(requireContext())

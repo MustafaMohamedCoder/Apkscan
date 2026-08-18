@@ -14,6 +14,7 @@ import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.LoginActivity
+import com.masahhisabat.app.ui.auth.LockActivity
 import com.masahhisabat.app.ui.auth.SessionStore
 import com.masahhisabat.app.ui.groups.GroupsFragment
 import com.masahhisabat.app.ui.home.HomeFragment
@@ -85,6 +86,11 @@ class MainActivity : AppCompatActivity() {
             } catch (_: Exception) {}
             android.widget.Toast.makeText(this, "حدث خطأ: ${e.message ?: e.javaClass.simpleName}", android.widget.Toast.LENGTH_LONG).show()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (SessionStore.requiresUnlock(this)) startActivity(Intent(this, LockActivity::class.java))
     }
 
     private fun switchTab(index: Int, animate: Boolean = true) {

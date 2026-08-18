@@ -47,6 +47,7 @@ class SettingsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         applyTheme(view)
         setupItem(view, R.id.item_theme, R.id.tv_theme_title, themeTitle()) { showThemeDialog() }
+        setupItem(view, R.id.item_app_lock, R.id.tv_app_lock_title, appLockTitle()) { showAppLockDialog() }
         // إخفاء «إدارة الفريق» عن كل الحسابات عدا mustafa فقط
         // إخفاء «إدارة الفريق» وخيار تغيير كلمة المرور عن كل الحسابات عدا mustafa فقط
         view.findViewById<LinearLayout>(R.id.item_accounts)?.visibility =
@@ -61,7 +62,9 @@ class SettingsFragment : Fragment() {
             }
         }
         setupItem(view, R.id.item_activity, R.id.tv_activity_title, getString(R.string.activity_log)) { showActivityLogDialog() }
-        setupItem(view, R.id.item_export, R.id.tv_export_title, getString(R.string.export_data)) { exportData() }
+        setupItem(view, R.id.item_help, R.id.tv_help_title, "مركز المساعدة") { showHelpDialog() }
+        setupItem(view, R.id.item_export, R.id.tv_export_title, getString(R.string.export_data)) { showExportOptions() }
+        setupItem(view, R.id.item_storage, R.id.tv_storage_title, "إدارة التخزين") { showStorageDialog() }
         setupItem(view, R.id.item_import, R.id.tv_import_title, getString(R.string.import_backup)) { importBackup() }
         setupItem(view, R.id.item_sync, R.id.tv_sync_title, getString(R.string.local_sync)) {
             val role = SessionStore.currentRole(requireContext())
@@ -81,6 +84,35 @@ class SettingsFragment : Fragment() {
     }
 
     private fun themeTitle(): String = "المظهر: ${ThemeHelper.mode().label}"
+    private fun appLockTitle(): String = if (AppRepository.hasAppLock()) "قفل التطبيق: مفعّل" else "قفل التطبيق: غير مفعّل"
+
+    private fun showAppLockDialog() {
+        val ctx = requireContext()
+        if (AppRepository.hasAppLock()) {
+            MaterialAlertDialogBuilder(ctx).setTitle("قفل التطبيق")
+                .setItems(arrayOf("تغيير رمز PIN", "إيقاف القفل")) { _, option ->
+                    if (option == 0) promptForNewPin() else MaterialAlertDialogBuilder(ctx)
+                        .setTitle("إيقاف قفل التطبيق؟").setMessage("لن يُطلب رمز PIN عند العودة إلى التطبيق.")
+                        .setPositiveButton("إيقاف") { _, _ -> AppRepository.clearAppLockPin(); SessionStore.unlock(ctx); activity?.recreate() }
+                        .setNegativeButton("إلغاء", null).show()
+                }.show()
+        } else promptForNewPin()
+    }
+
+    private fun promptForNewPin() {
+        val ctx = requireContext()
+        val panel = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 8, 40, 0) }
+        fun pinField(hint: String) = EditText(ctx).apply { this.hint = hint; inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD }
+        val pin = pinField("رمز PIN من 4 أرقام أو أكثر")
+        val confirm = pinField("تأكيد رمز PIN")
+        panel.addView(pin); panel.addView(confirm)
+        MaterialAlertDialogBuilder(ctx).setTitle("تفعيل قفل التطبيق").setView(panel)
+            .setPositiveButton("حفظ") { _, _ ->
+                val value = pin.text.toString()
+                if (value.length < 4 || value != confirm.text.toString()) Toast.makeText(ctx, "تحقق من رمز PIN؛ يجب أن يتكون من 4 أرقام على الأقل", Toast.LENGTH_LONG).show()
+                else { AppRepository.setAppLockPin(value); SessionStore.unlock(ctx); activity?.recreate() }
+            }.setNegativeButton("إلغاء", null).show()
+    }
 
     /** يسمح باختيار مظهر الهاتف التلقائي إلى جانب الخيارين اليدويين. */
     private fun showThemeDialog() {
@@ -106,11 +138,11 @@ class SettingsFragment : Fragment() {
         val textSec = ThemeHelper.textSecondary(ctx)
         // الصفوف بخلفية card_surface_settings (قابلة للتكيف مع الوضع) — لا نكتب فوقها، بل نلوّنها ديناميكيًا
         val rowBg = ThemeHelper.surfaceHigh(ctx)
-        listOf(R.id.item_theme, R.id.item_accounts, R.id.item_activity,
+        listOf(R.id.item_theme, R.id.item_app_lock, R.id.item_accounts, R.id.item_activity, R.id.item_help, R.id.item_storage,
             R.id.item_export, R.id.item_import, R.id.item_sync, R.id.item_logout).forEach { id ->
             view.findViewById<LinearLayout>(id)?.background?.setTint(rowBg)
         }
-        listOf(R.id.tv_theme_title, R.id.tv_accounts_title,
+        listOf(R.id.tv_theme_title, R.id.tv_app_lock_title, R.id.tv_accounts_title, R.id.tv_help_title, R.id.tv_storage_title,
             R.id.tv_activity_title, R.id.tv_export_title, R.id.tv_import_title, R.id.tv_sync_title).forEach { id ->
             view.findViewById<TextView>(id)?.setTextColor(text)
         }
@@ -120,7 +152,26 @@ class SettingsFragment : Fragment() {
 
     private fun showActivityLogDialog() {
         val ctx = requireContext()
-        val log = AppRepository.activityLog()
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("عرض سجل النشاط")
+            .setItems(arrayOf("كل النشاط", "المستخدم الحالي", "الرسائل والصور", "المزامنة")) { _, choice ->
+                showFilteredActivityLog(choice)
+            }
+            .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
+    private fun showFilteredActivityLog(choice: Int) {
+        val ctx = requireContext()
+        val currentUser = SessionStore.currentUser(ctx).orEmpty()
+        val log = AppRepository.activityLog().filter { entry ->
+            when (choice) {
+                1 -> entry.user == currentUser
+                2 -> entry.action.contains("صورة") || entry.action.contains("نص") || entry.action.contains("رسالة")
+                3 -> entry.action.contains("مزامنة") || entry.action.contains("نسخة احتياطية")
+                else -> true
+            }
+        }
         val lines = if (log.isEmpty()) listOf("لا يوجد نشاط حتى الآن")
         else log.takeLast(50).map { "${it.at} — ${it.action}" }
         MaterialAlertDialogBuilder(ctx)
@@ -128,6 +179,56 @@ class SettingsFragment : Fragment() {
             .setItems(lines.toTypedArray(), null)
             .setNegativeButton(R.string.close, null)
             .show()
+    }
+
+    private fun showHelpDialog() {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("مركز المساعدة")
+            .setMessage(
+                "• لإضافة رسالة: اكتب النص أو اضغط أيقونة الصورة ثم أرسل.\n\n" +
+                    "• للمزامنة: افتح «المزامنة المحلية»، اختر الجهاز ثم راجع الملخص قبل البدء.\n\n" +
+                    "• البيانات والنسخ الاحتياطية محفوظة في Documents/MasahHisabat.\n\n" +
+                    "• تستطيع تفعيل رمز PIN من الإعدادات لحماية الوصول بعد ترك التطبيق."
+            )
+            .setPositiveButton("فهمت", null)
+            .show()
+    }
+
+    private fun showExportOptions() {
+        MaterialAlertDialogBuilder(requireContext()).setTitle("تصدير البيانات")
+            .setItems(arrayOf("نسخة احتياطية كاملة (ZIP)", "تقرير بيانات (CSV / Excel)")) { _, which ->
+                if (which == 0) exportData() else exportCsvReport()
+            }.setNegativeButton(R.string.cancel, null).show()
+    }
+
+    private fun exportCsvReport() {
+        val ctx = requireContext()
+        try {
+            val csv = AppRepository.createCsvReport(ctx.cacheDir)
+            val user = SessionStore.currentUser(ctx) ?: "?"
+            AppRepository.logActivity(ActivityEntry(user, "صدّر $user تقرير CSV"))
+            val uri = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", csv)
+            val share = Intent(Intent.ACTION_SEND).apply {
+                type = "text/csv"; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(share, "مشاركة التقرير أو حفظه"))
+        } catch (e: Exception) { Toast.makeText(ctx, "فشل إنشاء التقرير: ${e.message}", Toast.LENGTH_LONG).show() }
+    }
+
+    private fun showStorageDialog() {
+        val ctx = requireContext()
+        val usage = AppRepository.storageUsage()
+        fun size(bytes: Long): String = when {
+            bytes >= 1024L * 1024L -> "%.1f MB".format(Locale.US, bytes / (1024f * 1024f))
+            bytes >= 1024L -> "%.1f KB".format(Locale.US, bytes / 1024f)
+            else -> "$bytes B"
+        }
+        MaterialAlertDialogBuilder(ctx).setTitle("إدارة التخزين")
+            .setMessage("البيانات والصور: ${size(usage.dataBytes)}\nالصور ضمن البيانات: ${size(usage.imageBytes)}\nالنسخ الوقائية: ${size(usage.backupBytes)}\n\nلا يحذف التنظيف أي مجموعة أو صورة محفوظة.")
+            .setPositiveButton("تنظيف المؤقت") { _, _ ->
+                val count = AppRepository.clearTemporaryFiles()
+                Toast.makeText(ctx, "تم حذف $count ملف مؤقت", Toast.LENGTH_SHORT).show()
+            }.setNegativeButton(R.string.close, null).show()
     }
 
     private fun exportData() {
@@ -224,38 +325,53 @@ class SettingsFragment : Fragment() {
                         .setTitle("الأجهزة المكتشفة — اضغط للمزامنة")
                         .setItems(names) { _, which ->
                             val peer = peers[which]
-                            val syncDialog = showSyncProgressDialog(peer.name)
-                            Thread {
-                                val result = SyncManager.syncWithHost(ctx, peer.address) { percent, status ->
-                                    activity?.runOnUiThread {
-                                        updateSyncProgress(syncDialog, percent, status)
-                                    }
-                                }
-                                activity?.runOnUiThread {
-                                    if (syncDialog.isShowing) syncDialog.dismiss()
-                                    val (title, message) = if (result.ok) {
-                                        "تمت المزامنة بنجاح" to
-                                            "اكتملت مزامنة ${peer.name}. استُقبلت ${result.itemsReceived} عناصر و${result.usersReceived} مستخدمين."
-                                    } else {
-                                        "فشلت المزامنة" to
-                                            (result.errorMessage
-                                                ?: "تعذر الاتصال بـ ${peer.name}. تأكد أن التطبيق مفتوح على الجهاز الآخر وأنكما على نفس شبكة Wi-Fi.")
-                                    }
-                                    if (isAdded) {
-                                        MaterialAlertDialogBuilder(ctx)
-                                            .setTitle(title)
-                                            .setMessage(message)
-                                            .setPositiveButton("حسنًا", null)
-                                            .show()
-                                    }
-                                }
-                            }.start()
+                            showSyncPreviewDialog(peer)
                         }
                         .setNegativeButton(R.string.close, null)
                         .show()
                 }
             }
         }.start()
+    }
+
+    /** موافقة صريحة ومعاينة للبيانات المحلية قبل إرسالها إلى الجهاز المختار. */
+    private fun showSyncPreviewDialog(peer: SyncManager.DiscoveredPeer) {
+        val ctx = requireContext()
+        val groups = AppRepository.groups().size
+        val items = AppRepository.totalInvoiceCount()
+        val users = AppRepository.users().size
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("مراجعة قبل المزامنة")
+            .setMessage(
+                "سيُرسل هذا الجهاز إلى ${peer.name}:\n\n" +
+                    "• $groups مجموعات\n• $items عناصر ورسائل\n• $users مستخدمين\n\n" +
+                    "لا تحذف المزامنة بيانات على الجهاز الآخر. سيُنشئ الجهاز المستقبِل نسخة احتياطية تلقائية قبل إضافة أي بيانات جديدة."
+            )
+            .setPositiveButton("بدء المزامنة") { _, _ -> startConfirmedSync(peer) }
+            .setNegativeButton("إلغاء", null)
+            .show()
+    }
+
+    private fun startConfirmedSync(peer: SyncManager.DiscoveredPeer) {
+        val ctx = requireContext()
+        val syncDialog = showSyncProgressDialog(peer.name)
+        Thread {
+            val result = SyncManager.syncWithHost(ctx, peer.address) { percent, status ->
+                activity?.runOnUiThread { updateSyncProgress(syncDialog, percent, status) }
+            }
+            activity?.runOnUiThread {
+                if (syncDialog.isShowing) syncDialog.dismiss()
+                val (title, message) = if (result.ok) {
+                    "تمت المزامنة بنجاح" to
+                        "اكتملت مزامنة ${peer.name}. استُقبلت ${result.itemsReceived} عناصر و${result.usersReceived} مستخدمين."
+                } else {
+                    "فشلت المزامنة" to
+                        (result.errorMessage ?: "تعذر الاتصال بـ ${peer.name}. تأكد أن التطبيق مفتوح وأنكما على الشبكة نفسها.")
+                }
+                if (isAdded) MaterialAlertDialogBuilder(ctx)
+                    .setTitle(title).setMessage(message).setPositiveButton("حسنًا", null).show()
+            }
+        }.apply { name = "confirmed-local-sync" }.start()
     }
 
     /** يشغل سيناريوهات المزامنة المحلية الآمنة دون إرسال أو تغيير أي بيانات فعلية. */

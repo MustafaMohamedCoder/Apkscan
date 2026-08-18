@@ -65,6 +65,7 @@ class GroupActivity : AppCompatActivity() {
             return
         }
         groupName = group.name
+        AppRepository.setLastOpenedGroupId(groupId)
 
         findViewById<TextView>(R.id.group_title).text = groupName
         findViewById<ImageView>(R.id.btn_back).setOnClickListener { finish() }
@@ -168,9 +169,7 @@ class GroupActivity : AppCompatActivity() {
         val copied = uri?.let { copyToInternal(it) }
         if (copied != null) {
             pendingAttach = copied
-            findViewById<EditText>(R.id.et_message).hint = "الصورة جاهزة — اكتب نصًا اختياريًا واضغط إرسال"
-            findViewById<EditText>(R.id.et_message).requestFocus()
-            showSoftKeyboard(findViewById(R.id.et_message))
+            showAttachmentPreview(copied)
         } else {
             Toast.makeText(this, "تعذر قراءة الصورة", Toast.LENGTH_SHORT).show()
         }
@@ -178,12 +177,47 @@ class GroupActivity : AppCompatActivity() {
 
     private fun copyToInternal(uri: Uri): String? {
         return try {
-            val file = File(cacheDir, "attach_${System.currentTimeMillis()}.jpg")
+            val raw = File(cacheDir, "attach_raw_${System.currentTimeMillis()}.jpg")
             contentResolver.openInputStream(uri)?.use { input ->
-                file.outputStream().use { output -> input.copyTo(output) }
+                raw.outputStream().use { output -> input.copyTo(output) }
             }
-            file.absolutePath
+            // ضغط معتدل: يحافظ على صورة قابلة للتكبير ويقلل استهلاك التخزين ونقل الشبكة.
+            val source = android.graphics.BitmapFactory.decodeFile(raw.absolutePath) ?: return raw.absolutePath
+            val maxSide = maxOf(source.width, source.height)
+            val bitmap = if (maxSide > 1920) {
+                val ratio = 1920f / maxSide
+                android.graphics.Bitmap.createScaledBitmap(source, (source.width * ratio).toInt(), (source.height * ratio).toInt(), true)
+            } else source
+            val compressed = File(cacheDir, "attach_${System.currentTimeMillis()}.jpg")
+            compressed.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 86, it) }
+            if (bitmap !== source) bitmap.recycle()
+            source.recycle()
+            raw.delete()
+            compressed.absolutePath
         } catch (e: Exception) { null }
+    }
+
+    /** معاينة صريحة تعطي المستخدم فرصة للإلغاء أو كتابة وصف قبل الإرسال. */
+    private fun showAttachmentPreview(path: String) {
+        val preview = ImageView(this).apply {
+            setImageBitmap(android.graphics.BitmapFactory.decodeFile(path))
+            adjustViewBounds = true
+            setPadding(28, 16, 28, 0)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("معاينة الصورة")
+            .setMessage("يمكنك إرسالها الآن أو إضافة نص معها في نفس الرسالة.")
+            .setView(preview)
+            .setPositiveButton("إرسال الآن") { _, _ -> findViewById<ImageView>(R.id.btn_send).performClick() }
+            .setNeutralButton("إضافة نص") { _, _ ->
+                findViewById<EditText>(R.id.et_message).apply {
+                    hint = "الصورة جاهزة — اكتب نصًا اختياريًا ثم أرسل"
+                    requestFocus()
+                    showSoftKeyboard(this)
+                }
+            }
+            .setNegativeButton("إلغاء") { _, _ -> pendingAttach = null; File(path).delete() }
+            .show()
     }
 
     private fun showSoftKeyboard(view: android.view.View) {

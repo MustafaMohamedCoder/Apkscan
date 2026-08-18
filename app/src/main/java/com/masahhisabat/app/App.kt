@@ -1,11 +1,15 @@
 package com.masahhisabat.app
 
 import android.app.Application
+import android.app.Activity
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.ui.ThemeHelper
+import com.masahhisabat.app.ui.auth.SessionStore
+import com.masahhisabat.app.ui.auth.LockActivity
 import java.io.PrintWriter
 import java.io.StringWriter
 
@@ -14,11 +18,34 @@ import java.io.StringWriter
  * يمنع الانهيار الصامت ويسجل السبب في ملف داخل الهاتف للتحليل.
  */
 class App : Application() {
+    private val foregroundHandler = Handler(Looper.getMainLooper())
+    private var startedActivities = 0
+    private val lockWhenBackgrounded = Runnable {
+        if (startedActivities == 0 && AppRepository.hasAppLock()) SessionStore.lock(this)
+    }
     override fun onCreate() {
         super.onCreate()
         AppRepository.initAppContext(this)
         // يُطبَّق قبل عرض شاشة الدخول حتى يتبع التطبيق مظهر النظام من أول إطار.
         ThemeHelper.applyTheme(this)
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityStarted(activity: Activity) {
+                startedActivities++
+                foregroundHandler.removeCallbacks(lockWhenBackgrounded)
+                if (activity !is LockActivity && SessionStore.requiresUnlock(activity)) {
+                    activity.startActivity(Intent(activity, LockActivity::class.java))
+                }
+            }
+            override fun onActivityStopped(activity: Activity) {
+                startedActivities = (startedActivities - 1).coerceAtLeast(0)
+                if (startedActivities == 0) foregroundHandler.postDelayed(lockWhenBackgrounded, 30_000)
+            }
+            override fun onActivityCreated(a: Activity, b: android.os.Bundle?) {}
+            override fun onActivityResumed(a: Activity) {}
+            override fun onActivityPaused(a: Activity) {}
+            override fun onActivitySaveInstanceState(a: Activity, b: android.os.Bundle) {}
+            override fun onActivityDestroyed(a: Activity) {}
+        })
         Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
             try {
                 val sw = StringWriter()

@@ -47,6 +47,9 @@ class SearchFragment : Fragment() {
     private var filterDate = ""
     private var filterStore = ""
     private var filterAmount = ""
+    private var filterGroup = ""
+    private var filterSender = ""
+    private var filterType = "" // image | text | فارغ لكل الأنواع
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return inflater.inflate(R.layout.fragment_search, container, false)
@@ -62,10 +65,21 @@ class SearchFragment : Fragment() {
         loadingBar = view.findViewById(R.id.loading_bar)
         emptyText = view.findViewById(R.id.empty_text)
 
+        // استعادة آخر سياق للبحث حتى لا يفقد المستخدم عمله عند التنقل بين التبويبات.
+        filterDate = AppRepository.lastSavedSearch("global_filter_date")
+        filterStore = AppRepository.lastSavedSearch("global_filter_store")
+        filterAmount = AppRepository.lastSavedSearch("global_filter_amount")
+        filterGroup = AppRepository.lastSavedSearch("global_filter_group")
+        filterSender = AppRepository.lastSavedSearch("global_filter_sender")
+        filterType = AppRepository.lastSavedSearch("global_filter_type")
+        searchInput.setText(AppRepository.lastSavedSearch("global_query"))
+
         view.findViewById<MaterialButton>(R.id.btn_filter).setOnClickListener { showFilterDialog() }
         view.findViewById<MaterialButton>(R.id.btn_reset).setOnClickListener {
             searchInput.setText("")
             filterDate = ""; filterStore = ""; filterAmount = ""
+            filterGroup = ""; filterSender = ""; filterType = ""
+            saveSearchContext()
             suggestionsPanel.removeAllViews()
             resultsPanel.removeAllViews()
             emptyText.visibility = View.GONE
@@ -78,7 +92,8 @@ class SearchFragment : Fragment() {
                 handler.removeCallbacksAndMessages(null)
                 handler.postDelayed({
                     query = s.toString().trim()
-                    if (query.length >= 1) {
+                    AppRepository.setLastSavedSearch("global_query", query)
+                    if (query.isNotEmpty() || hasActiveFilters()) {
                         loadingBar.visibility = View.VISIBLE
                         searchDebounced()
                     } else {
@@ -117,7 +132,7 @@ class SearchFragment : Fragment() {
 
     private fun performSearch() {
         val q = query.lowercase()
-        if (q.isBlank()) {
+        if (q.isBlank() && !hasActiveFilters()) {
             resultsPanel.removeAllViews()
             emptyText.visibility = View.GONE
             loadingBar.visibility = View.GONE
@@ -128,14 +143,14 @@ class SearchFragment : Fragment() {
         val results = mutableListOf<Pair<String, InvoiceItem>>()
         for (g in AppRepository.groups()) {
             for (item in AppRepository.items(g.id)) {
-                if (matches(item, q) && matchesFilters(item)) {
+                if ((q.isBlank() || matches(item, q)) && matchesFilters(item, g.name)) {
                     results.add(Pair(g.name, item))
                 }
             }
         }
 
         // اقتراحات: كلمات متكررة في البيانات المستخرجة
-        showSuggestions(q)
+        if (q.isNotBlank()) showSuggestions(q) else suggestionsPanel.removeAllViews()
 
         handler.post {
             loadingBar.visibility = View.GONE
@@ -159,11 +174,27 @@ class SearchFragment : Fragment() {
             (item.text?.lowercase()?.contains(q) == true) ||
             (item.itemsText?.lowercase()?.contains(q) == true)
 
-    private fun matchesFilters(item: InvoiceItem): Boolean {
+    private fun matchesFilters(item: InvoiceItem, groupName: String): Boolean {
         if (filterDate.isNotBlank() && (item.date?.contains(filterDate) != true)) return false
         if (filterStore.isNotBlank() && (item.storeName?.lowercase()?.contains(filterStore.lowercase()) != true)) return false
         if (filterAmount.isNotBlank() && (item.total?.contains(filterAmount) != true)) return false
+        if (filterGroup.isNotBlank() && !groupName.lowercase().contains(filterGroup.lowercase())) return false
+        if (filterSender.isNotBlank() && (item.sender?.lowercase()?.contains(filterSender.lowercase()) != true)) return false
+        if (filterType.isNotBlank() && item.type != filterType) return false
         return true
+    }
+
+    private fun hasActiveFilters(): Boolean = listOf(
+        filterDate, filterStore, filterAmount, filterGroup, filterSender, filterType
+    ).any { it.isNotBlank() }
+
+    private fun saveSearchContext() {
+        AppRepository.setLastSavedSearch("global_filter_date", filterDate)
+        AppRepository.setLastSavedSearch("global_filter_store", filterStore)
+        AppRepository.setLastSavedSearch("global_filter_amount", filterAmount)
+        AppRepository.setLastSavedSearch("global_filter_group", filterGroup)
+        AppRepository.setLastSavedSearch("global_filter_sender", filterSender)
+        AppRepository.setLastSavedSearch("global_filter_type", filterType)
     }
 
     private fun showSuggestions(q: String) {
@@ -263,25 +294,45 @@ class SearchFragment : Fragment() {
 
     private fun showFilterDialog() {
         val ctx = requireContext()
+        val panel = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(38, 12, 38, 0)
+        }
+        fun field(hint: String, value: String): EditText = EditText(ctx).apply {
+            this.hint = hint; setText(value); textSize = 15f
+            setTextColor(ThemeHelper.text(ctx)); setHintTextColor(ThemeHelper.textSecondary(ctx))
+        }
+        val date = field("التاريخ (مثل 2026-08)", filterDate)
+        val store = field("المتجر أو العنوان", filterStore)
+        val amount = field("المبلغ", filterAmount)
+        val group = field("اسم المجموعة", filterGroup)
+        val sender = field("اسم المرسل", filterSender)
+        val type = field("النوع: صورة أو نص", when (filterType) { "image" -> "صورة"; "text" -> "نص"; else -> "" })
+        listOf(date, store, amount, group, sender, type).forEach(panel::addView)
         MaterialAlertDialogBuilder(ctx)
-            .setTitle(R.string.filter)
-            .setItems(arrayOf(getString(R.string.filter_date), getString(R.string.filter_store), getString(R.string.filter_amount))) { _, which ->
-                val input = EditText(ctx).apply { setPadding(24, 20, 24, 20) }
-                MaterialAlertDialogBuilder(ctx)
-                    .setView(input)
-                    .setPositiveButton(R.string.save) { _, _ ->
-                        val v = input.text.toString().trim()
-                        when (which) {
-                            0 -> filterDate = v
-                            1 -> filterStore = v
-                            2 -> filterAmount = v
-                        }
-                        if (query.isNotBlank()) performSearch()
-                        else Toast.makeText(ctx, "تم تطبيق الفلتر — اكتب للبحث", Toast.LENGTH_SHORT).show()
-                    }
-                    .setNegativeButton(R.string.cancel, null)
-                    .show()
+            .setTitle("فلاتر البحث المتقدمة")
+            .setView(panel)
+            .setPositiveButton("تطبيق") { _, _ ->
+                filterDate = date.text.toString().trim()
+                filterStore = store.text.toString().trim()
+                filterAmount = amount.text.toString().trim()
+                filterGroup = group.text.toString().trim()
+                filterSender = sender.text.toString().trim()
+                filterType = when (type.text.toString().trim()) {
+                    "صورة", "صور", "image" -> "image"
+                    "نص", "نصوص", "text" -> "text"
+                    else -> ""
+                }
+                saveSearchContext()
+                performSearch()
             }
+            .setNeutralButton("مسح الفلاتر") { _, _ ->
+                filterDate = ""; filterStore = ""; filterAmount = ""
+                filterGroup = ""; filterSender = ""; filterType = ""
+                saveSearchContext()
+                if (query.isNotBlank()) performSearch()
+            }
+            .setNegativeButton(R.string.cancel, null)
             .show()
     }
 }

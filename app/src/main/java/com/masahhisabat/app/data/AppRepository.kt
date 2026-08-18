@@ -195,7 +195,12 @@ object AppRepository {
 
     fun canManageUsers(role: Role): Boolean = role == Role.ADMIN
     fun canAdmin(role: Role): Boolean = role == Role.ADMIN || role == Role.SUPERVISOR
-    fun canEdit(role: Role): Boolean = role in setOf(Role.ADMIN, Role.SUPERVISOR, Role.EDITOR)
+    fun canAddContent(role: Role): Boolean = role in setOf(Role.ADMIN, Role.SUPERVISOR, Role.EDITOR)
+    fun canEditContent(role: Role): Boolean = role in setOf(Role.ADMIN, Role.SUPERVISOR, Role.EDITOR)
+    fun canDeleteContent(role: Role): Boolean = role in setOf(Role.ADMIN, Role.SUPERVISOR)
+    fun isReadOnly(role: Role): Boolean = role == Role.VIEWER
+    // توافق مع تدفق الرسائل الحالي، مع قواعد مفصلة متاحة للشاشات الجديدة.
+    fun canEdit(role: Role): Boolean = canEditContent(role)
     fun canSync(role: Role): Boolean = role == Role.ADMIN || role == Role.SUPERVISOR
 
     // ---------- المجموعات والفواتير ----------
@@ -336,6 +341,10 @@ object AppRepository {
             .putBoolean("night_mode", valid == "dark")
             .apply()
     }
+    fun hasAppLock(): Boolean = !prefs.getString("app_lock_pin", "").isNullOrBlank()
+    fun setAppLockPin(pin: String) = prefs.edit().putString("app_lock_pin", HashUtil.encodePlain(pin)).apply()
+    fun clearAppLockPin() = prefs.edit().remove("app_lock_pin").apply()
+    fun verifyAppLockPin(pin: String): Boolean = HashUtil.decodePlain(prefs.getString("app_lock_pin", "") ?: "") == pin
     fun rememberLogin(username: String) = prefs.edit().putString("remember_user", username).apply()
     fun rememberedLogin(): String? = prefs.getString("remember_user", null)
     fun clearRemember() = prefs.edit().remove("remember_user").apply()
@@ -345,6 +354,8 @@ object AppRepository {
     fun setLastInvoiceName(name: String) = prefs.edit().putString("last_invoice_name", name).apply()
     fun lastSavedSearch(groupId: String): String = prefs.getString("saved_search_$groupId", "") ?: ""
     fun setLastSavedSearch(groupId: String, query: String) = prefs.edit().putString("saved_search_$groupId", query).apply()
+    fun lastOpenedGroupId(): String? = prefs.getString("last_opened_group", null)
+    fun setLastOpenedGroupId(groupId: String) = prefs.edit().putString("last_opened_group", groupId).apply()
 
     // ---------- دعم المزامنة ----------
     fun currentUserDeviceName(): String {
@@ -377,6 +388,7 @@ object AppRepository {
     fun totalInvoiceCount(): Int = groups().sumOf { items(it.id).size }
 
     fun exportData(outDir: File): File {
+        outDir.mkdirs()
         val zipFile = File(outDir, "masah_backup_${System.currentTimeMillis()}.zip")
         java.util.zip.ZipOutputStream(zipFile.outputStream()).use { zos ->
             dataDir().walkTopDown().filter { it.isFile }.forEach { file ->
@@ -387,6 +399,58 @@ object AppRepository {
             }
         }
         return zipFile
+    }
+
+    /** نسخة وقائية تلقائية خارج مجلد البيانات قبل إدخال بيانات قادمة من جهاز آخر. */
+    fun createSafetyBackup(): File {
+        val backupDir = File(dataDir().parentFile, "MasahHisabat_backups")
+        backupDir.mkdirs()
+        val file = exportData(backupDir)
+        // نحتفظ بآخر 10 نسخ وقائية فقط حتى لا تمتلئ الذاكرة بمرور الوقت.
+        backupDir.listFiles { candidate -> candidate.name.startsWith("masah_backup_") && candidate.extension == "zip" }
+            ?.sortedByDescending { it.lastModified() }
+            ?.drop(10)
+            ?.forEach { stale -> try { stale.delete() } catch (_: Exception) {} }
+        return file
+    }
+
+    data class StorageUsage(val dataBytes: Long, val imageBytes: Long, val backupBytes: Long) {
+        val totalBytes: Long get() = dataBytes + backupBytes
+    }
+
+    fun storageUsage(): StorageUsage {
+        fun sizeOf(file: File): Long = when {
+            !file.exists() -> 0L
+            file.isFile -> file.length()
+            else -> file.listFiles()?.sumOf(::sizeOf) ?: 0L
+        }
+        val dir = dataDir()
+        val images = File(dir, "images")
+        val backups = File(dir.parentFile, "MasahHisabat_backups")
+        return StorageUsage(sizeOf(dir), sizeOf(images), sizeOf(backups))
+    }
+
+    /** تقرير CSV قابل للفتح في Excel أو Google Sheets دون حاجة إلى اتصال بالإنترنت. */
+    fun createCsvReport(outputDir: File): File {
+        outputDir.mkdirs()
+        val report = File(outputDir, "masah_report_${System.currentTimeMillis()}.csv")
+        fun csv(value: String?): String = "\"${(value ?: "").replace("\"", "\"\"").replace("\n", " ")}\""
+        report.bufferedWriter(Charsets.UTF_8).use { writer ->
+            writer.appendLine("المجموعة,النوع,النص,المرسل,التاريخ,المبلغ,العملة,وقت الإنشاء")
+            groups().forEach { group ->
+                items(group.id).forEach { item ->
+                    writer.appendLine(listOf(group.name, item.type, item.text, item.sender, item.date, item.total, item.currency, item.createdAt.toString()).joinToString(",", transform = ::csv))
+                }
+            }
+        }
+        return report
+    }
+
+    /** لا يحذف البيانات أو الصور؛ ينظف فقط نسخ الإرفاق المؤقتة التي بقيت بعد إلغاء الإرسال. */
+    fun clearTemporaryFiles(): Int {
+        val cache = appContext?.cacheDir ?: return 0
+        val files = cache.listFiles { f -> f.name.startsWith("attach_") || f.name.startsWith("attach_raw_") } ?: emptyArray()
+        return files.count { candidate -> try { candidate.delete() } catch (_: Exception) { false } }
     }
 
     fun importBackup(zipFile: File) {

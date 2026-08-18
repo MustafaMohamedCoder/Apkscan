@@ -135,7 +135,7 @@ class TeamActivity : AppCompatActivity() {
                 setTextColor(text)
             }
             holder.itemView.findViewById<TextView>(R.id.member_role).apply {
-                this.text = roleLabel(user.role)
+                this.text = "${roleLabel(user.role)} — ${rolePermissions(user.role)}"
                 setTextColor(textSec)
             }
             holder.itemView.findViewById<TextView>(R.id.member_status).apply {
@@ -203,6 +203,13 @@ class TeamActivity : AppCompatActivity() {
             Role.SUPERVISOR -> "مشرف"
             Role.EDITOR -> "محرر"
             Role.VIEWER -> "مشاهد"
+        }
+
+        private fun rolePermissions(role: Role) = when (role) {
+            Role.ADMIN -> "إدارة كاملة"
+            Role.SUPERVISOR -> "مزامنة وتحرير وحذف"
+            Role.EDITOR -> "إضافة وتعديل الرسائل"
+            Role.VIEWER -> "قراءة فقط"
         }
     }
 

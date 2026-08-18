@@ -436,18 +436,25 @@ class CropEditActivity : AppCompatActivity() {
         loadingLabel.setText(R.string.loading)
         loadingPanel.visibility = View.VISIBLE
         Thread {
+            var pendingMediaUri: Uri? = null
             val error = try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     val values = ContentValues().apply {
                         put(MediaStore.Images.Media.DISPLAY_NAME, "masah_${System.currentTimeMillis()}.jpg")
                         put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
                         put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/MasahHisabat")
+                        put(MediaStore.Images.Media.IS_PENDING, 1)
                     }
                     val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
                         ?: throw IllegalStateException("تعذر إنشاء ملف الصورة")
+                    pendingMediaUri = uri
                     contentResolver.openOutputStream(uri)?.use { out ->
                         if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)) throw IllegalStateException("تعذر حفظ الصورة")
                     } ?: throw IllegalStateException("تعذر فتح ملف الصورة")
+                    contentResolver.update(uri, ContentValues().apply {
+                        put(MediaStore.Images.Media.IS_PENDING, 0)
+                    }, null, null)
+                    pendingMediaUri = null
                 } else {
                     val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "MasahHisabat")
                     dir.mkdirs()
@@ -459,6 +466,7 @@ class CropEditActivity : AppCompatActivity() {
                 }
                 null
             } catch (e: Exception) {
+                pendingMediaUri?.let { uri -> runCatching { contentResolver.delete(uri, null, null) } }
                 e.message ?: "تعذر حفظ الصورة في المعرض"
             }
             runOnUiThread {

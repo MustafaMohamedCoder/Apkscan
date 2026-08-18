@@ -42,6 +42,8 @@ class SearchFragment : Fragment() {
     private lateinit var resultsPanel: LinearLayout
     private lateinit var loadingBar: ProgressBar
     private lateinit var emptyText: TextView
+    private lateinit var searchStatus: TextView
+    private lateinit var filterButton: MaterialButton
     private val handler = Handler(Looper.getMainLooper())
     private var query = ""
     private var filterDate = ""
@@ -64,6 +66,8 @@ class SearchFragment : Fragment() {
         resultsPanel = view.findViewById(R.id.results_panel)
         loadingBar = view.findViewById(R.id.loading_bar)
         emptyText = view.findViewById(R.id.empty_text)
+        searchStatus = view.findViewById(R.id.search_status)
+        filterButton = view.findViewById(R.id.btn_filter)
 
         // استعادة آخر سياق للبحث حتى لا يفقد المستخدم عمله عند التنقل بين التبويبات.
         filterDate = AppRepository.lastSavedSearch("global_filter_date")
@@ -74,8 +78,9 @@ class SearchFragment : Fragment() {
         filterType = AppRepository.lastSavedSearch("global_filter_type")
         searchInput.setText(AppRepository.lastSavedSearch("global_query"))
 
-        view.findViewById<MaterialButton>(R.id.btn_filter).setOnClickListener { showFilterDialog() }
+        filterButton.setOnClickListener { showFilterDialog() }
         view.findViewById<MaterialButton>(R.id.btn_reset).setOnClickListener {
+            query = ""
             searchInput.setText("")
             filterDate = ""; filterStore = ""; filterAmount = ""
             filterGroup = ""; filterSender = ""; filterType = ""
@@ -83,7 +88,10 @@ class SearchFragment : Fragment() {
             suggestionsPanel.removeAllViews()
             resultsPanel.removeAllViews()
             emptyText.visibility = View.GONE
+            updateSearchState()
         }
+
+        updateSearchState()
 
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -101,6 +109,7 @@ class SearchFragment : Fragment() {
                         resultsPanel.removeAllViews()
                         loadingBar.visibility = View.GONE
                         emptyText.visibility = View.GONE
+                        updateSearchState()
                     }
                 }, 300)
             }
@@ -119,6 +128,7 @@ class SearchFragment : Fragment() {
         view.findViewById<EditText>(R.id.et_search).background?.setTint(ThemeHelper.inputFill(ctx))
         // أيقونة البحث داخل الحقل بلون ثانوي
         view.findViewById<ImageView>(R.id.search_icon)?.setColorFilter(ThemeHelper.textSecondary(ctx))
+        view.findViewById<TextView>(R.id.search_status)?.setTextColor(ThemeHelper.textSecondary(ctx))
     }
 
     private fun searchDebounced() {
@@ -131,6 +141,7 @@ class SearchFragment : Fragment() {
             resultsPanel.removeAllViews()
             emptyText.visibility = View.GONE
             loadingBar.visibility = View.GONE
+            updateSearchState()
             return
         }
         loadingBar.visibility = View.VISIBLE
@@ -158,6 +169,7 @@ class SearchFragment : Fragment() {
                     resultsPanel.addView(buildResultCard(groupName, item))
                 }
             }
+            updateSearchState(results.size)
         }
     }
 
@@ -182,6 +194,25 @@ class SearchFragment : Fragment() {
     private fun hasActiveFilters(): Boolean = listOf(
         filterDate, filterStore, filterAmount, filterGroup, filterSender, filterType
     ).any { it.isNotBlank() }
+
+    private fun activeFilterCount(): Int = listOf(
+        filterDate, filterStore, filterAmount, filterGroup, filterSender, filterType
+    ).count { it.isNotBlank() }
+
+    /** يعرض أثر الفلاتر والنتائج بدل أن تبقى الحالة مخفية داخل الحوار. */
+    private fun updateSearchState(resultCount: Int? = null) {
+        if (!::searchStatus.isInitialized || !::filterButton.isInitialized) return
+        val filters = activeFilterCount()
+        filterButton.text = if (filters > 0) "الفلاتر · $filters" else getString(R.string.filter)
+        val status = when {
+            resultCount != null && filters > 0 -> "$resultCount نتيجة · $filters فلاتر مفعلة"
+            resultCount != null -> "$resultCount نتيجة"
+            filters > 0 -> "$filters فلاتر مفعلة"
+            else -> ""
+        }
+        searchStatus.text = status
+        searchStatus.visibility = if (status.isBlank()) View.GONE else View.VISIBLE
+    }
 
     private fun saveSearchContext() {
         AppRepository.setLastSavedSearch("global_filter_date", filterDate)
@@ -325,7 +356,7 @@ class SearchFragment : Fragment() {
                 filterDate = ""; filterStore = ""; filterAmount = ""
                 filterGroup = ""; filterSender = ""; filterType = ""
                 saveSearchContext()
-                if (query.isNotBlank()) performSearch()
+                performSearch()
             }
             .setNegativeButton(R.string.cancel, null)
             .show()

@@ -75,6 +75,19 @@
             android:layout_height="40dp"
             android:text="@string/reset_search" />
 
+        <TextView
+            android:id="@+id/search_status"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/tajawal_regular"
+            android:gravity="end|center_vertical"
+            android:maxLines="1"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
         <ProgressBar
             android:id="@+id/loading_bar"
             android:layout_width="26dp"

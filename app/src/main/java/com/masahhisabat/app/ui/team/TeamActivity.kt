@@ -65,18 +65,18 @@ class TeamActivity : AppCompatActivity() {
         val roles = arrayOf("مشرف", "محرر", "مشاهد")
         spRole.adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, roles)
 
-        // تلوين الكتابة أسودًا واضحًا في الحقول
-        etUsername.setTextColor(android.graphics.Color.parseColor("#000000"))
-        etUsername.setHintTextColor(android.graphics.Color.parseColor("#888888"))
-        etPassword.setTextColor(android.graphics.Color.parseColor("#000000"))
-        etPassword.setHintTextColor(android.graphics.Color.parseColor("#888888"))
+        // ألوان دلالية تتكيف مع المظهر، بدل ألوان ثابتة تجعل النص غير واضح ليلًا.
+        etUsername.setTextColor(ThemeHelper.text(ctx))
+        etUsername.setHintTextColor(ThemeHelper.textSecondary(ctx))
+        etPassword.setTextColor(ThemeHelper.text(ctx))
+        etPassword.setHintTextColor(ThemeHelper.textSecondary(ctx))
 
         val dialog = MaterialAlertDialogBuilder(ctx)
             .setTitle(R.string.add_member)
             .setView(view)
             .setCancelable(false)
             .setPositiveButton(R.string.save) { d, _ ->
-                val username = etUsername.text.toString().trim().lowercase()
+                val username = AppRepository.normalizeUsername(etUsername.text.toString())
                 val password = etPassword.text.toString().trim()
                 val role = when (spRole.selectedItemPosition) {
                     0 -> Role.SUPERVISOR
@@ -91,7 +91,7 @@ class TeamActivity : AppCompatActivity() {
                     Toast.makeText(ctx, "كلمة المرور يجب أن تكون 3 أحرف على الأقل", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
-                if (AppRepository.users().any { it.username == username }) {
+                if (AppRepository.users().any { AppRepository.normalizeUsername(it.username) == username }) {
                     Toast.makeText(ctx, "اسم المستخدم مستخدم بالفعل", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
@@ -223,8 +223,8 @@ class TeamActivity : AppCompatActivity() {
                 setPadding(32, 24, 32, 24)
                 hint = "كلمة المرور الجديدة (3 أحرف على الأقل)"
                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16f)
-                setTextColor(android.graphics.Color.parseColor("#000000"))
-                setHintTextColor(android.graphics.Color.parseColor("#888888"))
+                setTextColor(ThemeHelper.text(ctx))
+                setHintTextColor(ThemeHelper.textSecondary(ctx))
             }
             MaterialAlertDialogBuilder(ctx)
                 .setTitle("كلمة المرور القديمة مشفرة")
@@ -290,18 +290,18 @@ class TeamActivity : AppCompatActivity() {
             etPassword.setSelection(etPassword.text.length)
         }
 
-        // تلوين الكتابة أسودًا واضحًا في الحقول
-        etUsername.setTextColor(android.graphics.Color.parseColor("#000000"))
-        etUsername.setHintTextColor(android.graphics.Color.parseColor("#888888"))
-        etPassword.setTextColor(android.graphics.Color.parseColor("#000000"))
-        etPassword.setHintTextColor(android.graphics.Color.parseColor("#888888"))
-        tvHint?.setTextColor(android.graphics.Color.parseColor("#000000"))
+        // ألوان دلالية تمنع ظهور نص داكن على خلفية داكنة في الحوار الليلي.
+        etUsername.setTextColor(ThemeHelper.text(ctx))
+        etUsername.setHintTextColor(ThemeHelper.textSecondary(ctx))
+        etPassword.setTextColor(ThemeHelper.text(ctx))
+        etPassword.setHintTextColor(ThemeHelper.textSecondary(ctx))
+        tvHint?.setTextColor(ThemeHelper.text(ctx))
 
         MaterialAlertDialogBuilder(ctx)
             .setTitle("تعديل العضو")
             .setView(view)
             .setPositiveButton(R.string.save) { _, _ ->
-                val newUsername = etUsername.text.toString().trim().lowercase()
+                val newUsername = AppRepository.normalizeUsername(etUsername.text.toString())
                 val newPassword = etPassword.text.toString().trim()
                 val newRole = when (spRole.selectedItemPosition) {
                     0 -> Role.SUPERVISOR
@@ -312,7 +312,10 @@ class TeamActivity : AppCompatActivity() {
                     Toast.makeText(ctx, "اسم المستخدم غير صالح", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
-                if (newUsername != user.username && AppRepository.users().any { it.username == newUsername }) {
+                val currentUsername = AppRepository.normalizeUsername(user.username)
+                if (newUsername != currentUsername && AppRepository.users().any {
+                        AppRepository.normalizeUsername(it.username) == newUsername
+                    }) {
                     Toast.makeText(ctx, "اسم المستخدم مستخدم بالفعل", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }

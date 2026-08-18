@@ -80,6 +80,8 @@ class MainActivity : AppCompatActivity() {
             applyTheme()
             // كل الأجهزة تستقبل محليًا، وجلسة mustafa وحدها ترسل ملف المستخدمين تلقائيًا.
             SyncManager.startAutomaticUserSync(this)
+            // بعد تسجيل الدخول تُدمج المجموعات والفواتير والصور الجديدة تلقائيًا مع الأجهزة القريبة.
+            SyncManager.startAutomaticDataSyncAfterLogin(this)
         } catch (e: Exception) {
             try {
                 val sw = java.io.StringWriter()

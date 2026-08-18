@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.util.Base64
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
@@ -60,6 +61,10 @@ object SyncManager {
     private const val AUTO_SYNC_DISCOVERY_TIMEOUT_MS = 1_500L
     private const val AUTO_SYNC_INTERVAL_MS = 8_000L
     private const val AUTO_USER_SYNC_MODE = "mustafa_users_only"
+    private const val AUTO_DATA_SYNC_MODE = "post_login_groups_and_invoices"
+    private const val AUTO_DATA_SYNC_ATTEMPTS = 4
+    private const val AUTO_DATA_SYNC_RETRY_DELAY_MS = 3_000L
+    private const val MAX_SYNC_IMAGE_BYTES = 12L * 1024L * 1024L
     private val gson = Gson()
 
     @Volatile private var server: ServerSocket? = null
@@ -67,10 +72,13 @@ object SyncManager {
     @Volatile private var isServing = false
     @Volatile private var autoSyncRunning = false
     @Volatile private var autoSyncThread: Thread? = null
+    @Volatile private var autoDataSyncRunning = false
+    @Volatile private var autoDataSyncThread: Thread? = null
     @Volatile private var updateCheckRunning = false
     @Volatile private var multicastLock: WifiManager.MulticastLock? = null
     val peers = CopyOnWriteArrayList<String>()
     private val autoSyncedUserFiles = ConcurrentHashMap<String, String>()
+    private val autoSyncedDataFiles = ConcurrentHashMap<String, String>()
 
     // ---------- إدارة الخادم ----------
     fun startServer(context: Context) {
@@ -131,7 +139,11 @@ object SyncManager {
         autoSyncRunning = false
         autoSyncThread?.interrupt()
         autoSyncThread = null
+        autoDataSyncRunning = false
+        autoDataSyncThread?.interrupt()
+        autoDataSyncThread = null
         autoSyncedUserFiles.clear()
+        autoSyncedDataFiles.clear()
         try { server?.close() } catch (_: Throwable) {}
         try { updateServer?.close() } catch (_: Throwable) {}
         server = null
@@ -378,6 +390,7 @@ object SyncManager {
                         true
                     ))
                     val isMustafaUserFile = payload.mode == AUTO_USER_SYNC_MODE
+                    val isAutomaticDataSync = payload.mode == AUTO_DATA_SYNC_MODE
                     if (isMustafaUserFile && AppRepository.normalizeUsername(payload.sourceUsername.orEmpty()) != "mustafa") {
                         throw IOException("مصدر ملف المستخدمين غير معتمد")
                     }
@@ -390,11 +403,23 @@ object SyncManager {
                     // رد: عدد العناصر المستقبلة + عدد المستخدمين المستقبلة.
                     val ack = "OK ${result.items} ${result.users}\n"
                     client.getOutputStream().write(ack.toByteArray())
+                    if (isAutomaticDataSync) {
+                        // تعيد المزامنة التلقائية بيانات هذا الجهاز في الجلسة نفسها،
+                        // وبذلك يصل كل طرف إلى أحدث المجموعات والفواتير دون طلب يدوي ثانٍ.
+                        client.getOutputStream().write(gson.toJson(buildAutomaticDataPayload()).toByteArray())
+                        client.getOutputStream().write("\n".toByteArray())
+                    }
                     client.getOutputStream().flush()
                     val sender = payload.deviceName?.takeIf { it.isNotBlank() } ?: client.inetAddress.hostAddress
-                    val action = if (isMustafaUserFile) "استقبال تلقائي للمستخدمين" else "استقبال"
+                    val action = when {
+                        isMustafaUserFile -> "استقبال تلقائي للمستخدمين"
+                        isAutomaticDataSync -> "استقبال تلقائي للبيانات"
+                        else -> "استقبال"
+                    }
                     val detail = if (isMustafaUserFile) {
                         "تم تحديث ${result.users} حسابًا من جهاز mustafa: $sender"
+                    } else if (isAutomaticDataSync) {
+                        "تم دمج ${result.items} فاتورة ورسالة من $sender بعد تسجيل الدخول."
                     } else {
                         "استُقبلت ${result.items} عناصر و${result.users} مستخدمين من $sender"
                     }
@@ -492,6 +517,59 @@ object SyncManager {
     }
 
     /**
+     * مزامنة تلقائية ثنائية الاتجاه للمجموعات والفواتير بعد تسجيل الدخول.
+     * لا تشمل حسابات المستخدمين؛ إذ تبقى مزامنتها التلقائية محصورة في بروتوكول جهاز mustafa.
+     */
+    private fun syncAutomaticDataWithHost(context: Context, host: String, peerName: String): SyncResult {
+        var outgoing: SyncPayload? = null
+        try {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(host, TCP_PORT), CONNECT_TIMEOUT_MS)
+                socket.soTimeout = READ_TIMEOUT_MS
+                outgoing = buildAutomaticDataPayload()
+                val writer = socket.getOutputStream().bufferedWriter()
+                writer.write(gson.toJson(outgoing))
+                writer.newLine()
+                writer.flush()
+
+                val reader = socket.getInputStream().bufferedReader()
+                val ack = reader.readLine() ?: throw EOFException("انقطع الاتصال قبل تأكيد مزامنة البيانات")
+                val parts = ack.trim().split(Regex("\\s+"))
+                if (parts.firstOrNull() != "OK") throw IOException("استجابة غير مكتملة من الجهاز الآخر")
+
+                val returnJson = reader.readLine()
+                    ?: throw EOFException("لم تصل بيانات المجموعات والفواتير من الجهاز الآخر")
+                val returnedPayload = gson.fromJson(returnJson, SyncPayload::class.java)
+                    ?: throw IOException("بيانات المجموعات والفواتير غير صالحة")
+                if (returnedPayload.mode != AUTO_DATA_SYNC_MODE) {
+                    throw IOException("استجابة مزامنة غير متوقعة")
+                }
+
+                val preview = previewPayload(returnedPayload)
+                if (preview.newGroups > 0 || preview.newItems > 0) {
+                    val backup = AppRepository.createSafetyBackup()
+                    AppRepository.logSync(SyncEntry("نسخة احتياطية تلقائية", "حُفظت نسخة وقائية: ${backup.name}", true))
+                }
+                val received = applyPayload(context, returnedPayload)
+                AppRepository.logSync(SyncEntry(
+                    "مزامنة تلقائية للبيانات",
+                    "بعد تسجيل الدخول مع $peerName: أُرسلت ${outgoing?.totalItems ?: 0} عنصرًا واستُقبلت ${received.items} عنصرًا.",
+                    true
+                ))
+                return SyncResult(true, received.items, received.users)
+            }
+        } catch (e: Throwable) {
+            val errorMessage = syncErrorMessage(e)
+            AppRepository.logSync(SyncEntry(
+                "مزامنة تلقائية للبيانات",
+                "تعذر مزامنة المجموعات والفواتير مع $peerName: $errorMessage",
+                false
+            ))
+            return SyncResult(false, 0, 0, errorMessage)
+        }
+    }
+
+    /**
      * يبدأ الاكتشاف التلقائي في الواجهة الأمامية. كل الأجهزة تستقبل محليًا،
      * لكن جلسة mustafa وحدها ترسل ملف المستخدمين إلى الأجهزة المكتشفة.
      */
@@ -529,16 +607,68 @@ object SyncManager {
         }
     }
 
+    /**
+     * يبدأ عند انتقال المستخدم إلى التطبيق بعد تسجيل الدخول، ويعيد الاكتشاف عدة مرات
+     * لالتقاط الأجهزة التي فتحت التطبيق بعده بلحظات. المزامنة دمجية ولا تحذف بيانات محلية.
+     */
+    fun startAutomaticDataSyncAfterLogin(context: Context) {
+        val appContext = context.applicationContext
+        ensureServer(appContext)
+        if (autoDataSyncRunning || !hasActiveSession(appContext)) return
+        autoDataSyncRunning = true
+        autoDataSyncThread = Thread {
+            try {
+                for (attempt in 0 until AUTO_DATA_SYNC_ATTEMPTS) {
+                    if (!isServing || !hasActiveSession(appContext)) break
+                    val fingerprint = dataFingerprint()
+                    discover(AUTO_SYNC_DISCOVERY_TIMEOUT_MS)
+                        .asSequence()
+                        .filterNot { isLocalAddress(it.address) }
+                        .distinctBy { it.address }
+                        .forEach { peer ->
+                            if (autoSyncedDataFiles[peer.address] != fingerprint) {
+                                val result = syncAutomaticDataWithHost(appContext, peer.address, peer.name)
+                                if (result.ok) autoSyncedDataFiles[peer.address] = dataFingerprint()
+                            }
+                        }
+                    if (attempt < AUTO_DATA_SYNC_ATTEMPTS - 1) {
+                        try { Thread.sleep(AUTO_DATA_SYNC_RETRY_DELAY_MS) } catch (_: InterruptedException) { break }
+                    }
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "automatic data sync error", e)
+                AppRepository.logSync(SyncEntry("مزامنة البيانات التلقائية", syncErrorMessage(e), false))
+            } finally {
+                autoDataSyncRunning = false
+                autoDataSyncThread = null
+            }
+        }.apply {
+            name = "post-login-data-auto-sync"
+            start()
+        }
+    }
+
     private fun isMustafaSession(context: Context): Boolean {
         val username = context.getSharedPreferences("session", Context.MODE_PRIVATE)
             .getString("username", null)
         return AppRepository.normalizeUsername(username.orEmpty()) == "mustafa"
     }
 
+    private fun hasActiveSession(context: Context): Boolean = context
+        .getSharedPreferences("session", Context.MODE_PRIVATE)
+        .getString("username", null)
+        ?.isNotBlank() == true
+
     private fun userFileFingerprint(): String = AppRepository.users()
         .sortedBy { AppRepository.normalizeUsername(it.username) }
         .joinToString("|") { user ->
             "${AppRepository.normalizeUsername(user.username)}:${user.passwordHash}:${user.role.name}:${user.enabled}"
+        }
+
+    private fun dataFingerprint(): String = buildAutomaticDataPayload().items
+        .sortedWith(compareBy<SyncItemPayload> { it.groupId }.thenBy { it.item.id })
+        .joinToString("|") { payload ->
+            "${payload.groupId}:${payload.groupName}:${gson.toJson(payload.item)}"
         }
 
     private fun isLocalAddress(address: String): Boolean = try {
@@ -740,14 +870,61 @@ object SyncManager {
         return SyncPayload(
             deviceName = AppRepository.currentUserDeviceName(),
             users = AppRepository.users().map { UserPayload(it.username, it.passwordHash, it.role.name, it.enabled) },
-            items = buildList {
-                for (g in AppRepository.groups()) {
-                    for (item in AppRepository.items(g.id)) {
-                        add(SyncItemPayload(g.id, g.name, item))
-                    }
-                }
-            }
+            items = buildDataItems()
         )
+    }
+
+    private fun buildAutomaticDataPayload(): SyncPayload = SyncPayload(
+        deviceName = AppRepository.currentUserDeviceName(),
+        users = emptyList(),
+        items = buildDataItems(),
+        mode = AUTO_DATA_SYNC_MODE
+    )
+
+    private fun buildDataItems(): List<SyncItemPayload> = buildList {
+        for (group in AppRepository.groups()) {
+            for (item in AppRepository.items(group.id)) {
+                add(
+                    SyncItemPayload(
+                        groupId = group.id,
+                        groupName = group.name,
+                        item = item,
+                        image = encodeImageForSync(item.imagePath),
+                        processedImage = encodeImageForSync(item.processedPath)
+                    )
+                )
+            }
+        }
+    }
+
+    /** يحول المرفق المحلي إلى بيانات قابلة للنقل، مع حد يمنع استهلاك الذاكرة على ملفات غير منطقية. */
+    private fun encodeImageForSync(path: String?): SyncImagePayload? {
+        return try {
+            val file = path?.takeIf { it.isNotBlank() }?.let(::File) ?: return null
+            if (!file.isFile || file.length() !in 1..MAX_SYNC_IMAGE_BYTES) return null
+            SyncImagePayload(file.name, Base64.encodeToString(file.readBytes(), Base64.NO_WRAP))
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /** يعيد حفظ المرفق ضمن مجلد بيانات التطبيق الدائم بدل الاحتفاظ بمسار الجهاز المصدر. */
+    private fun restoreImageFromSync(itemId: String, label: String, image: SyncImagePayload?): String? {
+        return try {
+            image ?: return null
+            val bytes = Base64.decode(image.data, Base64.NO_WRAP)
+            if (bytes.isEmpty() || bytes.size.toLong() > MAX_SYNC_IMAGE_BYTES) return null
+            val extension = image.fileName.substringAfterLast('.', "jpg")
+                .replace(Regex("[^A-Za-z0-9]"), "")
+                .take(8)
+                .ifBlank { "jpg" }
+            val imageDir = File(AppRepository.dataDir(), "images").also { it.mkdirs() }
+            val target = File(imageDir, "sync_${itemId}_${label}.${extension}")
+            target.outputStream().use { it.write(bytes) }
+            target.absolutePath
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     private fun buildMustafaUsersPayload(): SyncPayload = SyncPayload(
@@ -819,7 +996,11 @@ object SyncManager {
             }
             val exists = AppRepository.items(p.groupId).any { it.id == p.item.id }
             if (!exists) {
-                AppRepository.addItem(p.groupId, p.item)
+                val syncedItem = p.item.copy(
+                    imagePath = restoreImageFromSync(p.item.id, "original", p.image),
+                    processedPath = restoreImageFromSync(p.item.id, "processed", p.processedImage)
+                )
+                AppRepository.addItem(p.groupId, syncedItem)
                 addedItems++
             }
         }
@@ -978,7 +1159,14 @@ object SyncManager {
 
     // ---------- نماذج المزامنة ----------
     data class UserPayload(val username: String, val passwordHash: String, val roleName: String, val enabled: Boolean)
-    data class SyncItemPayload(val groupId: String, val groupName: String, val item: InvoiceItem)
+    data class SyncImagePayload(val fileName: String, val data: String)
+    data class SyncItemPayload(
+        val groupId: String,
+        val groupName: String,
+        val item: InvoiceItem,
+        val image: SyncImagePayload? = null,
+        val processedImage: SyncImagePayload? = null
+    )
     data class SyncPayload(
         val deviceName: String? = null,
         val users: List<UserPayload>,

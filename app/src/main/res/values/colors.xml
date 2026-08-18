@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- === نظام ألوان احترافي جديد (Teal عصري) === -->
+    <color name="primary">#0D9488</color>
+    <color name="primary_dark">#0F766E</color>
+    <color name="primary_light">#99F6E4</color>
+    <color name="accent">#14B8A6</color>
+
+    <!-- Night theme — داكن فاخر بلمسة Teal -->
+    <color name="night_background">#041615</color>
+    <color name="night_surface">#0B2623</color>
+    <color name="night_surface_high">#123631</color>
+    <color name="night_text">#F2FFFD</color>
+    <color name="night_text_secondary">#93B8B3</color>
+    <color name="night_card_stroke">#1C423D</color>
+    <color name="night_nav_bar">#06201E</color>
+
+    <!-- Day theme — فاتح نظيف -->
+    <color name="day_background">#F5F9F8</color>
+    <color name="day_surface">#FFFFFF</color>
+    <color name="day_surface_high">#EDF5F3</color>
+    <color name="day_text">#0C2120</color>
+    <color name="day_text_secondary">#5A7471</color>
+    <color name="day_card_stroke">#E1EEE9</color>
+    <color name="day_nav_bar">#FFFFFF</color>
+
+    <!-- Login gradient -->
+    <color name="login_top">#0B3B37</color>
+    <color name="login_mid">#0D5D55</color>
+    <color name="login_bottom">#0F766E</color>
+    <color name="input_fill">#F3F6F5</color>
+    <color name="input_fill_night">#0B2623</color>
+    <color name="input_stroke">#D9E6E2</color>
+    <color name="input_stroke_night">#1C423D</color>
+
+    <color name="white">#FFFFFF</color>
+    <!-- فقاعات الرسائل داخل المجموعات (تتغير حسب الوضع) -->
+    <color name="bubble_day_start">#0D6E66</color>
+    <color name="bubble_day_center">#0F766E</color>
+    <color name="bubble_day_end">#128B80</color>
+    <color name="bubble_night_start">#0B2623</color>
+    <color name="bubble_night_center">#0E3530</color>
+    <color name="bubble_night_end">#12433C</color>
+    <color name="bubble_text">#F2FFFD</color>
+    <color name="bubble_time">#B9DCD6</color>
+    <color name="bubble_seen">#7DD3FC</color>
+    <color name="counter_light">#D7EEEA</color>
+    <color name="counter_dark">#0A1F1C</color>
+
+    <color name="error">#EF4444</color>
+    <color name="success">#10B981</color>
+    <color name="warning">#F59E0B</color>
+
+    <color name="ic_bg">#06252C</color>
+</resources>

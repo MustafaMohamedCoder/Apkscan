@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/home_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipToPadding="false"
+    android:paddingBottom="120dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="28dp"
+        android:paddingBottom="16dp">
+
+        <!-- شريط الترحيب: تحية + اسم المستخدم -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/greeting"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="مرحبًا بك 👋"
+                    android:textSize="15sp"
+                    android:fontFamily="@font/tajawal_medium"
+                    android:textColor="@color/accent" />
+                <TextView
+                    android:id="@+id/title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/app_name_title"
+                    android:textSize="32sp"
+                    android:fontFamily="@font/tajawal_bold"
+                    android:letterSpacing="0.01" />
+            </LinearLayout>
+            <ImageView
+                android:id="@+id/welcome_badge"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:src="@drawable/ic_invoice_new"
+                android:background="@drawable/circle_primary"
+                android:padding="14dp"
+                android:contentDescription="@string/app_name_title" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/subtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/home_subtitle"
+            android:textSize="14sp"
+            android:fontFamily="@font/tajawal_medium"
+            android:textColor="@color/day_text_secondary" />
+
+        <!-- بطاقتا الإحصائيات -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_invoices"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="4dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/day_card_stroke">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+                    <ImageView
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:src="@drawable/ic_invoice"
+                        android:tint="@color/accent"
+                        android:contentDescription="@string/invoices_count" />
+                    <TextView
+                        android:id="@+id/invoices_count"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="0"
+                        android:textSize="32sp"
+                        android:fontFamily="@font/tajawal_bold"
+                        android:textColor="@color/primary_dark" />
+                    <TextView
+                        android:id="@+id/invoices_label"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/invoices_count"
+                        android:textSize="13sp"
+                        android:textColor="@color/day_text_secondary" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_groups"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="4dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/day_card_stroke">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+                    <ImageView
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:src="@drawable/ic_groups_filled"
+                        android:tint="@color/accent"
+                        android:contentDescription="@string/groups_count" />
+                    <TextView
+                        android:id="@+id/groups_count"
+                        android:layout_width="wrap_content"
+                        android:clickable="true"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="0"
+                        android:textSize="32sp"
+                        android:fontFamily="@font/tajawal_bold"
+                        android:textColor="@color/primary_dark" />
+                    <TextView
+                        android:id="@+id/groups_label"
+                        android:layout_width="wrap_content"
+                        android:clickable="true"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/groups_count"
+                        android:textSize="13sp"
+                        android:textColor="@color/day_text_secondary" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+
+        <!-- زر ابدأ مسحًا جديدًا -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_start_scan"
+            android:layout_width="match_parent"
+            android:layout_height="58dp"
+            android:layout_marginTop="24dp"
+            android:text="@string/start_scan"
+            android:textSize="17sp"
+            android:fontFamily="@font/tajawal_bold"
+            android:backgroundTint="@color/accent"
+            app:cornerRadius="20dp"
+            app:elevation="6dp"
+            android:drawableStart="@drawable/ic_scanner_white"
+            android:drawablePadding="8dp" />
+
+        <LinearLayout
+            android:id="@+id/recent_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/recent_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/recent_operations"
+                android:textSize="17sp"
+                android:fontFamily="@font/tajawal_bold" />
+
+            <ImageView
+                android:id="@+id/recent_toggle"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:padding="9dp"
+                android:src="@drawable/ic_chevron_down"
+                android:background="@drawable/circle_primary"
+                android:backgroundTint="@color/day_surface_high"
+                android:layout_marginStart="8dp"
+                android:contentDescription="عرض/إخفاء آخر العمليات" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/recent_panel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recent_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/recent_empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center"
+                android:padding="28dp"
+                android:text="@string/no_operations"
+                android:background="@drawable/input_bg"
+                android:textColor="@color/day_text_secondary"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

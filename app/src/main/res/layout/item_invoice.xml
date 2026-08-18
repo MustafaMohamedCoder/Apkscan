@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- فقاعة رسالة على طريقة واتساب: في المنتصف بتصميم احترافي -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="60dp"
+    android:layout_marginEnd="60dp"
+    android:layout_marginBottom="6dp">
+
+    <!-- فقاعة الرسالة (فاتحة بلون التطبيق مثل واتساب) -->
+    <LinearLayout
+        android:id="@+id/msg_bubble"
+        android:background="@drawable/msg_bubble_bg"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="4dp"
+        android:elevation="2dp">
+
+        <!-- صورة الرسالة (اختياري) -->
+        <ImageView
+            android:id="@+id/item_image"
+            android:layout_width="250dp"
+            android:layout_height="250dp"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            android:layout_gravity="center_horizontal" />
+
+        <!-- نص الرسالة (اختياري، يمكن أن يكون مع صورة أو بدونها) -->
+        <TextView
+            android:id="@+id/item_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start"
+            android:textSize="15sp"
+            android:paddingTop="4dp"
+            android:paddingBottom="2dp" />
+
+        <!-- التفاصيل الصغيرة أسفل النص (تاريخ/مبلغ) -->
+        <LinearLayout
+            android:id="@+id/meta_row"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_gravity="end"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/item_details"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:paddingEnd="6dp" />
+
+            <TextView
+                android:id="@+id/item_date"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- صف أسفل الرسالة: وقت وتاريخ + اسم المرسل + علامة ✓ -->
+        <LinearLayout
+            android:id="@+id/msg_footer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_gravity="end"
+            android:layout_marginTop="2dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/msg_time_date"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:paddingEnd="4dp" />
+
+            <TextView
+                android:id="@+id/msg_sender"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:paddingEnd="4dp" />
+
+            <!-- علامة ✓: لون الخط العادي عند الإرسال، زرقاء عند المشاهدة -->
+            <ImageView
+                android:id="@+id/msg_seen"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:src="@drawable/ic_seen_check"
+                android:visibility="gone"
+                android:contentDescription="تمت المشاهدة" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- أيقونة القلم أعلى الرسالة للتعديل (دائرة ناعمة) -->
+    <ImageView
+        android:id="@+id/item_edit_pencil"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:layout_gravity="end|top"
+        android:layout_marginEnd="-10dp"
+        android:layout_marginTop="-10dp"
+        android:padding="8dp"
+        android:src="@drawable/ic_edit"
+        android:tint="#FFFFFF"
+        android:background="@drawable/circle_primary"
+        android:elevation="6dp"
+        android:contentDescription="@string/edit" />
+
+    <!-- أيقونة المشاركة أسفل الرسالة (دائرة ناعمة) -->
+    <ImageView
+        android:id="@+id/item_share"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:layout_gravity="start|bottom"
+        android:layout_marginStart="4dp"
+        android:layout_marginBottom="-10dp"
+        android:padding="8dp"
+        android:src="@drawable/ic_share"
+        android:tint="#FFFFFF"
+        android:background="@drawable/circle_primary"
+        android:elevation="6dp"
+        android:contentDescription="@string/share" />
+
+    <!-- مربع التحديد (يظهر عند التحديد الجماعي) -->
+    <ImageView
+        android:id="@+id/item_check"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_gravity="start|top"
+        android:layout_marginStart="-6dp"
+        android:layout_marginTop="-6dp"
+        android:padding="4dp"
+        android:visibility="gone"
+        android:elevation="4dp"
+        android:contentDescription="@string/delete" />
+</FrameLayout>

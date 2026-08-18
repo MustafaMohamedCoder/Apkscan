@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ماسح الحسابات</string>
+    <string name="app_name_title"><font color="#14B8A6">ماسح</font> الحسابات</string>
+    <string name="home_subtitle">مسح، تنظيم، وحفظ فواتيرك بذكاء</string>
+
+    <!-- Common -->
+    <string name="ok">حسناً</string>
+    <string name="cancel">إلغاء</string>
+    <string name="save">حفظ</string>
+    <string name="delete">حذف</string>
+    <string name="edit">تعديل</string>
+    <string name="share">مشاركة</string>
+    <string name="close">إغلاق</string>
+    <string name="loading">جارٍ التحميل…</string>
+    <string name="no_items">لا توجد عناصر بعد</string>
+    <string name="success">تمت العملية بنجاح</string>
+
+    <!-- Login -->
+    <string name="login_title">تسجيل الدخول إلى ماسح الحسابات</string>
+    <string name="login_subtitle">أدخل اسم المستخدم وكلمة المرور.</string>
+    <string name="username">اسم المستخدم</string>
+    <string name="password">كلمة المرور</string>
+    <string name="login_btn">تسجيل الدخول</string>
+    <string name="remember_me">تذكرني</string>
+    <string name="show_password">إظهار كلمة المرور</string>
+    <string name="login_error">اسم المستخدم أو كلمة المرور غير صحيحة</string>
+
+    <!-- Bottom navigation -->
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_groups">المجموعات</string>
+    <string name="nav_scanner">السكانر</string>
+    <string name="nav_search">البحث</string>
+    <string name="nav_theme">نهاري</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <!-- Misc referenced by code -->
+    <string name="search">البحث</string>
+    <string name="toggle_theme">التبديل إلى الوضع النهاري</string>
+    <string name="activity_log">سجل نشاط المستخدمين</string>
+    <string name="add_member">إضافة عضو</string>
+    <string name="logout_confirm">هل أنت متأكد من تسجيل الخروج؟</string>
+
+    <!-- Home -->
+    <string name="invoices_count">الفواتير</string>
+    <string name="groups_count">المجموعات</string>
+    <string name="start_scan">ابدأ مسحاً جديداً</string>
+    <string name="recent_operations">آخر العمليات</string>
+    <string name="no_operations">لا توجد عمليات بعد – ابدأ بمسح أول فاتورة لك</string>
+    <string name="dev_credit">التطبيق من تطوير مصطفي <font color="#EF4444">♥️</font> عبدالفتاح</string>
+
+    <!-- Scanner -->
+    <string name="scan_tap">اضغط لالتقاط صورة أو اختر من المعرض</string>
+    <string name="auto_edge">تم تحديد حواف المستند تلقائياً</string>
+    <string name="save_options">ماذا تريد أن تفعل بالصورة؟</string>
+    <string name="save_gallery">حفظ في المعرض</string>
+    <string name="new_invoice">إنشاء فاتورة جديدة</string>
+    <string name="add_to_invoice">إضافة إلى فاتورة قائمة</string>
+    <string name="invoice_name_hint">فاتورة 2026-08-18 · 00:14</string>
+
+    <!-- Crop -->
+    <string name="crop_title">اقتصاص المستند</string>
+    <string name="crop_manual">اقتطاع يدوي</string>
+    <string name="crop_center">اقتطاع مركزي</string>
+    <string name="crop_auto">اقتطاع تلقائي</string>
+    <string name="grid_on">الشبكة</string>
+    <string name="rotate">تدوير</string>
+    <string name="edge_reached">وصلت إلى حافة الصورة</string>
+
+    <!-- Invoices & Groups -->
+    <string name="invoices">الفواتير</string>
+    <string name="group_name">اسم المجموعة</string>
+    <string name="new_group">مجموعة جديدة</string>
+    <string name="no_invoices">لا توجد فواتير في هذه المجموعة</string>
+    <string name="add_text">إضافة نص</string>
+    <string name="manual_text">نص يدوي</string>
+    <string name="extracting">جارٍ استخراج بيانات الفاتورة…</string>
+    <string name="extract_failed">تعذر استخراج البيانات من الصورة. يمكنك إضافتها يدوياً.</string>
+    <string name="extracted_data">البيانات المستخرجة</string>
+    <string name="store_name">اسم المتجر</string>
+    <string name="date">التاريخ</string>
+    <string name="total">المبلغ الإجمالي</string>
+    <string name="currency">العملة</string>
+    <string name="items">العناصر</string>
+    <string name="confirm_delete">تأكيد الحذف</string>
+    <string name="delete_confirm_msg">هل أنت متأكد من الحذف؟ لا يمكن التراجع عن هذا الإجراء.</string>
+    <string name="selected_items">%d عنصر محدد</string>
+    <string name="delete_all">حذف المحدد</string>
+
+    <!-- Search -->
+    <string name="search_hint">ابحث في التطبيق…</string>
+    <string name="search_group_hint">ابحث في هذه المجموعة…</string>
+    <string name="filter">فلترة</string>
+    <string name="filter_date">التاريخ</string>
+    <string name="filter_store">اسم المتجر</string>
+    <string name="filter_amount">المبلغ</string>
+    <string name="reset_search">إعادة ضبط</string>
+    <string name="search_group">بحث داخل المجموعة</string>
+    <string name="no_results">لا توجد نتائج مطابقة</string>
+
+    <!-- Settings -->
+    <string name="settings">الإعدادات</string>
+    <string name="toggle_day_mode">التبديل إلى الوضع النهاري</string>
+    <string name="manage_accounts">إدارة الحسابات المحلية</string>
+    <string name="change_password">تغيير كلمة المرور</string>
+    <string name="user_activity_log">سجل نشاط المستخدمين</string>
+    <string name="export_data">تصدير جميع البيانات</string>
+    <string name="import_backup">استيراد نسخة احتياطية</string>
+    <string name="logout">تسجيل الخروج</string>
+    <string name="backup_exported">تم تصدير النسخة الاحتياطية بنجاح</string>
+    <string name="backup_imported">تم استيراد النسخة الاحتياطية بنجاح</string>
+    <string name="import_warning">سيتم استبدال البيانات الحالية بالبيانات المستوردة. هل تريد المتابعة؟</string>
+    <string name="invalid_backup">ملف النسخة الاحتياطية غير صالح</string>
+    <string name="new_password">كلمة المرور الجديدة</string>
+    <string name="current_password">كلمة المرور الحالية</string>
+    <string name="confirm_password">تأكيد كلمة المرور</string>
+    <string name="password_changed">تم تغيير كلمة المرور بنجاح</string>
+    <string name="password_mismatch">كلمتا المرور غير متطابقتين</string>
+    <string name="wrong_password">كلمة المرور الحالية غير صحيحة</string>
+
+    <!-- Team -->
+    <string name="team_management">إدارة الفريق</string>
+    <string name="team_subtitle">إدارة من يمكنه تسجيل الدخول وما يمكنه فعله.</string>
+    <string name="members">الأعضاء</string>
+    <string name="add_people">إضافة أشخاص</string>
+    <string name="requests">الطلبات</string>
+    <string name="sync_registrations">تسجيل</string>
+    <string name="invite_link">دعوة برابط</string>
+    <string name="create_account">إنشاء حساب دخول</string>
+    <string name="upload_file">رفع ملف</string>
+    <string name="account_note">اختر اسم المستخدم وكلمة المرور ثم سلّمهما له – دون حاجة لرابط.</string>
+    <string name="role">الدور</string>
+    <string name="example_user">مثال: sara</string>
+    <string name="auto_generate">يُولّد تلقائياً</string>
+    <string name="optional">اختياري</string>
+    <string name="create_account_btn">إنشاء حساب</string>
+    <string name="no_invites">لا توجد دعوات بعد.</string>
+    <string name="admin">مدير أساسي</string>
+    <string name="supervisor">مشرف</string>
+    <string name="editor">محرر</string>
+    <string name="viewer">مشاهد</string>
+    <string name="user_exists">اسم المستخدم موجود بالفعل</string>
+    <string name="user_created">تم إنشاء الحساب بنجاح</string>
+    <string name="account_deleted">تم حذف الحساب</string>
+
+    <!-- Sync -->
+    <string name="local_sync">المزامنة المحلية</string>
+    <string name="sync_available_devices">الأجهزة المتاحة</string>
+    <string name="start_sync">بدء المزامنة</string>
+    <string name="sync_progress">تقدم المزامنة</string>
+    <string name="sync_log">سجل المزامنة</string>
+    <string name="clear_log">مسح السجل</string>
+    <string name="export_log">تصدير السجل CSV</string>
+    <string name="sync_success">اكتملت المزامنة بنجاح</string>
+    <string name="sync_failed">فشلت المزامنة</string>
+    <string name="clear_log_confirm">هل تريد مسح سجل المزامنة بالكامل؟</string>
+
+    <!-- Activity log -->
+    <string name="log_login">سجّل المستخدم دخول: %s</string>
+    <string name="log_create_invoice" formatted="false">أنشأ %s فاتورة: %s</string>
+    <string name="log_create_group" formatted="false">أنشأ %s مجموعة: %s</string>
+    <string name="log_delete">حذف %s عنصراً</string>
+    <string name="log_create_user" formatted="false">أنشأ %s مستخدماً جديداً: %s</string>
+    <string name="log_no_entries">لا يوجد نشاط بعد</string>
+</resources>

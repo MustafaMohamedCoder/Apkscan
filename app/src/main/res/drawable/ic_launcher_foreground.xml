@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- QR frame corners: simple Material You line style -->
+    <!-- Top-left corner -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M40,40 L40,34 Q40,30 44,30 L50,30" />
+    <!-- Top-right corner -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M58,30 L64,30 Q68,30 68,34 L68,40" />
+    <!-- Bottom-right corner -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M68,68 L68,74 Q68,78 64,78 L58,78" />
+    <!-- Bottom-left corner -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M50,78 L44,78 Q40,78 40,74 L40,68" />
+
+    <!-- QR pattern modules -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,46 h4 v4 h-4 z M56,46 h4 v4 h-4 z M56,56 h4 v4 h-4 z M48,56 h4 v4 h-4 z" />
+
+    <!-- Scan line -->
+    <path
+        android:strokeColor="#80DEEA"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M34,54 L74,54" />
+</vector>

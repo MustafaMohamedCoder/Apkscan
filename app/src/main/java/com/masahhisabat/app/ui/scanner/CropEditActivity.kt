@@ -1,16 +1,22 @@
 package com.masahhisabat.app.ui.scanner
 
 import android.content.Context
+import android.content.ContentValues
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.net.Uri
+import android.os.Build
 import java.io.File
 import android.graphics.Paint
 import android.graphics.RectF
 import android.os.Bundle
+import android.os.Environment
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.provider.MediaStore
 import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
@@ -19,16 +25,20 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
+import com.masahhisabat.app.data.ActivityEntry
+import com.masahhisabat.app.data.InvoiceItem
 import com.masahhisabat.app.data.currentInvoiceName
 import com.masahhisabat.app.image.ImageProcessor
 import com.masahhisabat.app.image.ProcessMode
 import com.masahhisabat.app.ui.ThemeHelper
-import com.masahhisabat.app.ui.invoice.InvoiceActivity
+import com.masahhisabat.app.ui.auth.SessionStore
 
 /**
  * شاشة الاقتصاص والمعالجة:
@@ -44,15 +54,20 @@ class CropEditActivity : AppCompatActivity() {
         const val EXTRA_ACTION = "action"
         const val ACTION_NEW_INVOICE = "new_invoice"
         const val ACTION_ADD_TO_INVOICE = "add_to_invoice"
+        private const val REQUEST_SAVE_GALLERY = 319
     }
 
     private lateinit var cropView: CropView
     private lateinit var originalBmp: android.graphics.Bitmap
     private var processedBmp: android.graphics.Bitmap? = null
+    private var previewBmp: android.graphics.Bitmap? = null
     private var imagePath: String = ""
     private var action: String = ACTION_NEW_INVOICE
     private var lastMode = ProcessMode.AUTO
     private var processing = false
+    private var filterPreviewInProgress = false
+    private var previewMode: ProcessMode? = null
+    private var pendingGalleryBitmap: Bitmap? = null
     private var edgeDetectionInProgress = false
     private var edgeDetectionToken = 0
     private lateinit var loadingPanel: LinearLayout
@@ -87,9 +102,13 @@ class CropEditActivity : AppCompatActivity() {
             if (rotated !== croppedForRotation && !croppedForRotation.isRecycled) croppedForRotation.recycle()
             if (!originalBmp.isRecycled) originalBmp.recycle()
             processedBmp?.takeIf { !it.isRecycled }?.recycle()
+            previewBmp?.takeIf { it !== originalBmp && !it.isRecycled }?.recycle()
             cropView.setBitmap(rotated)
             originalBmp = rotated
             processedBmp = null
+            previewBmp = null
+            previewMode = null
+            lastMode = ProcessMode.AUTO
             cropView.setCropRect(0.035f, 0.035f, 0.965f, 0.965f)
             detectAndApplyEdges(showResult = false)
         }
@@ -107,12 +126,16 @@ class CropEditActivity : AppCompatActivity() {
             detectAndApplyEdges(showResult = true)
         }
 
+        findViewById<MaterialButton>(R.id.btn_filter).setOnClickListener {
+            showFilterPicker()
+        }
+
         findViewById<MaterialButton>(R.id.btn_compare).setOnClickListener {
             showComparison()
         }
 
         findViewById<MaterialButton>(R.id.btn_done).setOnClickListener {
-            if (processing) return@setOnClickListener
+            if (processing || filterPreviewInProgress) return@setOnClickListener
             processAndContinue()
         }
 
@@ -126,8 +149,10 @@ class CropEditActivity : AppCompatActivity() {
         edgeDetectionToken++
         if (::cropView.isInitialized) cropView.clearBitmap()
         if (::originalBmp.isInitialized && !originalBmp.isRecycled) originalBmp.recycle()
-        processedBmp?.takeIf { it !== originalBmp && !it.isRecycled }?.recycle()
+        previewBmp?.takeIf { it !== originalBmp && !it.isRecycled }?.recycle()
+        processedBmp?.takeIf { it !== originalBmp && it !== previewBmp && !it.isRecycled }?.recycle()
         processedBmp = null
+        previewBmp = null
         super.onDestroy()
     }
 
@@ -143,6 +168,7 @@ class CropEditActivity : AppCompatActivity() {
         loadingPanel.visibility = View.VISIBLE
 
         val cropped = cropView.getCroppedBitmap()
+        // المعاينة لا تُحفظ مباشرة: يعاد تطبيق الفلتر على الجزء المقصوص بالحجم الكامل.
         ImageProcessor.process(lastMode, cropped, object : ImageProcessor.Callback {
             override fun onDone(bitmap: android.graphics.Bitmap) {
                 processing = false
@@ -160,6 +186,72 @@ class CropEditActivity : AppCompatActivity() {
                 showSuccessAndContinue(cropped)
             }
         })
+    }
+
+    /** يتيح تبديل الفلاتر مع معاينة حقيقية للصورة قبل الحفظ. */
+    private fun showFilterPicker() {
+        if (edgeDetectionInProgress || processing || filterPreviewInProgress) return
+        val modes = arrayOf(
+            ProcessMode.ORIGINAL,
+            ProcessMode.AUTO,
+            ProcessMode.LOW_LIGHT,
+            ProcessMode.DOCUMENT,
+            ProcessMode.HIGH_CONTRAST,
+            ProcessMode.BW
+        )
+        val checked = modes.indexOf(lastMode).coerceAtLeast(0)
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.choose_document_filter)
+            .setSingleChoiceItems(modes.map { it.label }.toTypedArray(), checked) { dialog, which ->
+                dialog.dismiss()
+                applyFilterPreview(modes[which])
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun applyFilterPreview(mode: ProcessMode) {
+        if (filterPreviewInProgress || originalBmp.isRecycled) return
+        filterPreviewInProgress = true
+        setFilterUi(loading = true)
+        ImageProcessor.process(mode, originalBmp, object : ImageProcessor.Callback {
+            override fun onDone(bitmap: Bitmap) {
+                if (isFinishing || isDestroyed) {
+                    if (!bitmap.isRecycled) bitmap.recycle()
+                    return
+                }
+                filterPreviewInProgress = false
+                setFilterUi(loading = false)
+                previewBmp?.takeIf { it !== originalBmp && !it.isRecycled }?.recycle()
+                previewBmp = if (mode == ProcessMode.ORIGINAL) null else bitmap
+                if (mode == ProcessMode.ORIGINAL && !bitmap.isRecycled) bitmap.recycle()
+                cropView.setBitmap(previewBmp ?: originalBmp)
+                lastMode = mode
+                previewMode = mode
+                Toast.makeText(this@CropEditActivity, getString(R.string.filter_preview_ready, mode.label), Toast.LENGTH_SHORT).show()
+            }
+
+            override fun onError() {
+                if (isFinishing || isDestroyed) return
+                filterPreviewInProgress = false
+                setFilterUi(loading = false)
+                Toast.makeText(this@CropEditActivity, "تعذر تطبيق الفلتر. يمكنك المتابعة بالصورة الأصلية.", Toast.LENGTH_LONG).show()
+            }
+        })
+    }
+
+    private fun setFilterUi(loading: Boolean) {
+        loadingLabel.setText(if (loading) R.string.filter_preview_loading else R.string.loading)
+        loadingPanel.visibility = if (loading) View.VISIBLE else View.GONE
+        intArrayOf(
+            R.id.btn_rotate,
+            R.id.btn_grid,
+            R.id.btn_crop_center,
+            R.id.btn_crop_auto,
+            R.id.btn_filter,
+            R.id.btn_compare,
+            R.id.btn_done
+        ).forEach { id -> findViewById<View>(id).isEnabled = !loading }
     }
 
     /** يشغّل الكشف خارج خيط الواجهة ويطبق الإطار فقط إذا بقيت الصورة نفسها نشطة. */
@@ -210,6 +302,7 @@ class CropEditActivity : AppCompatActivity() {
             R.id.btn_grid,
             R.id.btn_crop_center,
             R.id.btn_crop_auto,
+            R.id.btn_filter,
             R.id.btn_compare,
             R.id.btn_done
         ).forEach { id -> findViewById<View>(id).isEnabled = !detecting }
@@ -222,16 +315,16 @@ class CropEditActivity : AppCompatActivity() {
         Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
 
         val options = arrayOf(
-            getString(R.string.new_invoice),
-            getString(R.string.add_to_invoice),
+            getString(R.string.save_gallery),
+            getString(R.string.add_to_group),
             getString(R.string.share)
         )
         MaterialAlertDialogBuilder(ctx)
             .setTitle(R.string.save_options)
             .setItems(options) { _, which ->
                 when (which) {
-                    0 -> goToInvoice(newFile(bitmap), actionCreate = true)
-                    1 -> goToInvoice(newFile(bitmap), actionCreate = false)
+                    0 -> requestSaveToGallery(bitmap)
+                    1 -> chooseGroupAndAdd(bitmap)
                     2 -> shareBitmap(bitmap)
                 }
             }
@@ -244,35 +337,156 @@ class CropEditActivity : AppCompatActivity() {
         return ImageProcessor.saveTo(bitmap, dir, "scan").absolutePath
     }
 
-    private fun goToInvoice(path: String, actionCreate: Boolean) {
-        val intent = Intent(this, InvoiceActivity::class.java)
-        intent.putExtra(InvoiceActivity.EXTRA_IMAGE_PATH, path)
-        intent.putExtra(InvoiceActivity.EXTRA_ACTION,
-            if (actionCreate) InvoiceActivity.ACTION_CREATE else InvoiceActivity.ACTION_ADD)
-        startActivity(intent)
-        finish()
+    private fun chooseGroupAndAdd(bitmap: Bitmap) {
+        val groups = AppRepository.groups()
+        if (groups.isEmpty()) {
+            Toast.makeText(this, R.string.no_groups_for_image, Toast.LENGTH_LONG).show()
+            return
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.add_to_group)
+            .setItems(groups.map { it.name }.toTypedArray()) { _, which ->
+                addImageToGroup(bitmap, groups[which].id, groups[which].name)
+            }
+            .show()
     }
 
-    private fun shareBitmap(bitmap: android.graphics.Bitmap) {
-        try {
-            val file = File(cacheDir, "share_${System.currentTimeMillis()}.jpg")
-            file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }
-            val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
-            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                type = "image/jpeg"
-                putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    private fun addImageToGroup(bitmap: Bitmap, groupId: String, groupName: String) {
+        processing = true
+        loadingLabel.setText(R.string.loading)
+        loadingPanel.visibility = View.VISIBLE
+        Thread {
+            val error = try {
+                val scanPath = newFile(bitmap)
+                val persistentPath = AppRepository.persistAppImage(scanPath)
+                    ?: throw IllegalStateException("تعذر حفظ الصورة في التخزين الدائم")
+                AppRepository.addItem(groupId, InvoiceItem(type = "image", imagePath = persistentPath, processedPath = null))
+                val user = SessionStore.currentUser(this) ?: "?"
+                AppRepository.logActivity(ActivityEntry(user, "أضاف $user مستندًا ممسوحًا إلى $groupName"))
+                if (persistentPath != scanPath) File(scanPath).delete()
+                null
+            } catch (e: Exception) {
+                e.message ?: "تعذر إضافة الصورة إلى المجموعة"
             }
-            startActivity(android.content.Intent.createChooser(intent, getString(R.string.share)))
-            finish()
-        } catch (e: Exception) {
-            Toast.makeText(this, "تعذرت المشاركة", Toast.LENGTH_SHORT).show()
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                processing = false
+                loadingPanel.visibility = View.GONE
+                if (error == null) {
+                    Toast.makeText(this, R.string.success, Toast.LENGTH_SHORT).show()
+                    finish()
+                } else {
+                    Toast.makeText(this, error, Toast.LENGTH_LONG).show()
+                }
+            }
+        }.apply { name = "scan-add-to-group"; start() }
+    }
+
+    /** يطلب إذن الكتابة فقط للإصدارات التي تحتاجه قبل Android 10. */
+    private fun requestSaveToGallery(bitmap: Bitmap) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingGalleryBitmap = bitmap
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                REQUEST_SAVE_GALLERY
+            )
+            return
         }
+        saveToGallery(bitmap)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_SAVE_GALLERY) return
+        val bitmap = pendingGalleryBitmap
+        pendingGalleryBitmap = null
+        if (bitmap != null && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            saveToGallery(bitmap)
+        } else {
+            Toast.makeText(this, "يلزم السماح بالوصول للتخزين لحفظ الصورة في المعرض.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun saveToGallery(bitmap: Bitmap) {
+        processing = true
+        loadingLabel.setText(R.string.loading)
+        loadingPanel.visibility = View.VISIBLE
+        Thread {
+            val error = try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val values = ContentValues().apply {
+                        put(MediaStore.Images.Media.DISPLAY_NAME, "masah_${System.currentTimeMillis()}.jpg")
+                        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                        put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/MasahHisabat")
+                    }
+                    val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                        ?: throw IllegalStateException("تعذر إنشاء ملف الصورة")
+                    contentResolver.openOutputStream(uri)?.use { out ->
+                        if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)) throw IllegalStateException("تعذر حفظ الصورة")
+                    } ?: throw IllegalStateException("تعذر فتح ملف الصورة")
+                } else {
+                    val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "MasahHisabat")
+                    dir.mkdirs()
+                    val file = File(dir, "masah_${System.currentTimeMillis()}.jpg")
+                    file.outputStream().use { out ->
+                        if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)) throw IllegalStateException("تعذر حفظ الصورة")
+                    }
+                    sendBroadcast(Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE).apply { data = Uri.fromFile(file) })
+                }
+                null
+            } catch (e: Exception) {
+                e.message ?: "تعذر حفظ الصورة في المعرض"
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                processing = false
+                loadingPanel.visibility = View.GONE
+                if (error == null) {
+                    Toast.makeText(this, R.string.success, Toast.LENGTH_SHORT).show()
+                    finish()
+                } else {
+                    Toast.makeText(this, "فشل الحفظ: $error", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.apply { name = "scan-gallery-save"; start() }
+    }
+
+    private fun shareBitmap(bitmap: Bitmap) {
+        processing = true
+        loadingLabel.setText(R.string.loading)
+        loadingPanel.visibility = View.VISIBLE
+        Thread {
+            val file = try { ImageProcessor.saveTo(bitmap, cacheDir, "share", quality = 90) } catch (_: Exception) { null }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                processing = false
+                loadingPanel.visibility = View.GONE
+                if (file == null) {
+                    Toast.makeText(this, "تعذرت المشاركة", Toast.LENGTH_SHORT).show()
+                    return@runOnUiThread
+                }
+                try {
+                    val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/jpeg"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(intent, getString(R.string.share)))
+                    finish()
+                } catch (_: Exception) {
+                    Toast.makeText(this, "تعذرت المشاركة", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.apply { name = "scan-image-share"; start() }
     }
 
     private fun showComparison() {
         val ctx = this
-        val processed = processedBmp
+        val processed = previewBmp ?: processedBmp
         val items = listOf("الأصلية", "المحسنة")
         val bitmaps = listOf(originalBmp, processed)
         MaterialAlertDialogBuilder(ctx)

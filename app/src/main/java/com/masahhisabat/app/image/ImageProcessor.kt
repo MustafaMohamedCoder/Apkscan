@@ -11,6 +11,8 @@ import java.io.File
 enum class ProcessMode(val key: String, val label: String) {
     ORIGINAL("original", "الأصلية"),
     AUTO("auto", "تحسين تلقائي"),
+    LOW_LIGHT("low_light", "إضاءة ضعيفة"),
+    DOCUMENT("document", "تباين المستند"),
     HIGH_CONTRAST("high", "تباين عالي"),
     BW("bw", "أبيض وأسود");
 }
@@ -35,7 +37,9 @@ object ImageProcessor {
             try {
                 val result = when (mode) {
                     ProcessMode.ORIGINAL -> src.copy(Bitmap.Config.ARGB_8888, false)
-                    ProcessMode.AUTO -> enhance(src)
+                    ProcessMode.AUTO -> enhanceAutomatically(src)
+                    ProcessMode.LOW_LIGHT -> correctLowLight(src)
+                    ProcessMode.DOCUMENT -> documentContrast(src)
                     ProcessMode.HIGH_CONTRAST -> highContrast(src)
                     ProcessMode.BW -> toBlackAndWhite(src)
                 }
@@ -48,7 +52,9 @@ object ImageProcessor {
 
     fun processSync(mode: ProcessMode, src: Bitmap): Bitmap = when (mode) {
         ProcessMode.ORIGINAL -> src.copy(Bitmap.Config.ARGB_8888, false)
-        ProcessMode.AUTO -> enhance(src)
+        ProcessMode.AUTO -> enhanceAutomatically(src)
+        ProcessMode.LOW_LIGHT -> correctLowLight(src)
+        ProcessMode.DOCUMENT -> documentContrast(src)
         ProcessMode.HIGH_CONTRAST -> highContrast(src)
         ProcessMode.BW -> toBlackAndWhite(src)
     }
@@ -73,46 +79,103 @@ object ImageProcessor {
         return requireNotNull(BitmapFactory.decodeFile(path, o2)) { "تعذر فك ترميز الصورة" }
     }
 
-    /** تحسين تلقائي للإضاءة والتباين: تمديد المدى الديناميكي + تصحيح غاما خفيف */
-    private fun enhance(src: Bitmap): Bitmap {
+    /**
+     * اختيار تحسين متوازن بعد قياس متوسط الإضاءة. الصور الداكنة تستفيد من تصحيح
+     * محلي أقوى، أما المستندات الطبيعية فتستخدم تباينًا محافظًا يحافظ على ألوانها.
+     */
+    private fun enhanceAutomatically(src: Bitmap): Bitmap {
+        val pixels = IntArray(src.width * src.height)
+        src.getPixels(pixels, 0, src.width, 0, 0, src.width, src.height)
+        var sum = 0L
+        for (pixel in pixels) sum += luminance(pixel).toLong()
+        val mean = sum.toFloat() / pixels.size.coerceAtLeast(1)
+        return if (mean < 132f) correctLowLight(src) else documentContrast(src, strength = 0.42f)
+    }
+
+    /**
+     * تصحيح الإضاءة الضعيفة أو غير المتجانسة محليًا، دون أي مكتبة أو خدمة خارجية.
+     * يُحسب متوسط الإضاءة لكل بلاطة من الصورة ثم تُصحح البكسلات بالنسبة إليه، مما
+     * يقلل الظلال الموضعية دون تحويل النص إلى كتلة سوداء أو تضخيم الضوضاء بشدة.
+     */
+    private fun correctLowLight(src: Bitmap): Bitmap = adaptiveDocumentEnhance(
+        src = src,
+        targetLuminance = 164f,
+        illuminationStrength = 0.72f,
+        contrast = 1.24f,
+        gamma = 0.78f
+    )
+
+    /** فلتر مخصص للمستندات: يوازن الخلفية الورقية ويعطي النصوص تباينًا أوضح. */
+    private fun documentContrast(src: Bitmap, strength: Float = 0.64f): Bitmap = adaptiveDocumentEnhance(
+        src = src,
+        targetLuminance = 174f,
+        illuminationStrength = strength.coerceIn(0f, 1f),
+        contrast = 1.36f,
+        gamma = 0.90f
+    )
+
+    /**
+     * توازن محلي للإضاءة مع تباين ناعم. تقسيم الصورة إلى بلاطات صغيرة يحقق نتيجة
+     * قريبة من تصحيح الخلفية مع ذاكرة محدودة، وهو مناسب لصور الكاميرا الكبيرة.
+     */
+    private fun adaptiveDocumentEnhance(
+        src: Bitmap,
+        targetLuminance: Float,
+        illuminationStrength: Float,
+        contrast: Float,
+        gamma: Float
+    ): Bitmap {
         val bmp = src.copy(Bitmap.Config.ARGB_8888, true)
         val w = bmp.width
         val h = bmp.height
         val pixels = IntArray(w * h)
         bmp.getPixels(pixels, 0, w, 0, 0, w, h)
 
-        // العثور على min/max للسطوع
-        var minV = 255f
-        var maxV = 0f
-        for (i in pixels.indices) {
-            val px = pixels[i]
-            val lum = 0.299f * ((px shr 16) and 255) + 0.587f * (((px shr 8) and 255)) + 0.114f * (px and 255)
-            if (lum < minV) minV = lum
-            if (lum > maxV) maxV = lum
-        }
-        val range = maxV - minV
-        val gamma = 0.92f
-
-        for (i in pixels.indices) {
-            val px = pixels[i]
-            var r = ((px shr 16) and 255).toFloat()
-            var g = ((px shr 8) and 255).toFloat()
-            var b = (px and 255).toFloat()
-            if (range > 20) {
-                r = ((r - minV) / range * 255f).coerceIn(0f, 255f)
-                g = ((g - minV) / range * 255f).coerceIn(0f, 255f)
-                b = ((b - minV) / range * 255f).coerceIn(0f, 255f)
+        // بلاطات بعرض يقارب 96px: حجم ثابت قليل الذاكرة حتى مع صور التابلت الكبيرة.
+        val columns = (w / 96).coerceIn(4, 28)
+        val rows = (h / 96).coerceIn(4, 28)
+        val sums = LongArray(columns * rows)
+        val counts = IntArray(columns * rows)
+        for (y in 0 until h) {
+            val tileY = (y * rows / h).coerceAtMost(rows - 1)
+            val rowOffset = y * w
+            for (x in 0 until w) {
+                val tileX = (x * columns / w).coerceAtMost(columns - 1)
+                val index = tileY * columns + tileX
+                sums[index] += luminance(pixels[rowOffset + x]).toLong()
+                counts[index]++
             }
-            // غاما
-            r = 255f * Math.pow((r / 255f).toDouble(), gamma.toDouble()).toFloat()
-            g = 255f * Math.pow((g / 255f).toDouble(), gamma.toDouble()).toFloat()
-            b = 255f * Math.pow((b / 255f).toDouble(), gamma.toDouble()).toFloat()
-            pixels[i] = (0xFF000000.toInt()) or
-                (r.toInt() shl 16) or (g.toInt() shl 8) or b.toInt()
+        }
+        val localMeans = FloatArray(sums.size) { index ->
+            (sums[index].toFloat() / counts[index].coerceAtLeast(1)).coerceAtLeast(38f)
+        }
+
+        for (y in 0 until h) {
+            val tileY = (y * rows / h).coerceAtMost(rows - 1)
+            val rowOffset = y * w
+            for (x in 0 until w) {
+                val index = rowOffset + x
+                val px = pixels[index]
+                val lum = luminance(px)
+                val tileX = (x * columns / w).coerceAtMost(columns - 1)
+                val localMean = localMeans[tileY * columns + tileX]
+                val illuminationCorrected = lum + ((lum * (targetLuminance / localMean)).coerceIn(0f, 255f) - lum) * illuminationStrength
+                val contrasted = (targetLuminance + (illuminationCorrected - targetLuminance) * contrast).coerceIn(0f, 255f)
+                val outputLum = (255.0 * Math.pow((contrasted / 255f).toDouble(), gamma.toDouble())).toFloat()
+                    .coerceIn(0f, 255f)
+                val colorScale = outputLum / lum.coerceAtLeast(1f)
+                val r = (((px shr 16) and 255) * colorScale).toInt().coerceIn(0, 255)
+                val g = (((px shr 8) and 255) * colorScale).toInt().coerceIn(0, 255)
+                val b = ((px and 255) * colorScale).toInt().coerceIn(0, 255)
+                pixels[index] = (0xFF000000.toInt()) or (r shl 16) or (g shl 8) or b
+            }
         }
         bmp.setPixels(pixels, 0, w, 0, 0, w, h)
         return bmp
     }
+
+    private fun luminance(pixel: Int): Float =
+        0.299f * ((pixel shr 16) and 255) + 0.587f * ((pixel shr 8) and 255) + 0.114f * (pixel and 255)
 
     /** تباين عالي */
     private fun highContrast(src: Bitmap): Bitmap {

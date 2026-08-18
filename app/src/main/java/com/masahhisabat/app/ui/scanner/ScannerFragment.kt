@@ -137,28 +137,10 @@ class ScannerFragment : Fragment() {
 
     private fun showPostScanOptions(imagePath: String) {
         val ctx = requireContext()
-        // اهتزاز خفيف. كشف الحواف يبدأ عند فتح محرر القص حتى لا يعطّل اختيار الإجراء.
+        // يفتح محرر القص مباشرةً: خيارات إخراج النسخة المحسنة تظهر بعد المعالجة.
         (ctx.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
             ?.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE))
-
-        val options = arrayOf(
-            getString(R.string.save_gallery),
-            getString(R.string.new_invoice),
-            getString(R.string.add_to_invoice),
-            getString(R.string.share)
-        )
-
-        MaterialAlertDialogBuilder(ctx)
-            .setTitle(R.string.save_options)
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> saveToGallery(imagePath)
-                    1 -> startCrop(imagePath, action = CropEditActivity.ACTION_NEW_INVOICE)
-                    2 -> startCrop(imagePath, action = CropEditActivity.ACTION_ADD_TO_INVOICE)
-                    3 -> shareImage(imagePath)
-                }
-            }
-            .show()
+        startCrop(imagePath, action = CropEditActivity.ACTION_NEW_INVOICE)
     }
 
     private fun startCrop(imagePath: String, action: String) {

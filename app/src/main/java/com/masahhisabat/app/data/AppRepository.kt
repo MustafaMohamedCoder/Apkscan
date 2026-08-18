@@ -6,6 +6,7 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 import java.io.File
+import java.util.Locale
 
 /**
  * مستودع محلي شامل: مستخدمون، مجموعات، فواتير، سجل نشاط، سجل مزامنة، تفضيلات.
@@ -158,21 +159,32 @@ object AppRepository {
     }
 
     // ---------- المستخدمون ----------
+    /** اسم موحّد للمقارنة والتخزين كي لا تختلف بيانات الدخول بين جهازين بسبب المسافات أو حالة الحروف. */
+    fun normalizeUsername(username: String): String = username.trim().lowercase(Locale.ROOT)
+    private fun sameUsername(first: String, second: String): Boolean =
+        normalizeUsername(first) == normalizeUsername(second)
+
     private fun usersInternal(): List<User> = loadList("users.json", User::class.java)
     private fun addUserInternal(u: User) = saveList("users.json", usersInternal().toMutableList().also { it.add(u) })
-    fun addUser(u: User) = saveList("users.json", users().toMutableList().also { it.add(u) })
-    fun removeUser(username: String) = saveList("users.json", users().filter { it.username != username })
+    fun addUser(u: User) {
+        val normalized = normalizeUsername(u.username)
+        require(normalized.isNotBlank()) { "اسم المستخدم مطلوب" }
+        require(users().none { sameUsername(it.username, normalized) }) { "اسم المستخدم مستخدم بالفعل" }
+        saveList("users.json", users().toMutableList().also { it.add(u.copy(username = normalized)) })
+    }
+    fun removeUser(username: String) = saveList("users.json", users().filterNot { sameUsername(it.username, username) })
     fun changePassword(username: String, newHash: String) {
-        saveList("users.json", users().map { if (it.username == username) it.copy(passwordHash = newHash) else it })
+        saveList("users.json", users().map { if (sameUsername(it.username, username)) it.copy(passwordHash = newHash) else it })
     }
 
     fun authenticate(username: String, password: String): User? {
-        val user = users().find { it.username == username && it.enabled } ?: return null
+        val normalized = normalizeUsername(username)
+        val user = users().find { sameUsername(it.username, normalized) && it.enabled } ?: return null
         // دعم النوعين: SHA-256 القديم، وv2 القابل للفك (كلمات مرور المستخدمين الجدد)
         if (user.passwordHash == HashUtil.hash(password)) {
             // الدخول بكلمة مرور قديمة ناجح — نرقّيها تلقائيًا إلى النمط القابل للفك (v2)
             // حتى تُعرض لاحقًا كما هي في إدارة الفريق
-            changePassword(username, HashUtil.encodePlain(password))
+            changePassword(user.username, HashUtil.encodePlain(password))
             return user
         }
         if (HashUtil.isDecodable(user.passwordHash) && HashUtil.decodePlain(user.passwordHash) == password) {
@@ -186,7 +198,7 @@ object AppRepository {
         if (isBadV2) {
             val fixed = HashUtil.encodePlain(if (user.role == Role.ADMIN) "0" else user.username)
             changePassword(user.username, fixed)
-            return users().find { it.username == username && it.enabled }?.takeIf {
+            return users().find { sameUsername(it.username, normalized) && it.enabled }?.takeIf {
                 HashUtil.decodePlain(it.passwordHash) == (if (it.role == Role.ADMIN) "0" else it.username)
             }
         }
@@ -393,8 +405,8 @@ object AppRepository {
     fun setAppLockPin(pin: String) = prefs.edit().putString("app_lock_pin", HashUtil.encodePlain(pin)).apply()
     fun clearAppLockPin() = prefs.edit().remove("app_lock_pin").apply()
     fun verifyAppLockPin(pin: String): Boolean = HashUtil.decodePlain(prefs.getString("app_lock_pin", "") ?: "") == pin
-    fun rememberLogin(username: String) = prefs.edit().putString("remember_user", username).apply()
-    fun rememberedLogin(): String? = prefs.getString("remember_user", null)
+    fun rememberLogin(username: String) = prefs.edit().putString("remember_user", normalizeUsername(username)).apply()
+    fun rememberedLogin(): String? = prefs.getString("remember_user", null)?.let(::normalizeUsername)
     fun clearRemember() = prefs.edit().remove("remember_user").apply()
     fun lastProcessMode(): String = prefs.getString("last_process_mode", "auto") ?: "auto"
     fun setLastProcessMode(mode: String) = prefs.edit().putString("last_process_mode", mode).apply()

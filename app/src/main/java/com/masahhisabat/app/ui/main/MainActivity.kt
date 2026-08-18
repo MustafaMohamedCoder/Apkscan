@@ -13,6 +13,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
+import com.masahhisabat.app.data.SyncManager
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.LoginActivity
 import com.masahhisabat.app.ui.auth.LockActivity
@@ -77,6 +78,8 @@ class MainActivity : AppCompatActivity() {
             lastTab = savedInstanceState?.getInt("last_tab", 0) ?: 0
             switchTab(lastTab, animate = false)
             applyTheme()
+            // كل الأجهزة تستقبل محليًا، وجلسة mustafa وحدها ترسل ملف المستخدمين تلقائيًا.
+            SyncManager.startAutomaticUserSync(this)
         } catch (e: Exception) {
             try {
                 val sw = java.io.StringWriter()

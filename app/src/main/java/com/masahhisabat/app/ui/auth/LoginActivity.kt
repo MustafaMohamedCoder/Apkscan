@@ -69,7 +69,9 @@ class LoginActivity : AppCompatActivity() {
             binding.usernameInput.setText(remembered)
             binding.rememberCheck.isChecked = true
             // الدخول التلقائي فورًا دون انتظار الضغط على الزر
-            val user = AppRepository.users().find { it.username == remembered && it.enabled }
+            val user = AppRepository.users().find {
+                AppRepository.normalizeUsername(it.username) == remembered && it.enabled
+            }
             if (user != null) {
                 AppRepository.logActivity(ActivityEntry(user.username, getString(R.string.log_login, remembered)))
                 SessionStore.save(this, user)

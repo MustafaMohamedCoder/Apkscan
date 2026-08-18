@@ -8,6 +8,7 @@ import android.os.Looper
 import android.widget.Toast
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.SyncManager
+import com.masahhisabat.app.data.TrashCleanupScheduler
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.SessionStore
 import com.masahhisabat.app.ui.auth.LockActivity
@@ -27,6 +28,11 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         AppRepository.initAppContext(this)
+        // تنظيف السلة المؤجل لا يعمل إلا إذا أبقاه المستخدم مفعّلًا في الإعدادات.
+        TrashCleanupScheduler.update(this)
+        if (AppRepository.isAutoTrashPurgeEnabled()) {
+            Thread { try { AppRepository.purgeExpiredTrash() } catch (_: Exception) { } }.start()
+        }
         // يبقى الجهاز المستقبل مستعدًا لملف مستخدمي mustafa حتى قبل تسجيل الدخول.
         SyncManager.ensureServer(this)
         // يفحص الإصدار بين الأجهزة المفتوحة على الشبكة المحلية مرة واحدة عند بدء التطبيق.

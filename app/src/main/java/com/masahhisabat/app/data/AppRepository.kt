@@ -15,6 +15,9 @@ import java.util.Locale
  */
 object AppRepository {
 
+    private const val AUTO_TRASH_PURGE_KEY = "auto_purge_trash_after_30_days"
+    private const val TRASH_RETENTION_MS = 30L * 24L * 60L * 60L * 1000L
+
     private var appContext: Context? = null
     private val prefs: SharedPreferences by lazy {
         val ctx = appContext
@@ -443,6 +446,26 @@ object AppRepository {
 
     /** العناصر الظاهرة للمستخدم في سلة المحذوفات. */
     fun trashEntries(): List<TrashEntry> = trashRecords().filter { it.state == "trashed" }
+
+    /** هل يسمح المستخدم بالحذف النهائي التلقائي لعناصر السلة بعد مدة الاحتفاظ. */
+    fun isAutoTrashPurgeEnabled(): Boolean = prefs.getBoolean(AUTO_TRASH_PURGE_KEY, true)
+
+    /** يحفظ تفضيل الحذف التلقائي محليًا؛ القيمة الافتراضية مفعلة لحماية مساحة التخزين. */
+    fun setAutoTrashPurgeEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(AUTO_TRASH_PURGE_KEY, enabled).apply()
+    }
+
+    /**
+     * يحذف نهائيًا عناصر السلة التي تجاوزت 30 يومًا فقط عند تفعيل الميزة.
+     * لا يلمس الصور المرتبطة إلا عبر الحذف النهائي الآمن الموجود أصلًا.
+     */
+    fun purgeExpiredTrash(now: Long = System.currentTimeMillis()): Int {
+        if (!isAutoTrashPurgeEnabled()) return 0
+        val cutoff = now - TRASH_RETENTION_MS
+        return trashEntries()
+            .filter { it.stateChangedAt in 1..cutoff }
+            .count { permanentlyDeleteTrashEntry(it.id) }
+    }
 
     /** يعيد عنصرًا واحدًا من السلة ويحذفه منها عند نجاح الاستعادة. */
     fun restoreTrashEntry(trashId: String): Boolean {

@@ -17,10 +17,12 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.materialswitch.MaterialSwitch
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.ActivityEntry
 import com.masahhisabat.app.data.SyncManager
+import com.masahhisabat.app.data.TrashCleanupScheduler
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.LoginActivity
 import com.masahhisabat.app.ui.auth.SessionStore
@@ -70,6 +72,7 @@ class SettingsFragment : Fragment() {
                 Toast.makeText(requireContext(), "سلة المحذوفات متاحة للمدير والمشرف فقط", Toast.LENGTH_SHORT).show()
             }
         }
+        setupAutoTrashPurge(view)
         setupItem(view, R.id.item_help, R.id.tv_help_title, "مركز المساعدة") { showHelpDialog() }
         setupItem(view, R.id.item_export, R.id.tv_export_title, getString(R.string.export_data)) { showExportOptions() }
         setupItem(view, R.id.item_storage, R.id.tv_storage_title, "إدارة التخزين") { showStorageDialog() }
@@ -97,6 +100,33 @@ class SettingsFragment : Fragment() {
     private fun trashTitle(): String {
         val count = AppRepository.trashEntries().size
         return if (count == 0) "سلة المحذوفات" else "سلة المحذوفات ($count)"
+    }
+
+    /** يتيح للمدير والمشرف فقط التحكم في الحذف النهائي المؤجل لعناصر السلة. */
+    private fun setupAutoTrashPurge(view: View) {
+        val row = view.findViewById<LinearLayout>(R.id.item_auto_trash_purge) ?: return
+        val context = requireContext()
+        if (!AppRepository.canDeleteContent(SessionStore.currentRole(context))) {
+            row.visibility = View.GONE
+            return
+        }
+        val toggle = row.findViewById<MaterialSwitch>(R.id.switch_auto_trash_purge)
+        toggle.setOnCheckedChangeListener(null)
+        toggle.isChecked = AppRepository.isAutoTrashPurgeEnabled()
+        toggle.setOnCheckedChangeListener { _, enabled ->
+            AppRepository.setAutoTrashPurgeEnabled(enabled)
+            TrashCleanupScheduler.update(context)
+            if (enabled) {
+                Thread { try { AppRepository.purgeExpiredTrash() } catch (_: Exception) { } }.start()
+            }
+            val text = if (enabled) {
+                "تم تفعيل الحذف التلقائي بعد 30 يومًا"
+            } else {
+                "تم إيقاف الحذف التلقائي؛ ستبقى عناصر السلة حتى تحذفها يدويًا"
+            }
+            Toast.makeText(context, text, Toast.LENGTH_LONG).show()
+        }
+        row.setOnClickListener { toggle.performClick() }
     }
 
     private fun showAppLockDialog() {
@@ -151,14 +181,15 @@ class SettingsFragment : Fragment() {
         val textSec = ThemeHelper.textSecondary(ctx)
         // الصفوف بخلفية card_surface_settings (قابلة للتكيف مع الوضع) — لا نكتب فوقها، بل نلوّنها ديناميكيًا
         val rowBg = ThemeHelper.surfaceHigh(ctx)
-        listOf(R.id.item_theme, R.id.item_app_lock, R.id.item_accounts, R.id.item_activity, R.id.item_trash, R.id.item_help, R.id.item_storage,
+        listOf(R.id.item_theme, R.id.item_app_lock, R.id.item_accounts, R.id.item_activity, R.id.item_trash, R.id.item_auto_trash_purge, R.id.item_help, R.id.item_storage,
             R.id.item_export, R.id.item_import, R.id.item_sync, R.id.item_logout).forEach { id ->
             view.findViewById<LinearLayout>(id)?.background?.setTint(rowBg)
         }
         listOf(R.id.tv_theme_title, R.id.tv_app_lock_title, R.id.tv_accounts_title, R.id.tv_help_title, R.id.tv_storage_title,
-            R.id.tv_activity_title, R.id.tv_trash_title, R.id.tv_export_title, R.id.tv_import_title, R.id.tv_sync_title).forEach { id ->
+            R.id.tv_activity_title, R.id.tv_trash_title, R.id.tv_auto_trash_purge_title, R.id.tv_export_title, R.id.tv_import_title, R.id.tv_sync_title).forEach { id ->
             view.findViewById<TextView>(id)?.setTextColor(text)
         }
+        view.findViewById<TextView>(R.id.tv_auto_trash_purge_summary)?.setTextColor(textSec)
         view.findViewById<TextView>(R.id.tv_sync_summary)?.setTextColor(textSec)
         view.findViewById<TextView>(R.id.tv_title)?.setTextColor(text)
         view.findViewById<TextView>(R.id.version_text)?.setTextColor(textSec)

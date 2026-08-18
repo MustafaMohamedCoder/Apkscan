@@ -6,25 +6,25 @@
     <color name="primary_light">#CCFBF1</color>
     <color name="accent">#14B8A6</color>
 
-    <!-- Night theme — داكن فاخر بلمسة Teal -->
-    <color name="night_background">#071C1A</color>
-    <color name="night_surface">#0D2B27</color>
-    <color name="night_surface_high">#163D37</color>
-    <color name="night_text">#F4FFFD</color>
-    <color name="night_text_secondary">#B6D2CD</color>
-    <color name="night_card_stroke">#2B5C55</color>
-    <color name="night_nav_bar">#06201E</color>
+    <!-- أسطح Apkscan-by-gemini: Slate عميق مع Teal واضح للعمليات -->
+    <color name="night_background">#121820</color>
+    <color name="night_surface">#18202A</color>
+    <color name="night_surface_high">#22303D</color>
+    <color name="night_text">#F8FAFC</color>
+    <color name="night_text_secondary">#94A3B8</color>
+    <color name="night_card_stroke">#2B3947</color>
+    <color name="night_nav_bar">#18202A</color>
 
     <!-- Day theme — فاتح نظيف -->
-    <color name="day_background">#F5F9F8</color>
+    <color name="day_background">#F8FAFC</color>
     <color name="day_surface">#FFFFFF</color>
-    <color name="day_surface_high">#E7F3F0</color>
-    <color name="day_text">#082826</color>
-    <color name="day_text_secondary">#466864</color>
-    <color name="day_card_stroke">#CDE2DC</color>
+    <color name="day_surface_high">#F0FDFA</color>
+    <color name="day_text">#0F172A</color>
+    <color name="day_text_secondary">#64748B</color>
+    <color name="day_card_stroke">#E2E8F0</color>
     <color name="day_nav_bar">#FFFFFF</color>
-    <color name="navigation_inactive_day">#647A76</color>
-    <color name="navigation_inactive_night">#A7BFBA</color>
+    <color name="navigation_inactive_day">#64748B</color>
+    <color name="navigation_inactive_night">#94A3B8</color>
 
     <!-- Login gradient -->
     <color name="login_top">#0B3B37</color>

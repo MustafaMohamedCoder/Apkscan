@@ -136,11 +136,11 @@ class HomeFragment : Fragment() {
             card.setCardBackgroundColor(surface)
             card.strokeColor = ThemeHelper.cardStroke(requireContext())
         }
-        view.findViewById<TextView>(R.id.title).setTextColor(text)
-        view.findViewById<TextView>(R.id.subtitle).setTextColor(textSec)
-        // شريط الترحيب
-        view.findViewById<TextView>(R.id.greeting)?.setTextColor(ThemeHelper.accent(requireContext()))
-        view.findViewById<ImageView>(R.id.welcome_badge)?.setColorFilter(ThemeHelper.accent(requireContext()))
+        // بطاقة الترحيب المتدرجة ثابتة اللون لتبقى القراءة واضحة في وضعي النهار والليل.
+        view.findViewById<TextView>(R.id.title).setTextColor(android.graphics.Color.WHITE)
+        view.findViewById<TextView>(R.id.subtitle).setTextColor(0xFFE6FFFB.toInt())
+        view.findViewById<TextView>(R.id.greeting)?.setTextColor(0xFFD1FAE5.toInt())
+        view.findViewById<ImageView>(R.id.welcome_badge)?.setColorFilter(android.graphics.Color.WHITE)
         view.findViewById<TextView>(R.id.recent_title).setTextColor(text)
         view.findViewById<TextView>(R.id.dashboard_title).setTextColor(text)
         view.findViewById<TextView>(R.id.dashboard_last_group).setTextColor(textSec)

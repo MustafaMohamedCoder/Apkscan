@@ -275,6 +275,7 @@ private fun refresh() {
             val date: TextView = view.findViewById(R.id.group_date)
             val icon: ImageView = view.findViewById(R.id.group_icon)
             val pin: ImageView = view.findViewById(R.id.group_pin)
+            val itemCount: TextView = view.findViewById(R.id.group_items_count)
             val more: ImageView = view.findViewById(R.id.group_more)
         }
 
@@ -312,6 +313,10 @@ private fun refresh() {
             holder.date.text = fmt.format(java.util.Date(g.createdAt))
             holder.date.setTextColor(textSec)
             holder.date.typeface = ctx.resources.getFont(R.font.tajawal_medium)
+            val documents = AppRepository.items(g.id).size
+            holder.itemCount.text = "$documents مستند"
+            holder.itemCount.setTextColor(ThemeHelper.chipTextColor(ctx))
+            holder.itemCount.background?.setTint(ThemeHelper.chipBgColor(ctx))
             holder.icon.setColorFilter(android.graphics.Color.WHITE)
             holder.more.setColorFilter(textSec)
             holder.pin.visibility = if (g.id in AppRepository.favoriteGroupIds()) View.VISIBLE else View.GONE

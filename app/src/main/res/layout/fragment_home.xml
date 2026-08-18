@@ -16,59 +16,72 @@
         android:paddingTop="28dp"
         android:paddingBottom="16dp">
 
-        <!-- شريط الترحيب: تحية + اسم المستخدم -->
-        <LinearLayout
+        <!-- بطاقة ترحيب مستلهمة من واجهة Apkscan-by-gemini -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/welcome_banner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:background="@drawable/home_welcome_banner_bg"
+            app:cardBackgroundColor="@android:color/transparent"
+            app:cardCornerRadius="28dp"
+            app:cardElevation="6dp"
+            app:strokeWidth="0dp">
             <LinearLayout
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-                <TextView
-                    android:id="@+id/greeting"
-                    android:layout_width="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="22dp">
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="مرحبًا بك 👋"
-                    android:textSize="15sp"
-                    android:fontFamily="@font/tajawal_medium"
-                    android:textColor="@color/accent" />
-                <TextView
-                    android:id="@+id/title"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/app_name_title"
-                    android:textSize="32sp"
-                    android:fontFamily="@font/tajawal_bold"
-                    android:letterSpacing="0.01" />
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+                    <TextView
+                        android:id="@+id/greeting"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="مساحة عملك المالية"
+                        android:textSize="13sp"
+                        android:fontFamily="@font/tajawal_medium"
+                        android:textColor="#D1FAE5" />
+                    <TextView
+                        android:id="@+id/title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/app_name_title"
+                        android:textSize="26sp"
+                        android:fontFamily="@font/tajawal_bold"
+                        android:letterSpacing="0.01"
+                        android:textColor="#FFFFFF" />
+                    <TextView
+                        android:id="@+id/subtitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="إدارة محلية، مسح ذكي، ومزامنة آمنة"
+                        android:textSize="12sp"
+                        android:fontFamily="@font/tajawal_regular"
+                        android:textColor="#E6FFFB" />
+                </LinearLayout>
+                <ImageView
+                    android:id="@+id/welcome_badge"
+                    android:layout_width="58dp"
+                    android:layout_height="58dp"
+                    android:src="@drawable/ic_invoice_new"
+                    android:background="@drawable/kpi_icon_teal_bg"
+                    android:backgroundTint="#33FFFFFF"
+                    android:padding="15dp"
+                    android:contentDescription="@string/app_name_title" />
             </LinearLayout>
-            <ImageView
-                android:id="@+id/welcome_badge"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:src="@drawable/ic_invoice_new"
-                android:background="@drawable/circle_primary"
-                android:padding="14dp"
-                android:contentDescription="@string/app_name_title" />
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/subtitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/home_subtitle"
-            android:textSize="14sp"
-            android:fontFamily="@font/tajawal_medium"
-            android:textColor="@color/day_text_secondary" />
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- بطاقتا الإحصائيات -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="16dp"
             android:orientation="horizontal">
 
             <com.google.android.material.card.MaterialCardView
@@ -77,8 +90,8 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginEnd="8dp"
-                app:cardCornerRadius="24dp"
-                app:cardElevation="4dp"
+                app:cardCornerRadius="26dp"
+                app:cardElevation="2dp"
                 app:strokeWidth="1dp"
                 app:strokeColor="@color/day_card_stroke">
                 <LinearLayout
@@ -90,7 +103,7 @@
                         android:layout_width="36dp"
                         android:layout_height="36dp"
                         android:src="@drawable/ic_invoice"
-                        app:tint="@color/accent"
+                        app:tint="#2563EB"
                         android:contentDescription="@string/invoices_count" />
                     <TextView
                         android:id="@+id/invoices_count"
@@ -100,7 +113,7 @@
                         android:text="0"
                         android:textSize="32sp"
                         android:fontFamily="@font/tajawal_bold"
-                        android:textColor="@color/primary_dark" />
+                        android:textColor="#2563EB" />
                     <TextView
                         android:id="@+id/invoices_label"
                         android:layout_width="wrap_content"
@@ -121,8 +134,8 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="8dp"
-                app:cardCornerRadius="24dp"
-                app:cardElevation="4dp"
+                app:cardCornerRadius="26dp"
+                app:cardElevation="2dp"
                 app:strokeWidth="1dp"
                 app:strokeColor="@color/day_card_stroke">
                 <LinearLayout
@@ -134,7 +147,7 @@
                         android:layout_width="36dp"
                         android:layout_height="36dp"
                         android:src="@drawable/ic_groups_filled"
-                        app:tint="@color/accent"
+                        app:tint="@color/primary"
                         android:contentDescription="@string/groups_count" />
                     <TextView
                         android:id="@+id/groups_count"
@@ -145,7 +158,7 @@
                         android:text="0"
                         android:textSize="32sp"
                         android:fontFamily="@font/tajawal_bold"
-                        android:textColor="@color/primary_dark" />
+                        android:textColor="@color/primary" />
                     <TextView
                         android:id="@+id/groups_label"
                         android:layout_width="wrap_content"

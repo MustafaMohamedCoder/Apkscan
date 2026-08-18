@@ -44,6 +44,24 @@ data class Group(
     @SerializedName("created_at") val createdAt: Long = System.currentTimeMillis()
 )
 
+/** عنصر محفوظ في سلة المحذوفات المحلية حتى يستعيده المستخدم أو يحذفه نهائيًا. */
+data class TrashEntry(
+    val id: String = generateId(),
+    /** group | item */
+    val type: String,
+    @SerializedName("group_id") val groupId: String,
+    @SerializedName("group_name") val groupName: String,
+    /** بيانات المجموعة مطلوبة فقط عندما يكون النوع group. */
+    val group: Group? = null,
+    /** رسالة واحدة أو كل رسائل المجموعة المحذوفة. */
+    val items: List<InvoiceItem> = emptyList(),
+    @SerializedName("deleted_by") val deletedBy: String? = null,
+    @SerializedName("deleted_at") val deletedAt: Long = System.currentTimeMillis(),
+    /** trashed | restored | purged. تُرسل الحالة بين الأجهزة لحل تعارض الحذف والاستعادة. */
+    val state: String = "trashed",
+    @SerializedName("state_changed_at") val stateChangedAt: Long = deletedAt
+)
+
 /** سجل نشاط المستخدم */
 data class ActivityEntry(
     @SerializedName("user") val user: String,
@@ -61,5 +79,3 @@ data class SyncEntry(
 
 fun generateId(): String =
     System.currentTimeMillis().toString(36) + (Math.random() * 1000).toInt().toString(36)
-
-

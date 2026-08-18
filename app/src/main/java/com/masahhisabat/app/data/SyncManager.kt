@@ -555,7 +555,7 @@ object SyncManager {
                 }
 
                 val preview = previewPayload(returnedPayload)
-                if (preview.newGroups > 0 || preview.newItems > 0) {
+                if (preview.hasChanges) {
                     val backup = AppRepository.createSafetyBackup()
                     AppRepository.logSync(SyncEntry("نسخة احتياطية تلقائية", "حُفظت نسخة وقائية: ${backup.name}", true))
                 }
@@ -712,6 +712,17 @@ object SyncManager {
                     }
                 }
                 digest.update('\n'.code.toByte())
+            }
+        }
+        val trashFile = File(AppRepository.dataDir(), "trash.json")
+        if (trashFile.isFile) {
+            FileInputStream(trashFile).use { input ->
+                val buffer = ByteArray(32 * 1024)
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    digest.update(buffer, 0, read)
+                }
             }
         }
         digest.digest().joinToString("") { "%02x".format(it) }
@@ -937,7 +948,8 @@ object SyncManager {
         return SyncPayload(
             deviceName = AppRepository.currentUserDeviceName(),
             users = AppRepository.users().map { UserPayload(it.username, it.passwordHash, it.role.name, it.enabled) },
-            items = buildDataItems()
+            items = buildDataItems(),
+            trashRecords = AppRepository.trashRecords()
         )
     }
 
@@ -945,6 +957,7 @@ object SyncManager {
         deviceName = AppRepository.currentUserDeviceName(),
         users = emptyList(),
         items = buildDataItems(),
+        trashRecords = AppRepository.trashRecords(),
         mode = AUTO_DATA_SYNC_MODE
     )
 
@@ -1015,16 +1028,24 @@ object SyncManager {
             val localIds = AppRepository.items(groupId).map { it.id }.toSet()
             newItems += items.count { it.item.id !in localIds }
         }
+        val localTrash = AppRepository.trashRecords().associateBy { it.id }
+        val changedTrashRecords = payload.trashRecords.orEmpty().count { incoming ->
+            val localRecord = localTrash[incoming.id]
+            localRecord == null || incoming.stateChangedAt > localRecord.stateChangedAt
+        }
         return SyncPreview(
             newUsers = payload.users.count { AppRepository.normalizeUsername(it.username) !in localUsers },
             existingUsers = payload.users.count { AppRepository.normalizeUsername(it.username) in localUsers },
             newGroups = newGroups,
-            newItems = newItems
+            newItems = newItems,
+            changedTrashRecords = changedTrashRecords
         )
     }
 
     /** تطبيق بيانات مستقبلة ومزامنتها مع المحلي: المستخدمون يُدمجون (إضافة الجدد، تحديث كلمات المرور)، والبيانات تُضاف. */
     private fun applyPayload(context: Context, payload: SyncPayload): ApplyResult {
+        // تطبق حالات السلة أولًا حتى لا تعود البيانات المحذوفة من جهاز آخر.
+        AppRepository.mergeTrashRecords(payload.trashRecords.orEmpty())
         var addedUsers = 0
         // 1) مزامنة المستخدمين: دمج حسب اسم المستخدم
         val local = AppRepository.users().toMutableList()
@@ -1056,6 +1077,7 @@ object SyncManager {
         // 2) مزامنة المجموعات والعناصر
         var addedItems = 0
         for (p in payload.items) {
+            if (AppRepository.isGroupTrashed(p.groupId) || AppRepository.isItemTrashed(p.groupId, p.item.id)) continue
             var group = AppRepository.groups().find { it.id == p.groupId }
             if (group == null) {
                 group = Group(p.groupId, p.groupName)
@@ -1216,8 +1238,9 @@ object SyncManager {
         val newUsers: Int,
         val existingUsers: Int,
         val newGroups: Int,
-        val newItems: Int
-    ) { val hasChanges: Boolean get() = newUsers > 0 || newGroups > 0 || newItems > 0 }
+        val newItems: Int,
+        val changedTrashRecords: Int = 0
+    ) { val hasChanges: Boolean get() = newUsers > 0 || newGroups > 0 || newItems > 0 || changedTrashRecords > 0 }
     data class NetworkTestCase(val label: String, val success: Boolean, val detail: String)
     data class NetworkSelfTestReport(val results: List<NetworkTestCase>) {
         val passedCount: Int get() = results.count { it.success }
@@ -1238,6 +1261,8 @@ object SyncManager {
         val deviceName: String? = null,
         val users: List<UserPayload>,
         val items: List<SyncItemPayload>,
+        /** nullable للحفاظ على توافق حمولات الإصدارات السابقة. */
+        val trashRecords: List<TrashEntry>? = null,
         val mode: String? = null,
         val sourceUsername: String? = null
     ) {

@@ -177,6 +177,40 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/item_trash"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="68dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/card_surface_settings"
+            android:gravity="center_vertical"
+            android:paddingStart="18dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="14dp">
+            <ImageView
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_delete"
+                android:contentDescription="سلة المحذوفات" />
+            <TextView
+                android:id="@+id/tv_trash_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="16dp"
+                android:textSize="16sp"
+                android:includeFontPadding="false"
+                android:fontFamily="@font/tajawal_bold" />
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@drawable/ic_close"
+                android:rotation="135"
+                android:contentDescription="سلة المحذوفات" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/item_help"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

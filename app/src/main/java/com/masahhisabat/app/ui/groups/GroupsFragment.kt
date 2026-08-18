@@ -355,24 +355,18 @@ private fun refresh() {
                 .setTitle(R.string.confirm_delete)
                 .setMessage(R.string.delete_confirm_msg)
                 .setPositiveButton(R.string.delete) { _, _ ->
-                    val removed = AppRepository.removeGroupForUndo(g.id) ?: return@setPositiveButton
                     val user = SessionStore.currentUser(requireContext()) ?: "?"
+                    val removed = AppRepository.moveGroupToTrash(g.id, user) ?: return@setPositiveButton
                     AppRepository.logActivity(ActivityEntry(user, getString(R.string.log_delete)))
                     refresh()
-                    var restored = false
-                    Snackbar.make(requireView(), "تم حذف مجموعة ${g.name}", Snackbar.LENGTH_LONG)
+                    Snackbar.make(requireView(), "نُقلت مجموعة ${g.name} إلى سلة المحذوفات", Snackbar.LENGTH_LONG)
                         .setAction("تراجع") {
-                            restored = true
-                            AppRepository.restoreGroup(removed)
-                            AppRepository.logActivity(ActivityEntry(user, "تراجع عن حذف المجموعة ${g.name}"))
-                            refresh()
-                            Toast.makeText(requireContext(), "تمت استعادة المجموعة", Toast.LENGTH_SHORT).show()
-                        }
-                        .addCallback(object : Snackbar.Callback() {
-                            override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
-                                if (!restored) AppRepository.finalizeRemovedGroup(removed.id)
+                            if (AppRepository.restoreTrashEntry(removed.id)) {
+                                AppRepository.logActivity(ActivityEntry(user, "تراجع عن حذف المجموعة ${g.name}"))
+                                refresh()
+                                Toast.makeText(requireContext(), "تمت استعادة المجموعة", Toast.LENGTH_SHORT).show()
                             }
-                        })
+                        }
                         .show()
                 }
                 .setNegativeButton(R.string.cancel, null)

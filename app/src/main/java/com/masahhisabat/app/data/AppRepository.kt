@@ -241,6 +241,24 @@ object AppRepository {
         saveList("groups.json", groups().map { if (it.id == id) it.copy(name = name) else it })
     }
 
+    /** ينقل المجموعة وكل رسائلها إلى السلة دون لمس صورها أو مجلدها الدائم. */
+    fun moveGroupToTrash(id: String, deletedBy: String?): TrashEntry? {
+        val group = groups().find { it.id == id } ?: return null
+        val entry = TrashEntry(
+            type = "group",
+            groupId = group.id,
+            groupName = group.name,
+            group = group,
+            items = items(group.id),
+            deletedBy = deletedBy?.let(::normalizeUsername)
+        )
+        saveList("groups.json", groups().filterNot { it.id == id })
+        saveTrashRecords(listOf(entry) + trashRecords())
+        setFavoriteGroupIds(favoriteGroupIds() - id)
+        clearMessageDraft(id)
+        return entry
+    }
+
     fun items(groupId: String): List<InvoiceItem> {
         val file = File(dataDir(), "invoices/$groupId/items.json")
         if (!file.exists()) return emptyList()
@@ -362,6 +380,28 @@ object AppRepository {
         writeTextAtomically(File(dir, "items.json"), gson.toJson(all.filter { it.id !in ids }))
     }
 
+    /** ينقل الرسائل المحددة إلى السلة ويُبقي المرفقات الدائمة متاحة للاستعادة. */
+    fun moveItemsToTrash(groupId: String, groupName: String, ids: List<String>, deletedBy: String?): List<TrashEntry> {
+        if (ids.isEmpty()) return emptyList()
+        val all = items(groupId)
+        val removed = all.filter { it.id in ids }
+        if (removed.isEmpty()) return emptyList()
+        val entries = removed.map { item ->
+            TrashEntry(
+                type = "item",
+                groupId = groupId,
+                groupName = groupName,
+                items = listOf(item),
+                deletedBy = deletedBy?.let(::normalizeUsername)
+            )
+        }
+        val dir = File(dataDir(), "invoices/$groupId")
+        dir.mkdirs()
+        writeTextAtomically(File(dir, "items.json"), gson.toJson(all.filterNot { it.id in ids }))
+        saveTrashRecords(entries + trashRecords())
+        return entries
+    }
+
     /**
      * يحذف العناصر من القائمة فقط ويحتفظ بملفاتها مؤقتًا، حتى يتمكن المستخدم من
      * التراجع عن الحذف من الواجهة خلال المهلة القصيرة التالية للإجراء.
@@ -394,6 +434,152 @@ object AppRepository {
         removed.flatMap { listOfNotNull(it.imagePath, it.processedPath) }
             .distinct()
             .forEach { path -> try { File(path).delete() } catch (_: Exception) { } }
+    }
+
+    // ---------- سلة المحذوفات ----------
+    /** كل سجلات حالات السلة، بما في ذلك الاستعادة والحذف النهائي، لاستخدام المزامنة فقط. */
+    fun trashRecords(): List<TrashEntry> =
+        loadList("trash.json", TrashEntry::class.java).sortedByDescending { it.stateChangedAt }
+
+    /** العناصر الظاهرة للمستخدم في سلة المحذوفات. */
+    fun trashEntries(): List<TrashEntry> = trashRecords().filter { it.state == "trashed" }
+
+    /** يعيد عنصرًا واحدًا من السلة ويحذفه منها عند نجاح الاستعادة. */
+    fun restoreTrashEntry(trashId: String): Boolean {
+        val entry = trashEntries().find { it.id == trashId } ?: return false
+        val restored = when (entry.type) {
+            "group" -> {
+                val group = entry.group
+                if (group == null || groups().any { it.id == group.id }) false
+                else {
+                    restoreGroup(group)
+                    val dir = File(dataDir(), "invoices/${group.id}")
+                    dir.mkdirs()
+                    writeTextAtomically(File(dir, "items.json"), gson.toJson(entry.items))
+                    true
+                }
+            }
+            "item" -> {
+                if (groups().none { it.id == entry.groupId }) false
+                else {
+                    restoreItems(entry.groupId, entry.items)
+                    true
+                }
+            }
+            else -> false
+        }
+        if (restored) updateTrashState(trashId, "restored")
+        return restored
+    }
+
+    /** يحذف عنصر السلة نهائيًا، مع حذف صوره فقط إذا لم تعد مستخدمة في بيانات أخرى. */
+    fun permanentlyDeleteTrashEntry(trashId: String): Boolean {
+        val entry = trashEntries().find { it.id == trashId } ?: return false
+        updateTrashState(trashId, "purged")
+        if (entry.type == "group") {
+            try { File(dataDir(), "invoices/${entry.groupId}").deleteRecursively() } catch (_: Exception) { }
+        }
+        deleteUnreferencedAttachments(entry)
+        return true
+    }
+
+    /** يفرغ السلة بالكامل؛ لا يمس إلا المرفقات غير المرتبطة ببيانات فعّالة. */
+    fun emptyTrash(): Int {
+        val entries = trashEntries()
+        if (entries.isEmpty()) return 0
+        entries.forEach { permanentlyDeleteTrashEntry(it.id) }
+        return entries.size
+    }
+
+    /** يدمج سجلات السلة الواردة ثم يطبّق حالتها قبل دمج العناصر النشطة. */
+    fun mergeTrashRecords(incoming: List<TrashEntry>): Int {
+        if (incoming.isEmpty()) return 0
+        val current = trashRecords().toMutableList()
+        val updates = mutableListOf<TrashEntry>()
+        incoming.sortedBy { it.stateChangedAt }.forEach { record ->
+            val index = current.indexOfFirst { it.id == record.id }
+            val existing = current.getOrNull(index)
+            if (existing == null || record.stateChangedAt > existing.stateChangedAt) {
+                if (index >= 0) current[index] = record else current.add(record)
+                updates.add(record)
+            }
+        }
+        if (updates.isEmpty()) return 0
+        saveTrashRecords(current)
+        updates.forEach(::applyTrashState)
+        return updates.size
+    }
+
+    /** هل يجب منع مزامنة مجموعة أو رسالة من العودة من حمولة جهاز آخر؟ */
+    fun isGroupTrashed(groupId: String): Boolean = trashRecords().any {
+        it.state != "restored" && it.type == "group" && it.groupId == groupId
+    }
+    fun isItemTrashed(groupId: String, itemId: String): Boolean = trashRecords().any { entry ->
+        entry.state != "restored" && entry.type == "item" && entry.groupId == groupId && entry.items.any { it.id == itemId }
+    }
+
+    private fun updateTrashState(trashId: String, state: String) {
+        val changedAt = System.currentTimeMillis()
+        saveTrashRecords(trashRecords().map { entry ->
+            if (entry.id == trashId) entry.copy(state = state, stateChangedAt = changedAt) else entry
+        })
+    }
+
+    private fun saveTrashRecords(records: List<TrashEntry>) {
+        saveList("trash.json", records.sortedByDescending { it.stateChangedAt })
+    }
+
+    private fun applyTrashState(entry: TrashEntry) {
+        when (entry.state) {
+            "trashed", "purged" -> {
+                if (entry.type == "group") {
+                    if (groups().any { it.id == entry.groupId }) {
+                        saveList("groups.json", groups().filterNot { it.id == entry.groupId })
+                        setFavoriteGroupIds(favoriteGroupIds() - entry.groupId)
+                        clearMessageDraft(entry.groupId)
+                    }
+                } else if (entry.type == "item") {
+                    removeActiveItemsWithoutAttachments(entry.groupId, entry.items.map { it.id }.toSet())
+                }
+                if (entry.state == "purged") {
+                    if (entry.type == "group") {
+                        try { File(dataDir(), "invoices/${entry.groupId}").deleteRecursively() } catch (_: Exception) { }
+                    }
+                    deleteUnreferencedAttachments(entry)
+                }
+            }
+            "restored" -> {
+                if (entry.type == "group") {
+                    entry.group?.let(::restoreGroup)
+                }
+                if (groups().any { it.id == entry.groupId }) restoreItems(entry.groupId, entry.items)
+            }
+        }
+    }
+
+    private fun removeActiveItemsWithoutAttachments(groupId: String, ids: Set<String>) {
+        if (ids.isEmpty()) return
+        val all = items(groupId)
+        if (all.none { it.id in ids }) return
+        val dir = File(dataDir(), "invoices/$groupId").apply { mkdirs() }
+        writeTextAtomically(File(dir, "items.json"), gson.toJson(all.filterNot { it.id in ids }))
+    }
+
+    private fun deleteUnreferencedAttachments(entry: TrashEntry) {
+        entry.items.flatMap { listOfNotNull(it.imagePath, it.processedPath) }
+            .distinct()
+            .filterNot(::isAttachmentReferenced)
+            .forEach { path -> try { File(path).delete() } catch (_: Exception) { } }
+    }
+
+    private fun isAttachmentReferenced(path: String): Boolean {
+        val activeReference = groups().asSequence()
+            .flatMap { items(it.id).asSequence() }
+            .any { item -> item.imagePath == path || item.processedPath == path }
+        if (activeReference) return true
+        return trashEntries().asSequence()
+            .flatMap { it.items.asSequence() }
+            .any { item -> item.imagePath == path || item.processedPath == path }
     }
 
     // ---------- سجل النشاط ----------

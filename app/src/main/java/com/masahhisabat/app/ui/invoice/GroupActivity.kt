@@ -405,28 +405,23 @@ class GroupActivity : AppCompatActivity() {
 
     /** يحافظ على الملفات خلال مهلة قصيرة ويعرض زر تراجع قبل الحذف النهائي. */
     private fun deleteWithUndo(ids: List<String>) {
-        val removed = AppRepository.removeItemsForUndo(groupId, ids)
-        if (removed.isEmpty()) return
         val user = SessionStore.currentUser(this) ?: "?"
+        val removed = AppRepository.moveItemsToTrash(groupId, groupName, ids, user)
+        if (removed.isEmpty()) return
         AppRepository.logActivity(ActivityEntry(user, getString(R.string.log_delete)))
         selected.clear()
         isSelecting = false
         refresh()
 
-        var restored = false
-        Snackbar.make(recycler, "تم حذف ${removed.size} ${if (removed.size == 1) "رسالة" else "رسائل"}", Snackbar.LENGTH_LONG)
+        Snackbar.make(recycler, "نُقلت ${removed.size} ${if (removed.size == 1) "رسالة" else "رسائل"} إلى سلة المحذوفات", Snackbar.LENGTH_LONG)
             .setAction("تراجع") {
-                restored = true
-                AppRepository.restoreItems(groupId, removed)
-                AppRepository.logActivity(ActivityEntry(user, "تراجع عن حذف ${removed.size} رسالة في $groupName"))
-                refresh()
-                Toast.makeText(this, "تمت استعادة الرسالة", Toast.LENGTH_SHORT).show()
-            }
-            .addCallback(object : Snackbar.Callback() {
-                override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
-                    if (!restored) AppRepository.finalizeRemovedItems(removed)
+                val restored = removed.count { AppRepository.restoreTrashEntry(it.id) }
+                if (restored > 0) {
+                    AppRepository.logActivity(ActivityEntry(user, "تراجع عن حذف $restored رسالة في $groupName"))
+                    refresh()
+                    Toast.makeText(this, "تمت استعادة ${if (restored == 1) "الرسالة" else "$restored رسائل"}", Toast.LENGTH_SHORT).show()
                 }
-            })
+            }
             .show()
     }
 

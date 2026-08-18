@@ -62,6 +62,14 @@ class SettingsFragment : Fragment() {
             }
         }
         setupItem(view, R.id.item_activity, R.id.tv_activity_title, getString(R.string.activity_log)) { showActivityLogDialog() }
+        setupItem(view, R.id.item_trash, R.id.tv_trash_title, trashTitle()) {
+            val role = SessionStore.currentRole(requireContext())
+            if (AppRepository.canDeleteContent(role)) {
+                startActivity(Intent(requireContext(), TrashActivity::class.java))
+            } else {
+                Toast.makeText(requireContext(), "سلة المحذوفات متاحة للمدير والمشرف فقط", Toast.LENGTH_SHORT).show()
+            }
+        }
         setupItem(view, R.id.item_help, R.id.tv_help_title, "مركز المساعدة") { showHelpDialog() }
         setupItem(view, R.id.item_export, R.id.tv_export_title, getString(R.string.export_data)) { showExportOptions() }
         setupItem(view, R.id.item_storage, R.id.tv_storage_title, "إدارة التخزين") { showStorageDialog() }
@@ -86,6 +94,10 @@ class SettingsFragment : Fragment() {
 
     private fun themeTitle(): String = "المظهر: ${ThemeHelper.mode().label}"
     private fun appLockTitle(): String = if (AppRepository.hasAppLock()) "قفل التطبيق: مفعّل" else "قفل التطبيق: غير مفعّل"
+    private fun trashTitle(): String {
+        val count = AppRepository.trashEntries().size
+        return if (count == 0) "سلة المحذوفات" else "سلة المحذوفات ($count)"
+    }
 
     private fun showAppLockDialog() {
         val ctx = requireContext()
@@ -139,12 +151,12 @@ class SettingsFragment : Fragment() {
         val textSec = ThemeHelper.textSecondary(ctx)
         // الصفوف بخلفية card_surface_settings (قابلة للتكيف مع الوضع) — لا نكتب فوقها، بل نلوّنها ديناميكيًا
         val rowBg = ThemeHelper.surfaceHigh(ctx)
-        listOf(R.id.item_theme, R.id.item_app_lock, R.id.item_accounts, R.id.item_activity, R.id.item_help, R.id.item_storage,
+        listOf(R.id.item_theme, R.id.item_app_lock, R.id.item_accounts, R.id.item_activity, R.id.item_trash, R.id.item_help, R.id.item_storage,
             R.id.item_export, R.id.item_import, R.id.item_sync, R.id.item_logout).forEach { id ->
             view.findViewById<LinearLayout>(id)?.background?.setTint(rowBg)
         }
         listOf(R.id.tv_theme_title, R.id.tv_app_lock_title, R.id.tv_accounts_title, R.id.tv_help_title, R.id.tv_storage_title,
-            R.id.tv_activity_title, R.id.tv_export_title, R.id.tv_import_title, R.id.tv_sync_title).forEach { id ->
+            R.id.tv_activity_title, R.id.tv_trash_title, R.id.tv_export_title, R.id.tv_import_title, R.id.tv_sync_title).forEach { id ->
             view.findViewById<TextView>(id)?.setTextColor(text)
         }
         view.findViewById<TextView>(R.id.tv_sync_summary)?.setTextColor(textSec)

@@ -20,6 +20,10 @@ class TrashCleanupWorker(
 
     override suspend fun doWork(): Result = try {
         AppRepository.initAppContext(applicationContext)
+        val warningEntries = AppRepository.trashEntriesRequiringDeletionWarning()
+        if (TrashWarningNotifier.show(applicationContext, warningEntries)) {
+            AppRepository.markTrashDeletionWarningsShown(warningEntries.map { it.id })
+        }
         AppRepository.purgeExpiredTrash()
         Result.success()
     } catch (_: Exception) {

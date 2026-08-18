@@ -16,7 +16,9 @@ import java.util.Locale
 object AppRepository {
 
     private const val AUTO_TRASH_PURGE_KEY = "auto_purge_trash_after_30_days"
+    private const val TRASH_WARNING_NOTIFIED_IDS_KEY = "trash_warning_notified_ids"
     private const val TRASH_RETENTION_MS = 30L * 24L * 60L * 60L * 1000L
+    private const val TRASH_WARNING_WINDOW_MS = 3L * 24L * 60L * 60L * 1000L
 
     private var appContext: Context? = null
     private val prefs: SharedPreferences by lazy {
@@ -453,6 +455,30 @@ object AppRepository {
     /** يحفظ تفضيل الحذف التلقائي محليًا؛ القيمة الافتراضية مفعلة لحماية مساحة التخزين. */
     fun setAutoTrashPurgeEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(AUTO_TRASH_PURGE_KEY, enabled).apply()
+    }
+
+    /**
+     * عناصر السلة التي اقترب حذفها النهائي خلال ثلاثة أيام ولم يظهر لها تنبيه على هذا الجهاز.
+     * حالة الإشعار محلية؛ لذلك يمكن لكل جهاز متصل إظهار تنبيهه دون التأثير في مزامنة بيانات السلة.
+     */
+    fun trashEntriesRequiringDeletionWarning(now: Long = System.currentTimeMillis()): List<TrashEntry> {
+        if (!isAutoTrashPurgeEnabled()) return emptyList()
+        val notified = prefs.getStringSet(TRASH_WARNING_NOTIFIED_IDS_KEY, emptySet()).orEmpty()
+        return trashEntries().filter { entry ->
+            val remaining = (entry.stateChangedAt + TRASH_RETENTION_MS) - now
+            remaining in 1..TRASH_WARNING_WINDOW_MS && entry.id !in notified
+        }
+    }
+
+    /** يحفظ أن التنبيه ظهر بالفعل، وينظف المعرّفات التي لم تعد تخص عناصرًا فعالة في السلة. */
+    fun markTrashDeletionWarningsShown(ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        val activeIds = trashEntries().mapTo(mutableSetOf()) { it.id }
+        val notified = prefs.getStringSet(TRASH_WARNING_NOTIFIED_IDS_KEY, emptySet())
+            ?.filterTo(mutableSetOf()) { it in activeIds }
+            ?: mutableSetOf()
+        notified.addAll(ids.filter { it in activeIds })
+        prefs.edit().putStringSet(TRASH_WARNING_NOTIFIED_IDS_KEY, notified).apply()
     }
 
     /**

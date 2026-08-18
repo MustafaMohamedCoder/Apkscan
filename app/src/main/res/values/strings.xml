@@ -117,6 +117,11 @@
     <string name="password_changed">تم تغيير كلمة المرور بنجاح</string>
     <string name="password_mismatch">كلمتا المرور غير متطابقتين</string>
     <string name="wrong_password">كلمة المرور الحالية غير صحيحة</string>
+    <string name="trash_warning_channel_name">تنبيهات سلة المحذوفات</string>
+    <string name="trash_warning_channel_description">تنبيهات قبل الحذف النهائي للعناصر المحذوفة.</string>
+    <string name="trash_warning_title">حذف نهائي قريب</string>
+    <string name="trash_warning_text_one">تبقّى 3 أيام أو أقل قبل حذف %1$s نهائيًا.</string>
+    <string name="trash_warning_text_many">تبقّى 3 أيام أو أقل قبل حذف %1$d عناصر من سلة المحذوفات نهائيًا.</string>
 
     <!-- Team -->
     <string name="team_management">إدارة الفريق</string>

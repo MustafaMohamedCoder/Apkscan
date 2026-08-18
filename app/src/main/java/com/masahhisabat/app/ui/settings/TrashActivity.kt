@@ -2,9 +2,13 @@ package com.masahhisabat.app.ui.settings
 
 import android.content.res.ColorStateList
 import android.os.Bundle
+import android.text.Editable
+import android.text.InputType
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -34,7 +38,11 @@ class TrashActivity : AppCompatActivity() {
     private lateinit var emptyState: TextView
     private lateinit var summary: TextView
     private lateinit var emptyButton: MaterialButton
+    private lateinit var searchInput: EditText
+    private lateinit var clearSearch: MaterialButton
     private val adapter = TrashAdapter()
+    private var allEntries: List<TrashEntry> = emptyList()
+    private var searchQuery = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,6 +92,48 @@ class TrashActivity : AppCompatActivity() {
         header.addView(titlePanel, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
         root.addView(header)
 
+        val searchRow = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(14), 0, 0)
+        }
+        searchInput = EditText(this).apply {
+            hint = "ابحث باسم المجموعة أو محتوى الرسالة"
+            textSize = 15f
+            typeface = resources.getFont(R.font.tajawal_regular)
+            inputType = InputType.TYPE_CLASS_TEXT
+            isSingleLine = true
+            textDirection = View.TEXT_DIRECTION_RTL
+            setTextColor(ThemeHelper.text(this@TrashActivity))
+            setHintTextColor(ThemeHelper.textSecondary(this@TrashActivity))
+            setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_search, 0, 0, 0)
+            compoundDrawablePadding = dp(9)
+            backgroundTintList = ColorStateList.valueOf(ThemeHelper.accent(this@TrashActivity))
+            setPadding(dp(12), dp(4), dp(12), dp(4))
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                override fun afterTextChanged(s: Editable?) {
+                    searchQuery = s?.toString().orEmpty()
+                    clearSearch.visibility = if (searchQuery.isBlank()) View.GONE else View.VISIBLE
+                    applySearch()
+                }
+            })
+        }
+        clearSearch = MaterialButton(this).apply {
+            text = "مسح"
+            isAllCaps = false
+            visibility = View.GONE
+            setTextColor(ThemeHelper.accent(this@TrashActivity))
+            setOnClickListener {
+                searchInput.setText("")
+                searchInput.requestFocus()
+            }
+        }
+        searchRow.addView(searchInput, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        searchRow.addView(clearSearch, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(8) })
+        root.addView(searchRow)
+
         emptyState = TextView(this).apply {
             gravity = Gravity.CENTER
             text = "سلة المحذوفات فارغة\nستظهر هنا الرسائل والمجموعات التي تحذفها."
@@ -116,13 +166,49 @@ class TrashActivity : AppCompatActivity() {
     }
 
     private fun refresh() {
-        val entries = AppRepository.trashEntries()
-        adapter.submit(entries)
-        emptyState.visibility = if (entries.isEmpty()) View.VISIBLE else View.GONE
-        recycler.visibility = if (entries.isEmpty()) View.GONE else View.VISIBLE
-        emptyButton.visibility = if (entries.isEmpty()) View.GONE else View.VISIBLE
-        summary.text = if (entries.isEmpty()) "لا توجد عناصر بانتظار الاستعادة أو الحذف النهائي" else "${entries.size} عنصر محفوظ محليًا — يمكن استعادته في أي وقت"
+        allEntries = AppRepository.trashEntries()
+        applySearch()
     }
+
+    private fun applySearch() {
+        if (!::searchInput.isInitialized) return
+        val filtered = if (searchQuery.isBlank()) allEntries else allEntries.filter { entry ->
+            normalizeSearch(entry.groupName).contains(normalizeSearch(searchQuery)) ||
+                normalizeSearch(entry.group?.name.orEmpty()).contains(normalizeSearch(searchQuery)) ||
+                normalizeSearch(entry.deletedBy.orEmpty()).contains(normalizeSearch(searchQuery)) ||
+                entry.items.any { item ->
+                    listOf(item.text, item.storeName, item.itemsText, item.sender, item.date, item.total, item.currency)
+                        .any { value -> normalizeSearch(value.orEmpty()).contains(normalizeSearch(searchQuery)) }
+                }
+        }
+        adapter.submit(filtered)
+        val hasEntries = allEntries.isNotEmpty()
+        val hasResults = filtered.isNotEmpty()
+        emptyState.text = if (!hasEntries) {
+            "سلة المحذوفات فارغة\nستظهر هنا الرسائل والمجموعات التي تحذفها."
+        } else {
+            "لا توجد نتائج مطابقة\nجرّب اسم المجموعة أو جزءًا من محتوى الرسالة."
+        }
+        emptyState.visibility = if (hasResults) View.GONE else View.VISIBLE
+        recycler.visibility = if (hasResults) View.VISIBLE else View.GONE
+        emptyButton.visibility = if (hasEntries && searchQuery.isBlank()) View.VISIBLE else View.GONE
+        summary.text = when {
+            !hasEntries -> "لا توجد عناصر بانتظار الاستعادة أو الحذف النهائي"
+            searchQuery.isNotBlank() && !hasResults -> "لا توجد نتائج للبحث داخل ${allEntries.size} عنصر"
+            searchQuery.isNotBlank() -> "${filtered.size} نتيجة من أصل ${allEntries.size} عنصر في السلة"
+            else -> "${allEntries.size} عنصر محفوظ محليًا — يمكن استعادته في أي وقت"
+        }
+    }
+
+    private fun normalizeSearch(value: String): String =
+        value.lowercase(Locale("ar"))
+            .replace(Regex("[ًٌٍَُِّْ]"), "")
+            .replace('أ', 'ا')
+            .replace('إ', 'ا')
+            .replace('آ', 'ا')
+            .replace('ى', 'ي')
+            .replace('ة', 'ه')
+            .trim()
 
     private fun restore(entry: TrashEntry) {
         if (AppRepository.restoreTrashEntry(entry.id)) {

@@ -130,22 +130,6 @@
                 app:cornerRadius="27dp"
                 android:backgroundTint="@color/primary" />
 
-            <!-- شارة تسجيل الدخول التجريبي -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="10dp"
-                android:paddingStart="14dp"
-                android:paddingEnd="14dp"
-                android:paddingTop="5dp"
-                android:paddingBottom="5dp"
-                android:text="الحساب التجريبي: mustafa / 0"
-                android:textSize="12sp"
-                android:fontFamily="@font/tajawal_medium"
-                android:background="@drawable/badge_bg"
-                android:textColor="@color/primary_dark" />
-
             <TextView
                 android:id="@+id/error_text"
                 android:layout_width="wrap_content"

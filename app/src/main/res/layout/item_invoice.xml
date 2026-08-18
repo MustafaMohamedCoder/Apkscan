@@ -6,7 +6,10 @@
     android:layout_height="wrap_content"
     android:layout_marginStart="60dp"
     android:layout_marginEnd="60dp"
-    android:layout_marginBottom="6dp">
+    android:layout_marginTop="14dp"
+    android:layout_marginBottom="20dp"
+    android:clipChildren="false"
+    android:clipToPadding="false">
 
     <!-- فقاعة الرسالة (فاتحة بلون التطبيق مثل واتساب) -->
     <LinearLayout
@@ -97,8 +100,10 @@
             <!-- علامة ✓: لون الخط العادي عند الإرسال، زرقاء عند المشاهدة -->
             <ImageView
                 android:id="@+id/msg_seen"
-                android:layout_width="14dp"
-                android:layout_height="14dp"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_marginStart="4dp"
+                android:padding="2dp"
                 android:src="@drawable/ic_seen_check"
                 android:visibility="gone"
                 android:contentDescription="تمت المشاهدة" />
@@ -108,31 +113,31 @@
     <!-- أيقونة القلم أعلى الرسالة للتعديل (دائرة ناعمة) -->
     <ImageView
         android:id="@+id/item_edit_pencil"
-        android:layout_width="34dp"
-        android:layout_height="34dp"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
         android:layout_gravity="end|top"
-        android:layout_marginEnd="-10dp"
-        android:layout_marginTop="-10dp"
-        android:padding="8dp"
+        android:layout_marginEnd="-18dp"
+        android:layout_marginTop="-18dp"
+        android:padding="10dp"
         android:src="@drawable/ic_edit"
         app:tint="#FFFFFF"
         android:background="@drawable/circle_primary"
-        android:elevation="6dp"
+        android:elevation="8dp"
         android:contentDescription="@string/edit" />
 
     <!-- أيقونة المشاركة أسفل الرسالة (دائرة ناعمة) -->
     <ImageView
         android:id="@+id/item_share"
-        android:layout_width="34dp"
-        android:layout_height="34dp"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
         android:layout_gravity="start|bottom"
-        android:layout_marginStart="4dp"
-        android:layout_marginBottom="-10dp"
-        android:padding="8dp"
+        android:layout_marginStart="-18dp"
+        android:layout_marginBottom="-18dp"
+        android:padding="10dp"
         android:src="@drawable/ic_share"
         app:tint="#FFFFFF"
         android:background="@drawable/circle_primary"
-        android:elevation="6dp"
+        android:elevation="8dp"
         android:contentDescription="@string/share" />
 
     <!-- مربع التحديد (يظهر عند التحديد الجماعي) -->

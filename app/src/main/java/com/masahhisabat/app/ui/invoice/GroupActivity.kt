@@ -2,6 +2,7 @@ package com.masahhisabat.app.ui.invoice
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
@@ -477,11 +478,27 @@ class GroupActivity : AppCompatActivity() {
             val pencil = holder.itemView.findViewById<ImageView>(R.id.item_edit_pencil)
             val share = holder.itemView.findViewById<ImageView>(R.id.item_share)
 
-            // لون الفقاعة: خلفية متدرجة موحدة حسب الوضع
-            val bubbleBg = ctx.getDrawable(ThemeHelper.bubbleBgRes(ctx))
-            if (bubbleBg != null) {
-                bubbleBg.mutate()
-                bubble?.background = bubbleBg
+            // لون الفقاعة: تمييز متباين عند اختيار الرسالة، وخلفية متدرجة في الوضع العادي.
+            val itemSelected = isSelecting && item.id in selected
+            if (itemSelected) {
+                val isNight = (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+                bubble.background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = 24f * ctx.resources.displayMetrics.density
+                    setColor(Color.parseColor(if (isNight) "#164B45" else "#CCFBF1"))
+                    setStroke(
+                        (3f * ctx.resources.displayMetrics.density).toInt(),
+                        Color.parseColor(if (isNight) "#5EEAD4" else "#0F766E")
+                    )
+                }
+                bubble.elevation = 7f * ctx.resources.displayMetrics.density
+            } else {
+                val bubbleBg = ctx.getDrawable(ThemeHelper.bubbleBgRes(ctx))
+                if (bubbleBg != null) {
+                    bubbleBg.mutate()
+                    bubble.background = bubbleBg
+                }
+                bubble.elevation = 2f * ctx.resources.displayMetrics.density
             }
             tvName.setTextColor(ThemeHelper.bubbleText(ctx))
             tvDate.setTextColor(ThemeHelper.bubbleTime(ctx))
@@ -493,9 +510,9 @@ class GroupActivity : AppCompatActivity() {
             val primaryText = ThemeHelper.text(ctx)
             val secondaryText = ThemeHelper.textSecondary(ctx)
 
-            // تلوين أيقونتي القلم والمشاركة احترافيًا بلون نص حسب الوضع
-            pencil.setColorFilter(ThemeHelper.bubbleText(ctx))
-            share.setColorFilter(ThemeHelper.bubbleText(ctx))
+            // أيقونتا الإجراءات بيضاوان داخل دوائر كبيرة لتظلّا واضحتين خارج الفقاعة.
+            pencil.setColorFilter(Color.WHITE)
+            share.setColorFilter(Color.WHITE)
 
             if (item.type == "text") {
                 // فقاعة نص فقط
@@ -563,10 +580,13 @@ class GroupActivity : AppCompatActivity() {
                 msgFooter.visibility = View.VISIBLE
                 // علامة ✓: بنفس لون نص الشريط عند الإرسال، زرقاء عند مشاهدة مستخدمين آخرين
                 ivSeen.visibility = View.VISIBLE
-                ivSeen.setColorFilter(
-                    if (item.seen) ThemeHelper.bubbleSeen(ctx) // أزرق فاتح عند المشاهدة
-                    else ThemeHelper.bubbleTime(ctx) // بلون الوقت عند الإرسال
-                )
+                if (item.seen) {
+                    ivSeen.background = ctx.getDrawable(R.drawable.message_seen_badge)
+                    ivSeen.setColorFilter(Color.WHITE)
+                } else {
+                    ivSeen.background = null
+                    ivSeen.setColorFilter(ThemeHelper.bubbleTime(ctx))
+                }
             } else {
                 msgFooter.visibility = View.GONE
                 ivSeen.visibility = View.GONE

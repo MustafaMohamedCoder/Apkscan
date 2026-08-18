@@ -18,6 +18,7 @@ import com.masahhisabat.app.image.ImageProcessor
 import com.masahhisabat.app.ui.ThemeHelper
 import android.graphics.drawable.GradientDrawable
 import android.widget.Toast
+import java.io.File
 
 /**
  * شاشة عرض الصور بالحجم الكامل مع التنقل بالسحب يمينًا ويسارًا.
@@ -44,10 +45,16 @@ class ImageViewerActivity : AppCompatActivity() {
         startIndex = intent.getIntExtra("image_index", 0)
         selectedPath = intent.getStringExtra("image_path")
 
-        // لا نمرر إلى العارض إلا الملفات التي ما زالت موجودة فعلياً.
-        images = AppRepository.items(groupId)
-            .filter { it.type == "image" && (it.imagePath != null || it.processedPath != null) }
-            .mapNotNull { AppRepository.availableImagePath(it) }
+        // تعتمد أولوية العارض على المسارات التي ضغطها المستخدم في المجموعة؛
+        // ويكون الرجوع إلى المستودع فقط للتوافق مع فتحات قديمة.
+        val intentPaths = intent.getStringArrayListExtra("image_paths")
+            ?.filter { File(it).isFile && File(it).length() > 0L }
+            .orEmpty()
+        images = intentPaths.ifEmpty {
+            AppRepository.items(groupId)
+                .filter { it.type == "image" && (it.imagePath != null || it.processedPath != null) }
+                .mapNotNull { AppRepository.availableImagePath(it) }
+        }.distinct()
 
         if (images.isEmpty()) {
             Toast.makeText(this, "لا توجد صورة متاحة للعرض", Toast.LENGTH_SHORT).show()
@@ -116,6 +123,7 @@ class ImageViewerActivity : AppCompatActivity() {
                     holder.img.setImageBitmap(ImageProcessor.loadBitmap(path, 1600))
                 } catch (e: Exception) {
                     holder.img.setImageResource(R.drawable.ic_invoice)
+                    Toast.makeText(this@ImageViewerActivity, "تعذر عرض هذه الصورة", Toast.LENGTH_SHORT).show()
                 }
             } else {
                 holder.img.setImageResource(R.drawable.ic_invoice)

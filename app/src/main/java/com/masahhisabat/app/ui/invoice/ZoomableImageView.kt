@@ -63,10 +63,12 @@ class ZoomableImageView @JvmOverloads constructor(
     private fun fitImageCenter() {
         val w = drawable?.intrinsicWidth ?: return
         val h = drawable?.intrinsicHeight ?: return
-        if (w == 0 || h == 0) return
+        if (w <= 0 || h <= 0 || viewWidth <= 0f || viewHeight <= 0f) return
         val sx = viewWidth / w.toFloat()
         val sy = viewHeight / h.toFloat()
         scale = minOf(sx, sy)
+        minScale = scale
+        maxScale = minScale * 4f
         saveScale = scale
         val tx = (viewWidth - w * scale) / 2f
         val ty = (viewHeight - h * scale) / 2f
@@ -77,12 +79,22 @@ class ZoomableImageView @JvmOverloads constructor(
 
     fun getScale(): Float = saveScale
 
-    val isZoomed: Boolean get() = saveScale > 1.02f
+    val isZoomed: Boolean get() = saveScale > minScale * 1.02f
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
         viewWidth = measuredWidth.toFloat()
         viewHeight = measuredHeight.toFloat()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        viewWidth = w.toFloat()
+        viewHeight = h.toFloat()
+        if (drawable != null) {
+            fitImageCenter()
+            imageMatrix = matrix
+        }
     }
 
     override fun setImageBitmap(bm: android.graphics.Bitmap) {

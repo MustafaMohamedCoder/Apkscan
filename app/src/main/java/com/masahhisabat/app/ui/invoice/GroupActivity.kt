@@ -582,7 +582,7 @@ class GroupActivity : AppCompatActivity() {
             }
 
             // النقر على الفقاعة: معاينة الصورة أو تحديد
-            holder.itemView.setOnClickListener {
+            val openOrSelectItem: (View) -> Unit = {
                 if (isSelecting) {
                     if (item.id in selected) selected.remove(item.id) else selected.add(item.id)
                     if (selected.isEmpty()) isSelecting = false
@@ -591,6 +591,9 @@ class GroupActivity : AppCompatActivity() {
                     if (item.type == "image") showImagePreview(item)
                 }
             }
+            holder.itemView.setOnClickListener(openOrSelectItem)
+            // هدف نقر صريح للصورة نفسها؛ بعض واجهات الأجهزة لا تمرر اللمسة من ImageView إلى فقاعة الرسالة.
+            img.setOnClickListener(openOrSelectItem)
 
             holder.itemView.setOnLongClickListener {
                 if (!isSelecting) {
@@ -629,19 +632,24 @@ class GroupActivity : AppCompatActivity() {
 
         private fun showImagePreview(item: InvoiceItem) {
             val ctx = this@GroupActivity
-            // فهرس الصورة بين صور المجموعة (من الأحدث للأقدم كما تظهر في القائمة)
-            val imageIndex = AppRepository.items(groupId)
-                .filter { it.type == "image" && (it.imagePath != null || it.processedPath != null) }
-                .indexOfFirst { it.id == item.id }
             val selectedPath = AppRepository.availableImagePath(item)
             if (selectedPath == null) {
                 Toast.makeText(ctx, "ملف الصورة غير متوفر على الجهاز", Toast.LENGTH_SHORT).show()
                 return
             }
+            // نمرر المسارات القابلة للقراءة مباشرة. لا يعتمد العارض على إعادة قراءة قائمة الرسائل
+            // بعد فتح نشاط جديد، وهو ما كان يجعل العارض فارغًا على بعض الأجهزة.
+            val imagePaths = items
+                .filter { it.type == "image" }
+                .mapNotNull { AppRepository.availableImagePath(it) }
+                .distinct()
+                .ifEmpty { listOf(selectedPath) }
+            val imageIndex = imagePaths.indexOf(selectedPath).coerceAtLeast(0)
             val intent = android.content.Intent(ctx, ImageViewerActivity::class.java).apply {
                 putExtra("group_id", groupId)
-                putExtra("image_index", maxOf(imageIndex, 0))
+                putExtra("image_index", imageIndex)
                 putExtra("image_path", selectedPath)
+                putStringArrayListExtra("image_paths", ArrayList(imagePaths))
             }
             ctx.startActivity(intent)
         }

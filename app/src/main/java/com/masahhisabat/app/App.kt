@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 import com.masahhisabat.app.data.AppRepository
+import com.masahhisabat.app.data.SyncManager
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.SessionStore
 import com.masahhisabat.app.ui.auth.LockActivity
@@ -26,6 +27,8 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         AppRepository.initAppContext(this)
+        // يبقى الجهاز المستقبل مستعدًا لملف مستخدمي mustafa حتى قبل تسجيل الدخول.
+        SyncManager.ensureServer(this)
         // يُطبَّق قبل عرض شاشة الدخول حتى يتبع التطبيق مظهر النظام من أول إطار.
         ThemeHelper.applyTheme(this)
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {

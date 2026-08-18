@@ -131,7 +131,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:buttonTint="@color/white"
+                android:button="@drawable/checkbox_remember"
                 android:text="@string/remember_me"
                 android:textColor="@color/white" />
 
@@ -159,13 +159,19 @@
                 android:visibility="gone" />
         </LinearLayout>
 
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
         <TextView
             android:id="@+id/developer_text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
+            android:layout_marginBottom="4dp"
             android:fontFamily="@font/tajawal_bold"
-            android:text="التطبيق من تطوير مصطفي ♥️ عبدالفتاح"
+            android:text="@string/dev_credit"
             android:textColor="@color/white"
             android:textSize="13sp" />
     </LinearLayout>

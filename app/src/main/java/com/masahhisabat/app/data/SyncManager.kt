@@ -1,6 +1,7 @@
 package com.masahhisabat.app.data
 
 import android.content.Context
+import android.net.wifi.WifiManager
 import android.util.Log
 import com.google.gson.Gson
 import java.io.EOFException
@@ -10,6 +11,7 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.ConnectException
 import java.net.InetAddress
+import java.net.Inet4Address
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -42,12 +44,14 @@ object SyncManager {
     @Volatile private var isServing = false
     @Volatile private var autoSyncRunning = false
     @Volatile private var autoSyncThread: Thread? = null
+    @Volatile private var multicastLock: WifiManager.MulticastLock? = null
     val peers = CopyOnWriteArrayList<String>()
     private val autoSyncedUserFiles = ConcurrentHashMap<String, String>()
 
     // ---------- إدارة الخادم ----------
     fun startServer(context: Context) {
         if (isServing) return
+        acquireMulticastLock(context)
         // تُضبط قبل إطلاق الخيوط حتى لا تنتهي خدمة اكتشاف UDP بسبب سباق بدء التشغيل.
         isServing = true
         Thread {
@@ -89,6 +93,7 @@ object SyncManager {
         autoSyncedUserFiles.clear()
         try { server?.close() } catch (_: Throwable) {}
         server = null
+        releaseMulticastLock()
     }
 
     private fun handleClient(socket: Socket, context: Context) {
@@ -277,6 +282,29 @@ object SyncManager {
             ?.any { it.hostAddress == address } == true
     } catch (_: Throwable) {
         false
+    }
+
+    /** تمنع هواتف أندرويد من تصفية ردود UDP الخاصة باكتشاف الأجهزة على Wi‑Fi. */
+    private fun acquireMulticastLock(context: Context) {
+        try {
+            val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return
+            val lock = multicastLock ?: wifi.createMulticastLock("masah-hisabat-sync").also {
+                it.setReferenceCounted(false)
+                multicastLock = it
+            }
+            if (!lock.isHeld) lock.acquire()
+        } catch (e: Throwable) {
+            Log.w(TAG, "تعذر حجز بث Wi‑Fi المحلي", e)
+        }
+    }
+
+    private fun releaseMulticastLock() {
+        try {
+            multicastLock?.takeIf { it.isHeld }?.release()
+        } catch (_: Throwable) {
+        } finally {
+            multicastLock = null
+        }
     }
 
     /** يحول أخطاء الشبكة المتوقعة إلى رسائل عربية مفهومة، بلا كشف تفاصيل داخلية للمستخدم. */
@@ -606,8 +634,10 @@ object SyncManager {
                 socket.soTimeout = timeoutMs.toInt()
                 socket.broadcast = true
                 val msg = "WHO_IS_HERE"
-                val packet = DatagramPacket(msg.toByteArray(), msg.length, InetAddress.getByName("255.255.255.255"), UDP_PORT)
-                try { socket.send(packet) } catch (_: Throwable) {}
+                discoveryBroadcastAddresses().forEach { address ->
+                    val packet = DatagramPacket(msg.toByteArray(), msg.length, address, UDP_PORT)
+                    try { socket.send(packet) } catch (_: Throwable) {}
+                }
                 val buf = ByteArray(512)
                 val start = System.currentTimeMillis()
                 while (System.currentTimeMillis() - start < timeoutMs) {
@@ -626,6 +656,22 @@ object SyncManager {
             Log.e(TAG, "discover error", e)
         }
         return found.toList()
+    }
+
+    /** يجمع البث العام وبث الشبكات الفرعية، لأن بعض موجّهات Wi‑Fi لا تمرّر 255.255.255.255. */
+    private fun discoveryBroadcastAddresses(): List<InetAddress> {
+        val addresses = linkedSetOf(InetAddress.getByName("255.255.255.255"))
+        try {
+            java.net.NetworkInterface.getNetworkInterfaces()?.toList()
+                ?.filter { it.isUp && !it.isLoopback }
+                ?.flatMap { it.interfaceAddresses }
+                ?.mapNotNull { it.broadcast }
+                ?.filterIsInstance<Inet4Address>()
+                ?.forEach { addresses.add(it) }
+        } catch (e: Throwable) {
+            Log.w(TAG, "تعذر تحديد بث الشبكة الفرعية", e)
+        }
+        return addresses.toList()
     }
 
     fun ensureServer(context: Context) {

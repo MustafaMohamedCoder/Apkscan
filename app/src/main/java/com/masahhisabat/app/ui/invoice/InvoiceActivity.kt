@@ -144,9 +144,19 @@ class InvoiceActivity : AppCompatActivity() {
             }
             AppRepository.setLastInvoiceName(name)
 
+            val permanentPath = com.masahhisabat.app.data.AppRepository.persistAppImage(imagePath)
+            if (permanentPath == null) {
+                Toast.makeText(
+                    this,
+                    "تعذر حفظ الصورة بشكل دائم. فعّل إذن الوصول إلى الملفات ثم أعد المحاولة.",
+                    Toast.LENGTH_LONG
+                ).show()
+                return@setOnClickListener
+            }
+
             val item = InvoiceItem(
                 type = "image",
-                imagePath = com.masahhisabat.app.data.AppRepository.persistAppImage(imagePath) ?: imagePath,
+                imagePath = permanentPath,
                 processedPath = null,
                 storeName = etStore.text.toString().trim().ifBlank { null },
                 date = etDate.text.toString().trim().ifBlank { null },

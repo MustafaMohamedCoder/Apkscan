@@ -42,7 +42,14 @@ class LoginActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == storageRequestCode) {
             // إعادة محاولة إنشاء تهيئة البيانات بعد منح الإذن
-            try { AppRepository.init(this) } catch (_: Exception) { }
+            try {
+                AppRepository.init(this)
+                // إن وُجدت صور محفوظة من نسخة قديمة داخل cacheDir/filesDir،
+                // انقلها الآن إلى Documents/MasahHisabat قبل أن يحذفها النظام.
+                if (AppRepository.isUsingExternalStorage()) {
+                    AppRepository.remapTempImagePaths()
+                }
+            } catch (_: Exception) { }
         }
     }
 

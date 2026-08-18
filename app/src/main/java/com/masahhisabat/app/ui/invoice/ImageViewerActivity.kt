@@ -17,6 +17,7 @@ import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.image.ImageProcessor
 import com.masahhisabat.app.ui.ThemeHelper
 import android.graphics.drawable.GradientDrawable
+import android.widget.Toast
 
 /**
  * شاشة عرض الصور بالحجم الكامل مع التنقل بالسحب يمينًا ويسارًا.
@@ -28,6 +29,7 @@ class ImageViewerActivity : AppCompatActivity() {
     private var groupId: String = ""
     private var images: List<String> = emptyList()
     private var startIndex: Int = 0
+    private var selectedPath: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         com.masahhisabat.app.data.AppRepository.initAppContext(this)
@@ -40,11 +42,18 @@ class ImageViewerActivity : AppCompatActivity() {
 
         groupId = intent.getStringExtra("group_id") ?: ""
         startIndex = intent.getIntExtra("image_index", 0)
+        selectedPath = intent.getStringExtra("image_path")
 
-        // جمع مسارات كل الصور في المجموعة بترتيبها (من الأقدم للأحدث)
+        // لا نمرر إلى العارض إلا الملفات التي ما زالت موجودة فعلياً.
         images = AppRepository.items(groupId)
             .filter { it.type == "image" && (it.imagePath != null || it.processedPath != null) }
-            .map { it.processedPath ?: it.imagePath!! }
+            .mapNotNull { AppRepository.availableImagePath(it) }
+
+        if (images.isEmpty()) {
+            Toast.makeText(this, "لا توجد صورة متاحة للعرض", Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
 
         val pager = findViewById<ViewPager2>(R.id.image_pager)
         pager.adapter = ImagesPagerAdapter()
@@ -62,18 +71,18 @@ class ImageViewerActivity : AppCompatActivity() {
             page.alpha = 1f - kotlin.math.abs(position) * 0.2f
         }
 
-        // البدء من الصورة المضغوطة (عكس الاتجاه لأن ViewPager يبدأ من 0)
-        val startPos = if (images.isEmpty()) 0 else (images.size - 1 - startIndex)
+        // البدء من الصورة التي ضغط عليها المستخدم، ثم استخدام الفهرس القديم كحل احتياطي.
+        val startPos = selectedPath?.let { images.indexOf(it) }?.takeIf { it >= 0 }
+            ?: startIndex.coerceIn(0, images.lastIndex)
         pager.setCurrentItem(startPos, false)
 
         pager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
-                val imgIndex = images.size - 1 - position
-                updateCounter(imgIndex, images.size)
+                updateCounter(position, images.size)
             }
         })
 
-        updateCounter(startIndex, images.size)
+        updateCounter(startPos, images.size)
 
         findViewById<ImageButton>(R.id.btn_viewer_close).setOnClickListener { finish() }
     }
@@ -99,8 +108,7 @@ class ImageViewerActivity : AppCompatActivity() {
         }
 
         override fun onBindViewHolder(holder: ImageViewHolder, position: Int) {
-            val imgIndex = images.size - 1 - position
-            val path = images.getOrElse(imgIndex) { null }
+            val path = images.getOrElse(position) { null }
             // إعادة ضبط التكبير عند تبديل الصورة
             holder.img.resetZoom()
             if (path != null) {

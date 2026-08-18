@@ -112,7 +112,15 @@ class GroupActivity : AppCompatActivity() {
             if (textAttachment != null) {
                 // صورة (+ نص اختياري) في بطاقة واحدة — نُنسخها أولًا إلى المجلد الدائم
                 // الخارجي حتى لا تُفقد عند حذف التطبيق وإعادة التثبيت
-                val permanentPath = com.masahhisabat.app.data.AppRepository.persistAppImage(textAttachment) ?: textAttachment
+                val permanentPath = com.masahhisabat.app.data.AppRepository.persistAppImage(textAttachment)
+                if (permanentPath == null) {
+                    Toast.makeText(
+                        ctx,
+                        "تعذر حفظ الصورة بشكل دائم. فعّل إذن الوصول إلى الملفات ثم أعد المحاولة.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@setOnClickListener
+                }
                 val item = InvoiceItem(
                     type = "image",
                     imagePath = permanentPath,
@@ -366,16 +374,16 @@ class GroupActivity : AppCompatActivity() {
             } else {
                 // فقاعة صورة (مع أو بدون نص)
                 img.visibility = View.VISIBLE
-                val path = item.processedPath ?: item.imagePath
+                val path = AppRepository.availableImagePath(item)
                 if (path != null) {
                     try {
                         val bmp = ImageProcessor.loadBitmap(path, 600)
                         img.setImageBitmap(bmp)
                     } catch (e: Exception) { img.setImageResource(R.drawable.ic_invoice) }
+                } else {
+                    img.setImageResource(R.drawable.ic_invoice)
                 }
 
-                // إعادة ربط أي مسارات صور داخلية مؤقتة (من تثبيت قديم) بمسارات دائمة
-                com.masahhisabat.app.data.AppRepository.remapTempImagePaths()
                 // إذا كان هناك نص إضافي مع الصورة
                 val extraText = item.text?.takeIf { it.isNotBlank() }
                     ?: item.storeName?.takeIf { it.isNotBlank() }
@@ -489,9 +497,15 @@ class GroupActivity : AppCompatActivity() {
             val imageIndex = AppRepository.items(groupId)
                 .filter { it.type == "image" && (it.imagePath != null || it.processedPath != null) }
                 .indexOfFirst { it.id == item.id }
+            val selectedPath = AppRepository.availableImagePath(item)
+            if (selectedPath == null) {
+                Toast.makeText(ctx, "ملف الصورة غير متوفر على الجهاز", Toast.LENGTH_SHORT).show()
+                return
+            }
             val intent = android.content.Intent(ctx, ImageViewerActivity::class.java).apply {
                 putExtra("group_id", groupId)
                 putExtra("image_index", maxOf(imageIndex, 0))
+                putExtra("image_path", selectedPath)
             }
             ctx.startActivity(intent)
         }

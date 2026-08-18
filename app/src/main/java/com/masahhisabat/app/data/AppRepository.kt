@@ -225,6 +225,8 @@ object AppRepository {
      */
     fun persistAppImage(sourcePath: String): String? {
         return try {
+            // لا نعيد مسارًا داخليًا على أنه دائم: الصور الداخلية تُحذف عند إزالة التطبيق.
+            if (!isUsingExternalStorage()) return null
             val src = java.io.File(sourcePath)
             if (!src.exists()) return null
             val destDir = File(dataDir(), "images")
@@ -233,6 +235,15 @@ object AppRepository {
             src.inputStream().use { input -> dest.outputStream().use { output -> input.copyTo(output) } }
             dest.absolutePath
         } catch (e: Exception) { null }
+    }
+
+    /**
+     * اختيار النسخة القابلة للقراءة من الصورة. الأصل الدائم هو الأولوية دائماً؛
+     * النسخة المعالجة تُستخدم فقط إذا كانت هي الملف الوحيد المتاح.
+     */
+    fun availableImagePath(item: InvoiceItem): String? {
+        return listOf(item.imagePath, item.processedPath)
+            .firstOrNull { path -> !path.isNullOrBlank() && File(path).isFile && File(path).length() > 0L }
     }
 
     /**

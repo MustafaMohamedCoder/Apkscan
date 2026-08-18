@@ -118,6 +118,7 @@ class GroupsFragment : Fragment() {
         view.findViewById<EditText>(R.id.et_group_search)?.apply {
             setTextColor(ThemeHelper.inputText(requireContext()))
             setHintTextColor(ThemeHelper.inputHint(requireContext()))
+            compoundDrawableTintList = android.content.res.ColorStateList.valueOf(ThemeHelper.textSecondary(requireContext()))
         }
         view.findViewById<ImageView>(R.id.btn_clear_group_search)?.setColorFilter(ThemeHelper.textSecondary(requireContext()))
         view.findViewById<android.widget.ImageButton>(R.id.btn_sort_groups)?.setColorFilter(

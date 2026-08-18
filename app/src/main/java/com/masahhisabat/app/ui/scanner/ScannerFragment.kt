@@ -109,8 +109,13 @@ class ScannerFragment : Fragment() {
         }
         view.findViewById<TextView>(R.id.hint).setTextColor(ThemeHelper.textSecondary(ctx))
         view.findViewById<TextView>(R.id.scanner_summary).setTextColor(ThemeHelper.textSecondary(ctx))
+        view.findViewById<TextView>(R.id.scan_methods_label).setTextColor(ThemeHelper.text(ctx))
         view.findViewById<TextView>(R.id.recent_title).setTextColor(ThemeHelper.text(ctx))
         view.findViewById<TextView>(R.id.recent_scans_empty).setTextColor(ThemeHelper.textSecondary(ctx))
+        view.findViewById<MaterialCardView>(R.id.recent_scans_card).apply {
+            setCardBackgroundColor(ThemeHelper.surface(ctx))
+            strokeColor = ThemeHelper.cardStroke(ctx)
+        }
         // البطاقات الرئيسية بتدرج Teal ثابت ونصوصها بيضاء — لا حاجة لتلوين ديناميكي
     }
 

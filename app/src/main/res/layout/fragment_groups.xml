@@ -9,66 +9,67 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:paddingStart="20dp"
+        android:paddingTop="18dp"
         android:paddingEnd="20dp"
-        android:paddingTop="20dp"
-        android:paddingBottom="10dp"
-        android:gravity="center_vertical">
+        android:paddingBottom="8dp">
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:orientation="vertical">
+
             <TextView
                 android:id="@+id/title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:fontFamily="@font/tajawal_bold"
                 android:text="@string/nav_groups"
-                android:textSize="26sp"
-                android:fontFamily="@font/tajawal_bold" />
+                android:textSize="26sp" />
+
             <TextView
                 android:id="@+id/subtitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="جميع محادثاتك ونقاشاتك في مكان واحد"
-                android:textSize="13sp"
+                android:layout_marginTop="3dp"
                 android:fontFamily="@font/tajawal_medium"
-                android:textColor="@color/day_text_secondary" />
+                android:text="جميع مستنداتك ومحادثاتك في مكان واحد"
+                android:textColor="@color/day_text_secondary"
+                android:textSize="13sp" />
         </LinearLayout>
 
         <ImageButton
             android:id="@+id/btn_sort_groups"
-        android:layout_width="48dp"
-        android:layout_height="50dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:layout_marginEnd="6dp"
-            android:padding="11dp"
-            android:src="@drawable/ic_filter"
-            app:tint="@color/day_text_secondary"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="ترتيب المجموعات" />
+            android:contentDescription="ترتيب المجموعات"
+            android:padding="10dp"
+            android:src="@drawable/ic_filter"
+            app:tint="@color/day_text_secondary" />
 
         <ImageButton
             android:id="@+id/btn_add_group"
-            android:layout_width="50dp"
-            android:layout_height="50dp"
-            android:src="@drawable/ic_add"
-            app:tint="#FFFFFF"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="@drawable/scanner_fab_bg"
-            android:contentDescription="@string/new_group" />
+            android:contentDescription="@string/new_group"
+            android:padding="12dp"
+            android:src="@drawable/ic_add"
+            app:tint="#FFFFFF" />
     </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="20dp"
-        android:layout_marginEnd="20dp"
         android:layout_marginTop="2dp"
-        android:layout_marginBottom="8dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="10dp"
+        android:gravity="center_vertical">
 
         <TextView
             android:id="@+id/groups_summary"
@@ -85,7 +86,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:fontFamily="@font/tajawal_medium"
-            android:text="مرتبة حسب آخر نشاط"
+            android:text="آخر نشاط"
             android:textColor="@color/day_text_secondary"
             android:textSize="12sp" />
     </LinearLayout>
@@ -95,21 +96,23 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="20dp"
         android:layout_marginEnd="20dp"
-        android:layout_marginBottom="8dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:layout_marginBottom="10dp"
+        android:gravity="center_vertical">
 
         <EditText
             android:id="@+id/et_group_search"
             android:layout_width="0dp"
-            android:layout_height="48dp"
+            android:layout_height="50dp"
             android:layout_weight="1"
             android:background="@drawable/input_bg"
-            android:hint="ابحث عن مجموعة…"
+            android:drawableStart="@drawable/ic_search"
+            android:drawablePadding="10dp"
+            android:hint="ابحث عن مجموعة"
             android:imeOptions="actionSearch"
+            android:importantForAutofill="no"
             android:inputType="text"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
             android:singleLine="true"
             android:textSize="14sp" />
 
@@ -117,7 +120,7 @@
             android:id="@+id/btn_clear_group_search"
             android:layout_width="42dp"
             android:layout_height="42dp"
-            android:layout_marginStart="4dp"
+            android:layout_marginStart="2dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="مسح البحث"
             android:padding="11dp"
@@ -125,33 +128,42 @@
             android:visibility="gone" />
     </LinearLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/groups_list"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginStart="20dp"
-        android:layout_marginEnd="20dp"
-        android:layout_marginBottom="120dp"
-        android:padding="12dp"
-        android:background="@drawable/empty_state_bg"
-        android:clipToPadding="false"
-        android:paddingBottom="120dp" />
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="96dp">
 
-    <TextView
-        android:id="@+id/groups_empty"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:padding="40dp"
-        android:text="لا توجد مجموعات بعد. اضغط هنا لإنشاء مجموعتك الأولى."
-        android:clickable="true"
-        android:focusable="true"
-        android:foreground="?attr/selectableItemBackground"
-        android:textSize="15sp"
-        android:lineSpacingExtra="4dp"
-        android:fontFamily="@font/tajawal_medium"
-        android:textColor="@color/day_text_secondary"
-        android:visibility="visible" />
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/groups_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingStart="4dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="4dp"
+            android:paddingBottom="16dp" />
+
+        <TextView
+            android:id="@+id/groups_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_margin="12dp"
+            android:background="@drawable/empty_state_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="@font/tajawal_medium"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp"
+            android:minHeight="132dp"
+            android:padding="28dp"
+            android:text="لا توجد مجموعات بعد. اضغط هنا لإنشاء مجموعتك الأولى."
+            android:textColor="@color/day_text_secondary"
+            android:textSize="15sp" />
+    </FrameLayout>
 
 </LinearLayout>

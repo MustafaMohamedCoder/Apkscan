@@ -4,24 +4,25 @@
     android:id="@+id/group_card"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginStart="20dp"
-    android:layout_marginEnd="20dp"
-    android:layout_marginBottom="12dp"
-    app:cardCornerRadius="26dp"
-    app:cardElevation="3dp"
+    android:layout_marginStart="4dp"
+    android:layout_marginEnd="4dp"
+    android:layout_marginBottom="10dp"
+    android:foreground="?attr/selectableItemBackground"
+    app:cardCornerRadius="20dp"
+    app:cardElevation="1dp"
     app:strokeWidth="1dp"
     app:strokeColor="@color/day_card_stroke">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-            android:minHeight="96dp"
+            android:minHeight="88dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="16dp"
-        android:paddingTop="14dp"
-        android:paddingEnd="12dp"
-        android:paddingBottom="14dp">
+                    android:paddingStart="14dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="12dp">
 
         <!-- أيقونة المجلد داخل دائرة بتدرج Teal -->
         <FrameLayout
@@ -56,7 +57,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:textSize="19sp"
+                    android:textSize="17sp"
                     android:singleLine="true"
                     android:includeFontPadding="false"
                     android:fontFamily="@font/tajawal_bold" />
@@ -98,9 +99,9 @@
 
         <ImageView
             android:id="@+id/group_more"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:padding="10dp"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:padding="9dp"
             android:src="@drawable/ic_more"
             android:background="@drawable/group_more_bg"
             android:foreground="?attr/selectableItemBackgroundBorderless"

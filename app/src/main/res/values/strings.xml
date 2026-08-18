@@ -51,7 +51,9 @@
 
     <!-- Scanner -->
     <string name="scan_tap">اضغط لالتقاط صورة أو اختر من المعرض</string>
-    <string name="auto_edge">تم تحديد حواف المستند تلقائياً</string>
+    <string name="auto_edge">تم اقتراح حواف المستند تلقائياً. يمكنك تعديل الإطار يدوياً.</string>
+    <string name="detecting_document_edges">جارٍ اكتشاف حواف المستند…</string>
+    <string name="edge_detection_failed">لم تتضح حواف المستند. تم استخدام إطار كامل الصورة ويمكنك تعديله يدوياً.</string>
     <string name="save_options">ماذا تريد أن تفعل بالصورة؟</string>
     <string name="save_gallery">حفظ في المعرض</string>
     <string name="new_invoice">إنشاء فاتورة جديدة</string>

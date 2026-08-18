@@ -53,6 +53,10 @@ class CropEditActivity : AppCompatActivity() {
     private var action: String = ACTION_NEW_INVOICE
     private var lastMode = ProcessMode.AUTO
     private var processing = false
+    private var edgeDetectionInProgress = false
+    private var edgeDetectionToken = 0
+    private lateinit var loadingPanel: LinearLayout
+    private lateinit var loadingLabel: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppRepository.initAppContext(this)
@@ -74,10 +78,8 @@ class CropEditActivity : AppCompatActivity() {
 
         cropView = findViewById(R.id.crop_view)
         cropView.setBitmap(originalBmp)
-
-        // كشف تلقائي للحواف
-        val edges = ImageProcessor.detectEdges(originalBmp)
-        cropView.setCropRect(edges.left, edges.top, edges.right, edges.bottom)
+        loadingPanel = findViewById(R.id.loading_panel)
+        loadingLabel = findViewById(R.id.loading_message)
 
         findViewById<MaterialButton>(R.id.btn_rotate).setOnClickListener {
             val croppedForRotation = cropView.getCroppedBitmap()
@@ -88,6 +90,8 @@ class CropEditActivity : AppCompatActivity() {
             cropView.setBitmap(rotated)
             originalBmp = rotated
             processedBmp = null
+            cropView.setCropRect(0.035f, 0.035f, 0.965f, 0.965f)
+            detectAndApplyEdges(showResult = false)
         }
 
         findViewById<MaterialButton>(R.id.btn_grid).setOnClickListener {
@@ -100,9 +104,7 @@ class CropEditActivity : AppCompatActivity() {
         }
 
         findViewById<MaterialButton>(R.id.btn_crop_auto).setOnClickListener {
-            val e = ImageProcessor.detectEdges(originalBmp)
-            cropView.setCropRect(e.left, e.top, e.right, e.bottom)
-            Toast.makeText(this, R.string.crop_auto, Toast.LENGTH_SHORT).show()
+            detectAndApplyEdges(showResult = true)
         }
 
         findViewById<MaterialButton>(R.id.btn_compare).setOnClickListener {
@@ -115,9 +117,13 @@ class CropEditActivity : AppCompatActivity() {
         }
 
         findViewById<ImageView>(R.id.btn_back).setOnClickListener { finish() }
+
+        // يبدأ الاقتراح تلقائيًا بعد فتح الصورة؛ يظل الإطار قابلاً للتعديل دائمًا.
+        detectAndApplyEdges(showResult = true)
     }
 
     override fun onDestroy() {
+        edgeDetectionToken++
         if (::cropView.isInitialized) cropView.clearBitmap()
         if (::originalBmp.isInitialized && !originalBmp.isRecycled) originalBmp.recycle()
         processedBmp?.takeIf { it !== originalBmp && !it.isRecycled }?.recycle()
@@ -131,15 +137,16 @@ class CropEditActivity : AppCompatActivity() {
     }
 
     private fun processAndContinue() {
+        if (edgeDetectionInProgress) return
         processing = true
-        val loading = findViewById<LinearLayout>(R.id.loading_panel)
-        loading.visibility = View.VISIBLE
+        loadingLabel.setText(R.string.loading)
+        loadingPanel.visibility = View.VISIBLE
 
         val cropped = cropView.getCroppedBitmap()
         ImageProcessor.process(lastMode, cropped, object : ImageProcessor.Callback {
             override fun onDone(bitmap: android.graphics.Bitmap) {
                 processing = false
-                loading.visibility = View.GONE
+                loadingPanel.visibility = View.GONE
                 if (bitmap !== cropped && !cropped.isRecycled) cropped.recycle()
                 processedBmp = bitmap
                 AppRepository.setLastProcessMode(lastMode.key)
@@ -147,12 +154,65 @@ class CropEditActivity : AppCompatActivity() {
             }
             override fun onError() {
                 processing = false
-                loading.visibility = View.GONE
+                loadingPanel.visibility = View.GONE
                 Toast.makeText(this@CropEditActivity, "فشلت المعالجة — جاري استخدام الأصلية", Toast.LENGTH_SHORT).show()
                 processedBmp = cropped
                 showSuccessAndContinue(cropped)
             }
         })
+    }
+
+    /** يشغّل الكشف خارج خيط الواجهة ويطبق الإطار فقط إذا بقيت الصورة نفسها نشطة. */
+    private fun detectAndApplyEdges(showResult: Boolean) {
+        if (edgeDetectionInProgress || !::originalBmp.isInitialized || originalBmp.isRecycled) return
+        val bitmap = originalBmp
+        val token = ++edgeDetectionToken
+        edgeDetectionInProgress = true
+        setEdgeDetectionUi(detecting = true)
+
+        Thread {
+            val detection = try {
+                ImageProcessor.detectDocumentEdges(bitmap)
+            } catch (_: Throwable) {
+                null
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed || token != edgeDetectionToken || !::cropView.isInitialized) return@runOnUiThread
+                edgeDetectionInProgress = false
+                setEdgeDetectionUi(detecting = false)
+
+                if (detection != null) {
+                    val bounds = detection.bounds
+                    cropView.setCropRect(bounds.left, bounds.top, bounds.right, bounds.bottom)
+                    if (showResult) {
+                        Toast.makeText(
+                            this,
+                            if (detection.isDocumentDetected) R.string.auto_edge else R.string.edge_detection_failed,
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                } else {
+                    cropView.setCropRect(0.035f, 0.035f, 0.965f, 0.965f)
+                    if (showResult) Toast.makeText(this, R.string.edge_detection_failed, Toast.LENGTH_LONG).show()
+                }
+            }
+        }.apply {
+            name = "document-edge-detector"
+            start()
+        }
+    }
+
+    private fun setEdgeDetectionUi(detecting: Boolean) {
+        loadingLabel.setText(if (detecting) R.string.detecting_document_edges else R.string.loading)
+        loadingPanel.visibility = if (detecting) View.VISIBLE else View.GONE
+        intArrayOf(
+            R.id.btn_rotate,
+            R.id.btn_grid,
+            R.id.btn_crop_center,
+            R.id.btn_crop_auto,
+            R.id.btn_compare,
+            R.id.btn_done
+        ).forEach { id -> findViewById<View>(id).isEnabled = !detecting }
     }
 
     private fun showSuccessAndContinue(bitmap: android.graphics.Bitmap) {

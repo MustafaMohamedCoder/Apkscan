@@ -137,10 +137,9 @@ class ScannerFragment : Fragment() {
 
     private fun showPostScanOptions(imagePath: String) {
         val ctx = requireContext()
-        // اهتزاز خفيف + كشف الحواف
+        // اهتزاز خفيف. كشف الحواف يبدأ عند فتح محرر القص حتى لا يعطّل اختيار الإجراء.
         (ctx.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
             ?.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE))
-        Toast.makeText(ctx, R.string.auto_edge, Toast.LENGTH_SHORT).show()
 
         val options = arrayOf(
             getString(R.string.save_gallery),

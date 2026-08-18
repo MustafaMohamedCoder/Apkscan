@@ -142,7 +142,7 @@
             android:layout_height="44dp"
             android:padding="9dp"
             android:src="@drawable/ic_image_attach"
-            android:tint="@color/accent"
+            app:tint="@color/accent"
             android:background="@drawable/circle_primary"
             android:backgroundTint="@color/day_surface_high"
             android:contentDescription="إضافة صورة" />
@@ -169,7 +169,7 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:src="@drawable/ic_send"
-            android:tint="#FFFFFF"
+            app:tint="#FFFFFF"
             android:background="@drawable/scanner_fab_bg"
             android:padding="12dp"
             android:elevation="4dp"

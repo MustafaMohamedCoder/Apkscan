@@ -90,7 +90,7 @@
                         android:layout_width="36dp"
                         android:layout_height="36dp"
                         android:src="@drawable/ic_invoice"
-                        android:tint="@color/accent"
+                        app:tint="@color/accent"
                         android:contentDescription="@string/invoices_count" />
                     <TextView
                         android:id="@+id/invoices_count"
@@ -134,7 +134,7 @@
                         android:layout_width="36dp"
                         android:layout_height="36dp"
                         android:src="@drawable/ic_groups_filled"
-                        android:tint="@color/accent"
+                        app:tint="@color/accent"
                         android:contentDescription="@string/groups_count" />
                     <TextView
                         android:id="@+id/groups_count"

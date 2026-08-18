@@ -35,7 +35,7 @@
                 android:layout_height="26dp"
                 android:layout_gravity="center"
                 android:src="@drawable/ic_folder"
-                android:tint="#FFFFFF"
+                app:tint="#FFFFFF"
                 android:contentDescription="@string/nav_groups" />
         </FrameLayout>
 

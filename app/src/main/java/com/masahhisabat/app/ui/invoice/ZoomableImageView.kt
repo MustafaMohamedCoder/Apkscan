@@ -6,7 +6,7 @@ import android.graphics.PointF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
-import android.widget.ImageView
+import androidx.appcompat.widget.AppCompatImageView
 import kotlin.math.abs
 
 /**
@@ -17,7 +17,7 @@ class ZoomableImageView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
-) : ImageView(context, attrs, defStyleAttr) {
+) : AppCompatImageView(context, attrs, defStyleAttr) {
 
     private val matrix = Matrix()
     private var origMatrix = Matrix()

@@ -6,6 +6,7 @@ import android.view.Gravity
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.masahhisabat.app.data.AppRepository
@@ -59,7 +60,10 @@ class LockActivity : AppCompatActivity() {
         content.addView(action, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = 20 })
         setContentView(content)
         setFinishOnTouchOutside(false)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                moveTaskToBack(true)
+            }
+        })
     }
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() { moveTaskToBack(true) }
 }

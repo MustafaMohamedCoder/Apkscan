@@ -157,9 +157,9 @@
 
     <!-- Activity log -->
     <string name="log_login">سجّل المستخدم دخول: %s</string>
-    <string name="log_create_invoice" formatted="false">أنشأ %s فاتورة: %s</string>
-    <string name="log_create_group" formatted="false">أنشأ %s مجموعة: %s</string>
+    <string name="log_create_invoice">أنشأ %1$s فاتورة: %2$s</string>
+    <string name="log_create_group">أنشأ %1$s مجموعة: %2$s</string>
     <string name="log_delete">حذف %s عنصراً</string>
-    <string name="log_create_user" formatted="false">أنشأ %s مستخدماً جديداً: %s</string>
+    <string name="log_create_user">أنشأ %1$s مستخدماً جديداً: %2$s</string>
     <string name="log_no_entries">لا يوجد نشاط بعد</string>
 </resources>

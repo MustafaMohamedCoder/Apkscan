@@ -30,7 +30,7 @@
                 android:layout_height="26dp"
                 android:layout_gravity="center"
                 android:src="@drawable/ic_person"
-                android:tint="#FFFFFF"
+                app:tint="#FFFFFF"
                 android:contentDescription="@string/add_member" />
         </FrameLayout>
 

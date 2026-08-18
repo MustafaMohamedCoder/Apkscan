@@ -47,7 +47,7 @@
     <string name="start_scan">ابدأ مسحاً جديداً</string>
     <string name="recent_operations">آخر العمليات</string>
     <string name="no_operations">لا توجد عمليات بعد – ابدأ بمسح أول فاتورة لك</string>
-    <string name="dev_credit">التطبيق من تطوير مصطفي <font color="#EF4444">♥️</font> عبدالفتاح</string>
+    <string name="dev_credit">التطبيق من تطوير مصطفي<font color="#EF4444">♥️</font>عبدالفتاح</string>
 
     <!-- Scanner -->
     <string name="scan_tap">اضغط لالتقاط صورة أو اختر من المعرض</string>

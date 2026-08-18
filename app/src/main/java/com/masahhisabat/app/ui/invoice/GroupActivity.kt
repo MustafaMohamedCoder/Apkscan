@@ -538,7 +538,10 @@ class GroupActivity : AppCompatActivity() {
                     tvDetails.setTextColor(ThemeHelper.bubbleTime(ctx))
                     val fmt = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
                     tvDate.text = try {
-                        item.date?.let { fmt.format(java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).parse(it)) } ?: ""
+                        item.date?.let { rawDate ->
+                            val parsedDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).parse(rawDate)
+                            parsedDate?.let(fmt::format) ?: rawDate
+                        } ?: ""
                     } catch (e: Exception) { item.date ?: "" }
                     tvDate.setTextColor(ThemeHelper.bubbleTime(ctx))
                     metaRow.visibility = View.VISIBLE

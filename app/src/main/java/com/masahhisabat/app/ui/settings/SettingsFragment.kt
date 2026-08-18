@@ -25,6 +25,9 @@ import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.LoginActivity
 import com.masahhisabat.app.ui.auth.SessionStore
 import com.masahhisabat.app.ui.team.TeamActivity
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * الإعدادات: تبديل الوضع، إدارة الحسابات المحلية، تغيير كلمة المرور،
@@ -147,6 +150,24 @@ class SettingsFragment : Fragment() {
         val ctx = requireContext()
         SyncManager.ensureServer(ctx)
 
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle(R.string.local_sync)
+            .setItems(arrayOf("مزامنة مع جهاز آخر", "اختبار المزامنة والشبكة", "سجل أخطاء الشبكة")) { _, which ->
+                when (which) {
+                    0 -> showPeerDiscoveryDialog()
+                    1 -> showNetworkSelfTest()
+                    2 -> showNetworkLogDialog()
+                }
+            }
+            .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
+    /** اكتشاف الأجهزة المتاحة ثم بدء نقل البيانات عند اختيار أحدها. */
+    private fun showPeerDiscoveryDialog() {
+        val ctx = requireContext()
+        SyncManager.ensureServer(ctx)
+
         // واجهة التقدم أثناء البحث
         val progress = android.widget.LinearLayout(ctx).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -221,8 +242,62 @@ class SettingsFragment : Fragment() {
         }.start()
     }
 
+    /** يشغل سيناريوهات المزامنة المحلية الآمنة دون إرسال أو تغيير أي بيانات فعلية. */
+    private fun showNetworkSelfTest() {
+        val ctx = requireContext()
+        val testDialog = showSyncProgressDialog(
+            peerName = "",
+            title = "اختبار المزامنة والشبكة",
+            initialStatus = "جارٍ تجهيز الاختبار الذاتي الآمن..."
+        )
+        Thread {
+            val report = SyncManager.runNetworkSelfTest { percent, status ->
+                activity?.runOnUiThread { updateSyncProgress(testDialog, percent, status) }
+            }
+            activity?.runOnUiThread {
+                if (testDialog.isShowing) testDialog.dismiss()
+                if (!isAdded) return@runOnUiThread
+                val lines = report.results.joinToString("\n\n") { result ->
+                    val mark = if (result.success) "✓" else "✕"
+                    "$mark ${result.label}\n${result.detail}"
+                }
+                val title = if (report.isSuccessful) "اكتمل اختبار الشبكة بنجاح" else "اكتمل الاختبار مع ملاحظات"
+                MaterialAlertDialogBuilder(ctx)
+                    .setTitle(title)
+                    .setMessage("نجح ${report.passedCount} من ${report.results.size} اختبارات.\n\n$lines")
+                    .setPositiveButton("عرض السجل") { _, _ -> showNetworkLogDialog() }
+                    .setNegativeButton("حسنًا", null)
+                    .show()
+            }
+        }.apply { name = "sync-network-self-test" }.start()
+    }
+
+    /** يعرض آخر أحداث الشبكة بما فيها الأخطاء الفعلية ونتائج الاختبار الذاتي. */
+    private fun showNetworkLogDialog() {
+        val ctx = requireContext()
+        val formatter = SimpleDateFormat("dd/MM HH:mm:ss", Locale("ar"))
+        val records = AppRepository.syncLog().takeLast(60).asReversed()
+        val lines = if (records.isEmpty()) {
+            arrayOf("لا يوجد سجل مزامنة أو أخطاء شبكة حتى الآن.")
+        } else {
+            records.map { entry ->
+                val mark = if (entry.success) "✓" else "✕"
+                "$mark ${formatter.format(Date(entry.at))} — ${entry.action}\n${entry.detail}"
+            }.toTypedArray()
+        }
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("سجل أخطاء الشبكة")
+            .setItems(lines, null)
+            .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
     /** نافذة حالة المزامنة: نسبة مرئية تُحدّث من مراحل النقل الفعلية. */
-    private fun showSyncProgressDialog(peerName: String): androidx.appcompat.app.AlertDialog {
+    private fun showSyncProgressDialog(
+        peerName: String,
+        title: String = "جارٍ المزامنة",
+        initialStatus: String = "جارٍ تجهيز المزامنة مع $peerName..."
+    ): androidx.appcompat.app.AlertDialog {
         val ctx = requireContext()
         val content = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -230,7 +305,7 @@ class SettingsFragment : Fragment() {
 
             addView(TextView(ctx).apply {
                 id = R.id.sync_progress_status
-                text = "جارٍ تجهيز المزامنة مع $peerName..."
+                text = initialStatus
                 textSize = 15f
                 gravity = android.view.Gravity.CENTER
                 setTextColor(ThemeHelper.text(ctx))
@@ -265,7 +340,7 @@ class SettingsFragment : Fragment() {
             })
         }
         return MaterialAlertDialogBuilder(ctx)
-            .setTitle("جارٍ المزامنة")
+            .setTitle(title)
             .setView(content)
             .setCancelable(false)
             .create()

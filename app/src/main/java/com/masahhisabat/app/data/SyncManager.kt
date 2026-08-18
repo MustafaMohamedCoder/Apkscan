@@ -31,6 +31,7 @@ object SyncManager {
     private const val UDP_PORT = 8766
     private const val CONNECT_TIMEOUT_MS = 15_000
     private const val READ_TIMEOUT_MS = 60_000
+    private const val SELF_TEST_TIMEOUT_MS = 600
     private val gson = Gson()
 
     @Volatile private var server: ServerSocket? = null
@@ -152,6 +153,159 @@ object SyncManager {
         else -> "حدث خطأ غير متوقع أثناء المزامنة. أعد المحاولة."
     }
 
+    /**
+     * فحص شبكي ذاتي لا يرسل بيانات حقيقية ولا يحتاج جهازًا ثانيًا.
+     * يستخدم حلقة الاتصال المحلية فقط لاختبار نجاح الاتصال، الرفض، المهلة،
+     * انقطاع الرد، والاستجابة غير الصالحة؛ وتُسجل كل نتيجة في سجل المزامنة.
+     */
+    fun runNetworkSelfTest(
+        onProgress: (percent: Int, status: String) -> Unit = { _, _ -> }
+    ): NetworkSelfTestReport {
+        val results = mutableListOf<NetworkTestCase>()
+
+        fun record(label: String, success: Boolean, detail: String) {
+            results += NetworkTestCase(label, success, detail)
+            AppRepository.logSync(
+                SyncEntry(
+                    action = "اختبار شبكة — $label",
+                    detail = detail,
+                    success = success
+                )
+            )
+        }
+
+        onProgress(5, "جارٍ بدء الاختبار الذاتي الآمن...")
+
+        onProgress(20, "اختبار الاتصال المحلي والاستجابة السليمة...")
+        try {
+            withLoopbackServer(
+                handler = { peer ->
+                    val request = peer.getInputStream().bufferedReader().readLine()
+                    if (request != "PING") throw IOException("طلب اختبار غير متوقع")
+                    peer.getOutputStream().bufferedWriter().use { writer ->
+                        writer.write("OK\n")
+                        writer.flush()
+                    }
+                },
+                client = { port ->
+                    Socket().use { socket ->
+                        socket.connect(InetSocketAddress("127.0.0.1", port), SELF_TEST_TIMEOUT_MS)
+                        socket.soTimeout = SELF_TEST_TIMEOUT_MS
+                        val writer = socket.getOutputStream().bufferedWriter()
+                        writer.write("PING\n")
+                        writer.flush()
+                        val response = socket.getInputStream().bufferedReader().readLine()
+                        if (response != "OK") throw IOException("رد اختبار غير صالح")
+                    }
+                }
+            )
+            record("اتصال محلي", true, "نجح فتح اتصال محلي واستلام تأكيد صحيح.")
+        } catch (e: Throwable) {
+            record("اتصال محلي", false, syncErrorMessage(e))
+        }
+
+        onProgress(40, "اختبار رفض الاتصال...")
+        try {
+            val closedPort = ServerSocket(0).use { it.localPort }
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress("127.0.0.1", closedPort), SELF_TEST_TIMEOUT_MS)
+            }
+            record("رفض الاتصال", false, "تم الاتصال بمنفذ يجب أن يكون مغلقًا.")
+        } catch (_: ConnectException) {
+            record("رفض الاتصال", true, "تم التقاط رفض الاتصال ومعالجته بأمان.")
+        } catch (e: Throwable) {
+            record("رفض الاتصال", false, "نوع خطأ غير متوقع: ${syncErrorMessage(e)}")
+        }
+
+        onProgress(60, "اختبار انتهاء مهلة الرد...")
+        try {
+            withLoopbackServer(
+                handler = { Thread.sleep(SELF_TEST_TIMEOUT_MS.toLong() + 400) },
+                client = { port ->
+                    Socket().use { socket ->
+                        socket.connect(InetSocketAddress("127.0.0.1", port), SELF_TEST_TIMEOUT_MS)
+                        socket.soTimeout = SELF_TEST_TIMEOUT_MS
+                        socket.getInputStream().read()
+                        throw IOException("لم تنته مهلة الرد كما هو متوقع")
+                    }
+                }
+            )
+            record("مهلة الرد", false, "لم تنته المهلة في سيناريو عدم الاستجابة.")
+        } catch (_: SocketTimeoutException) {
+            record("مهلة الرد", true, "تم التقاط انتهاء مهلة الرد ومعالجته بأمان.")
+        } catch (e: Throwable) {
+            record("مهلة الرد", false, "نوع خطأ غير متوقع: ${syncErrorMessage(e)}")
+        }
+
+        onProgress(80, "اختبار انقطاع الرد والاستجابة غير الصالحة...")
+        try {
+            withLoopbackServer(
+                handler = { /* يقبل الاتصال ثم يغلقه دون رد. */ },
+                client = { port ->
+                    Socket().use { socket ->
+                        socket.connect(InetSocketAddress("127.0.0.1", port), SELF_TEST_TIMEOUT_MS)
+                        socket.soTimeout = SELF_TEST_TIMEOUT_MS
+                        if (socket.getInputStream().bufferedReader().readLine() != null) {
+                            throw IOException("وصل رد بينما يجب أن ينقطع الاتصال")
+                        }
+                        throw EOFException("انقطع الرد كما هو متوقع")
+                    }
+                }
+            )
+            record("انقطاع الرد", false, "لم يُلتقط انقطاع الرد كما هو متوقع.")
+        } catch (_: EOFException) {
+            record("انقطاع الرد", true, "تم التقاط انقطاع الرد ومعالجته بأمان.")
+        } catch (e: Throwable) {
+            record("انقطاع الرد", false, "نوع خطأ غير متوقع: ${syncErrorMessage(e)}")
+        }
+
+        try {
+            withLoopbackServer(
+                handler = { peer ->
+                    peer.getOutputStream().bufferedWriter().use { writer ->
+                        writer.write("REPLY_INCOMPLETE\n")
+                        writer.flush()
+                    }
+                },
+                client = { port ->
+                    Socket().use { socket ->
+                        socket.connect(InetSocketAddress("127.0.0.1", port), SELF_TEST_TIMEOUT_MS)
+                        socket.soTimeout = SELF_TEST_TIMEOUT_MS
+                        val reply = socket.getInputStream().bufferedReader().readLine()
+                        if (reply?.startsWith("OK") == true) throw IOException("قُبل رد غير صالح")
+                    }
+                }
+            )
+            record("استجابة غير صالحة", true, "تم رفض استجابة ناقصة دون تعطل التطبيق.")
+        } catch (e: Throwable) {
+            record("استجابة غير صالحة", false, syncErrorMessage(e))
+        }
+
+        val passed = results.count { it.success }
+        onProgress(100, "اكتمل الاختبار: $passed من ${results.size} سيناريوهات نجحت")
+        return NetworkSelfTestReport(results)
+    }
+
+    /** خادم محلي مؤقت للاختبارات فقط؛ يُغلق دائمًا بعد كل سيناريو. */
+    private fun withLoopbackServer(handler: (Socket) -> Unit, client: (Int) -> Unit) {
+        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { testServer ->
+            val worker = Thread {
+                try {
+                    testServer.accept().use { handler(it) }
+                } catch (_: Throwable) {
+                    // السيناريوهات المقصودة قد تغلق الاتصال قبل اكتمال رد الخادم.
+                }
+            }.apply { name = "sync-self-test-server" }
+            worker.start()
+            try {
+                client(testServer.localPort)
+            } finally {
+                try { testServer.close() } catch (_: Throwable) {}
+                try { worker.join(SELF_TEST_TIMEOUT_MS.toLong() + 1_200) } catch (_: InterruptedException) {}
+            }
+        }
+    }
+
     private fun buildPayload(context: Context): SyncPayload {
         return SyncPayload(
             users = AppRepository.users().map { UserPayload(it.username, it.passwordHash, it.role.name, it.enabled) },
@@ -220,10 +374,19 @@ object SyncManager {
                     if (msg.startsWith("WHO_IS_HERE")) {
                         // رد بعنواننا + الاسم
                         val me = AppRepository.currentUserDeviceName()
-                        val reply = ("HERE " + java.net.NetworkInterface.getNetworkInterfaces()
-                            .toList().flatMap { it.inetAddresses.toList() }
-                            .filter { !it.isLoopbackAddress && it.hostAddress.contains(".") }
-                            .firstOrNull()?.hostAddress ?: "unknown") + " " + me
+                        val localAddress = try {
+                            java.net.NetworkInterface.getNetworkInterfaces()
+                                ?.toList()
+                                ?.flatMap { it.inetAddresses.toList() }
+                                ?.firstOrNull { address ->
+                                    !address.isLoopbackAddress && address.hostAddress?.contains(".") == true
+                                }
+                                ?.hostAddress
+                                ?: "unknown"
+                        } catch (_: Throwable) {
+                            "unknown"
+                        }
+                        val reply = "HERE $localAddress $me"
                         val resp = DatagramPacket(reply.toByteArray(), reply.length, packet.address, packet.port)
                         socket.send(resp)
                         peers.addIfAbsent(packet.address.hostAddress)
@@ -274,6 +437,11 @@ object SyncManager {
         val usersReceived: Int,
         val errorMessage: String? = null
     )
+    data class NetworkTestCase(val label: String, val success: Boolean, val detail: String)
+    data class NetworkSelfTestReport(val results: List<NetworkTestCase>) {
+        val passedCount: Int get() = results.count { it.success }
+        val isSuccessful: Boolean get() = results.isNotEmpty() && passedCount == results.size
+    }
 
     // ---------- نماذج المزامنة ----------
     data class UserPayload(val username: String, val passwordHash: String, val roleName: String, val enabled: Boolean)

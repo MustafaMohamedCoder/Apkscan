@@ -1,37 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- === نظام ألوان احترافي جديد (Teal عصري) === -->
-    <color name="primary">#0D9488</color>
+    <!-- === هوية «مسار المسح»: Teal عميق + Aqua واضح للعمليات النشطة === -->
+    <color name="primary">#0F766E</color>
     <color name="primary_dark">#0F766E</color>
-    <color name="primary_light">#99F6E4</color>
+    <color name="primary_light">#CCFBF1</color>
     <color name="accent">#14B8A6</color>
 
     <!-- Night theme — داكن فاخر بلمسة Teal -->
-    <color name="night_background">#041615</color>
-    <color name="night_surface">#0B2623</color>
-    <color name="night_surface_high">#123631</color>
-    <color name="night_text">#F2FFFD</color>
-    <color name="night_text_secondary">#93B8B3</color>
-    <color name="night_card_stroke">#1C423D</color>
+    <color name="night_background">#061A19</color>
+    <color name="night_surface">#0D2926</color>
+    <color name="night_surface_high">#123B35</color>
+    <color name="night_text">#F4FFFD</color>
+    <color name="night_text_secondary">#B6D2CD</color>
+    <color name="night_card_stroke">#2B5C55</color>
     <color name="night_nav_bar">#06201E</color>
 
     <!-- Day theme — فاتح نظيف -->
-    <color name="day_background">#F5F9F8</color>
+    <color name="day_background">#F3F8F7</color>
     <color name="day_surface">#FFFFFF</color>
-    <color name="day_surface_high">#EDF5F3</color>
-    <color name="day_text">#0C2120</color>
-    <color name="day_text_secondary">#5A7471</color>
-    <color name="day_card_stroke">#E1EEE9</color>
+    <color name="day_surface_high">#EAF4F1</color>
+    <color name="day_text">#082826</color>
+    <color name="day_text_secondary">#466864</color>
+    <color name="day_card_stroke">#CDE2DC</color>
     <color name="day_nav_bar">#FFFFFF</color>
 
     <!-- Login gradient -->
     <color name="login_top">#0B3B37</color>
     <color name="login_mid">#0D5D55</color>
     <color name="login_bottom">#0F766E</color>
-    <color name="input_fill">#F3F6F5</color>
-    <color name="input_fill_night">#0B2623</color>
-    <color name="input_stroke">#D9E6E2</color>
-    <color name="input_stroke_night">#1C423D</color>
+    <!-- حقول عالية التباين: النص الأساسي واضح والحدود قابلة للرؤية في كلا الوضعين -->
+    <color name="input_fill">#FFFFFF</color>
+    <color name="input_fill_night">#102F2B</color>
+    <color name="input_stroke">#77AAA1</color>
+    <color name="input_stroke_night">#4F8C81</color>
+    <color name="input_text_day">#082826</color>
+    <color name="input_text_night">#F4FFFD</color>
+    <color name="input_hint_day">#3C625D</color>
+    <color name="input_hint_night">#B9DAD4</color>
 
     <color name="white">#FFFFFF</color>
     <!-- فقاعات الرسائل داخل المجموعات (تتغير حسب الوضع) -->

@@ -122,6 +122,10 @@ class MainActivity : AppCompatActivity() {
             iconView?.setColorFilter(if (i == index) activeColor else inactiveColor)
             labelView?.setTextColor(if (i == index) activeColor else inactiveColor)
             labelView?.typeface = if (i == index) resources.getFont(R.font.tajawal_bold) else resources.getFont(R.font.tajawal_regular)
+            // شارة هادئة خلف التبويب النشط: توضح الموضع الحالي دون ازدحام الشريط السفلي.
+            findViewById<View>(tabIds[i])?.backgroundTintList = android.content.res.ColorStateList.valueOf(
+                if (i == index) 0x2414B8A6 else android.graphics.Color.TRANSPARENT
+            )
         }
     }
 

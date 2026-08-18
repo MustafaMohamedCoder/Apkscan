@@ -99,6 +99,15 @@ object ThemeHelper {
         if (isNight(context)) context.getColor(R.color.input_stroke_night)
         else context.getColor(R.color.input_stroke)
 
+    /** ألوان الكتابة المضمونة للحقول، منفصلة عن لون النص الثانوي للبطاقات. */
+    fun inputText(context: Context): Int =
+        if (isNight(context)) context.getColor(R.color.input_text_night)
+        else context.getColor(R.color.input_text_day)
+
+    fun inputHint(context: Context): Int =
+        if (isNight(context)) context.getColor(R.color.input_hint_night)
+        else context.getColor(R.color.input_hint_day)
+
     /** شريط التنقل السفلي */
     fun navBarColor(context: Context): Int =
         if (isNight(context)) context.getColor(R.color.night_nav_bar)

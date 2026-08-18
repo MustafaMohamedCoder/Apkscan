@@ -515,12 +515,16 @@ class SettingsFragment : Fragment() {
             .setTitle(R.string.logout)
             .setMessage("هل أنت متأكد من تسجيل الخروج؟")
             .setPositiveButton(R.string.logout) { _, _ ->
-                SessionStore.logout(ctx)
-                AppRepository.logActivity(ActivityEntry(SessionStore.currentUser(ctx) ?: "?", "سجّل المستخدم خروج"))
+                // نلغي الجلسة و«تذكرني» معًا، وإلا ستعيد شاشة الدخول فتح الحساب تلقائيًا.
+                val user = SessionStore.currentUser(ctx) ?: "مستخدم"
+                AppRepository.logActivity(ActivityEntry(user, "سجّل $user خروج"))
+                AppRepository.clearRemember()
+                SessionStore.clear(ctx)
                 val intent = Intent(ctx, LoginActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 }
                 startActivity(intent)
+                activity?.finishAffinity()
             }
             .setNegativeButton(R.string.cancel, null)
             .show()

@@ -9,6 +9,7 @@ import android.widget.Toast
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.SyncManager
 import com.masahhisabat.app.data.TrashCleanupScheduler
+import com.masahhisabat.app.image.DocumentEdgeDetector
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.SessionStore
 import com.masahhisabat.app.ui.auth.LockActivity
@@ -28,6 +29,8 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         AppRepository.initAppContext(this)
+        // تحميل مكتبة الرؤية المضمنة محلياً. فشل التحميل لا يوقف التطبيق؛ يعود الماسح للقص اليدوي الآمن.
+        DocumentEdgeDetector.initialize()
         // تنظيف السلة المؤجل لا يعمل إلا إذا أبقاه المستخدم مفعّلًا في الإعدادات.
         TrashCleanupScheduler.update(this)
         if (AppRepository.isAutoTrashPurgeEnabled()) {

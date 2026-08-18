@@ -3,6 +3,7 @@ package com.masahhisabat.app.image
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.graphics.PointF
 import android.os.Handler
 import android.os.Looper
 import java.io.File
@@ -267,18 +268,25 @@ object ImageProcessor {
     data class EdgeDetection(
         val bounds: RectF,
         val isDocumentDetected: Boolean,
-        val confidence: Float
+        val confidence: Float,
+        val corners: List<PointF>,
+        val shouldAutoCorrect: Boolean
     )
 
-    /** كشف حواف مستند محلي عبر التدرج الرمادي ومرشح Sobel دون أي خدمة خارجية. */
+    /** كشف رباعي للمستند محلياً مع تقييم للثقة، دون خدمات Google أو اتصال بالشبكة. */
     fun detectDocumentEdges(src: Bitmap): EdgeDetection {
         val result = DocumentEdgeDetector.detect(src)
         return EdgeDetection(
             bounds = RectF(result.left, result.top, result.right, result.bottom),
             isDocumentDetected = result.isDocumentDetected,
-            confidence = result.confidence
+            confidence = result.confidence,
+            corners = result.corners,
+            shouldAutoCorrect = result.shouldAutoCorrect
         )
     }
+
+    /** تصحيح منظور النتيجة الواثقة؛ يعيد null حتى يبقى الاقتصاص اليدوي هو البديل الآمن. */
+    fun straightenDocument(src: Bitmap, corners: List<PointF>): Bitmap? = DocumentEdgeDetector.straighten(src, corners)
 
     /** توافق مع الاستدعاءات السابقة: يعيد الإطار المقترح فقط. */
     fun detectEdges(src: Bitmap): RectF = detectDocumentEdges(src).bounds

@@ -268,18 +268,39 @@ class CropEditActivity : AppCompatActivity() {
             } catch (_: Throwable) {
                 null
             }
+            val straightened = if (detection?.shouldAutoCorrect == true) {
+                try { ImageProcessor.straightenDocument(bitmap, detection.corners) } catch (_: Throwable) { null }
+            } else null
             runOnUiThread {
-                if (isFinishing || isDestroyed || token != edgeDetectionToken || !::cropView.isInitialized) return@runOnUiThread
+                if (isFinishing || isDestroyed || token != edgeDetectionToken || !::cropView.isInitialized) {
+                    straightened?.takeIf { !it.isRecycled }?.recycle()
+                    return@runOnUiThread
+                }
                 edgeDetectionInProgress = false
                 setEdgeDetectionUi(detecting = false)
 
-                if (detection != null) {
+                if (straightened != null) {
+                    val oldOriginal = originalBmp
+                    previewBmp?.takeIf { it !== oldOriginal && !it.isRecycled }?.recycle()
+                    previewBmp = null
+                    processedBmp?.takeIf { it !== oldOriginal && !it.isRecycled }?.recycle()
+                    processedBmp = null
+                    originalBmp = straightened
+                    cropView.setBitmap(straightened)
+                    cropView.setCropRect(0.035f, 0.035f, 0.965f, 0.965f)
+                    if (!oldOriginal.isRecycled) oldOriginal.recycle()
+                    if (showResult) Toast.makeText(this, R.string.document_perspective_fixed, Toast.LENGTH_LONG).show()
+                } else if (detection != null) {
                     val bounds = detection.bounds
                     cropView.setCropRect(bounds.left, bounds.top, bounds.right, bounds.bottom)
                     if (showResult) {
                         Toast.makeText(
                             this,
-                            if (detection.isDocumentDetected) R.string.auto_edge else R.string.edge_detection_failed,
+                            when {
+                                !detection.isDocumentDetected -> R.string.edge_detection_failed
+                                detection.confidence < 0.86f -> R.string.edge_detection_low_confidence
+                                else -> R.string.auto_edge
+                            },
                             Toast.LENGTH_LONG
                         ).show()
                     }

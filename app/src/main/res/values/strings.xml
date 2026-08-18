@@ -54,6 +54,8 @@
     <string name="auto_edge">تم اقتراح حواف المستند تلقائياً. يمكنك تعديل الإطار يدوياً.</string>
     <string name="detecting_document_edges">جارٍ اكتشاف حواف المستند…</string>
     <string name="edge_detection_failed">لم تتضح حواف المستند. تم استخدام إطار كامل الصورة ويمكنك تعديله يدوياً.</string>
+    <string name="edge_detection_low_confidence">اكتُشف المستند، لكن يفضّل مراجعة إطار القص قبل الحفظ.</string>
+    <string name="document_perspective_fixed">تم تصحيح منظور المستند تلقائياً. يمكنك قصه أو معالجته قبل الحفظ.</string>
     <string name="save_options">ماذا تريد أن تفعل بالصورة؟</string>
     <string name="save_gallery">حفظ في المعرض</string>
     <string name="add_to_group">إضافة إلى مجموعة</string>

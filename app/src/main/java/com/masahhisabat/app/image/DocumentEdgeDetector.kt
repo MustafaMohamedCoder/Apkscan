@@ -1,212 +1,194 @@
 package com.masahhisabat.app.image
 
 import android.graphics.Bitmap
+import android.graphics.PointF
+import org.opencv.android.OpenCVLoader
+import org.opencv.android.Utils
+import org.opencv.core.Core
+import org.opencv.core.CvType
+import org.opencv.core.Mat
+import org.opencv.core.MatOfPoint
+import org.opencv.core.MatOfPoint2f
+import org.opencv.core.Point
+import org.opencv.core.Size
+import org.opencv.imgproc.Imgproc
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
 /**
- * كاشف محلي خفيف لحدود المستندات.
- *
- * يعمل على نسخة مصغرة من الصورة، ثم يحلل التدرج الرمادي ومرشحاً بسيطاً
- * للحواف (Sobel) لاختيار أقوى أربعة حدود مستقيمة مرشحة للمستند. لا يعتمد
- * على خدمات Google أو الاتصال بالإنترنت، ويعيد إطاراً آمناً يغطي الصورة
- * تقريباً عندما لا تكون الثقة كافية.
+ * كاشف مستند محلي يعتمد على OpenCV المضمن داخل APK. يصحح الإضاءة ثم يستخرج
+ * المرشحات الرباعية من الحواف، ويقبل النتيجة فقط عند اجتياز فحص هندسي ودرجة ثقة.
  */
 object DocumentEdgeDetector {
-    private const val MAX_PROCESS_DIMENSION = 640
+    private const val MAX_PROCESS_DIMENSION = 960
     private const val FALLBACK_INSET = 0.035f
+    private const val AUTO_CORRECT_CONFIDENCE = 0.86f
+
+    @Volatile private var initialized = false
+    @Volatile private var openCvAvailable = false
 
     data class Result(
         val left: Float,
         val top: Float,
         val right: Float,
         val bottom: Float,
+        val corners: List<PointF>,
         val isDocumentDetected: Boolean,
-        val confidence: Float
+        val confidence: Float,
+        val shouldAutoCorrect: Boolean
     )
 
-    fun detect(source: Bitmap): Result {
-        if (source.isRecycled || source.width < 80 || source.height < 80) return fallback()
+    /** تهيئة آمنة؛ لا يؤدي فشل مكتبة الرؤية إلى منع المستخدم من الاقتصاص اليدوي. */
+    fun initialize(): Boolean = synchronized(this) {
+        if (!initialized) {
+            openCvAvailable = try { OpenCVLoader.initLocal() } catch (_: Throwable) { false }
+            initialized = true
+        }
+        openCvAvailable
+    }
 
+    fun detect(source: Bitmap): Result {
+        if (source.isRecycled || source.width < 100 || source.height < 100 || !initialize()) return fallback()
         val largest = max(source.width, source.height)
         val scale = min(1f, MAX_PROCESS_DIMENSION.toFloat() / largest.toFloat())
         val width = max(1, (source.width * scale).toInt())
         val height = max(1, (source.height * scale).toInt())
-        if (width < 60 || height < 60) return fallback()
+        val working = if (width == source.width && height == source.height) source
+        else Bitmap.createScaledBitmap(source, width, height, true)
 
-        val working = if (width == source.width && height == source.height) {
-            source
-        } else {
-            Bitmap.createScaledBitmap(source, width, height, true)
-        }
-
+        val input = Mat()
+        val grayscale = Mat()
+        val enhanced = Mat()
+        val blurred = Mat()
+        val edges = Mat()
+        val kernel = Mat.ones(Size(3.0, 3.0), CvType.CV_8U)
         return try {
-            val pixels = IntArray(width * height)
-            working.getPixels(pixels, 0, width, 0, 0, width, height)
-            val grayscale = IntArray(pixels.size)
-            for (index in pixels.indices) {
-                val pixel = pixels[index]
-                grayscale[index] = (
-                    0.299f * ((pixel shr 16) and 0xFF) +
-                        0.587f * ((pixel shr 8) and 0xFF) +
-                        0.114f * (pixel and 0xFF)
-                    ).toInt()
-            }
+            Utils.bitmapToMat(working, input)
+            Imgproc.cvtColor(input, grayscale, Imgproc.COLOR_RGBA2GRAY)
+            Imgproc.createCLAHE(3.0, Size(8.0, 8.0)).apply(grayscale, enhanced)
+            Imgproc.GaussianBlur(enhanced, blurred, Size(5.0, 5.0), 0.0)
+            val mean = Core.mean(blurred).`val`[0]
+            val lower = (mean * 0.66).coerceIn(22.0, 145.0)
+            val upper = (mean * 1.33).coerceIn(lower + 24.0, 245.0)
+            Imgproc.Canny(blurred, edges, lower, upper)
+            Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, kernel, Point(-1.0, -1.0), 2)
 
-            val gradients = sobel(blur3x3(grayscale, width, height), width, height)
-            val verticalProfile = smooth(verticalProfile(gradients, width, height))
-            val horizontalProfile = smooth(horizontalProfile(gradients, width, height))
+            val contours = ArrayList<MatOfPoint>()
+            Imgproc.findContours(edges, contours, Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
+            val candidate = contours
+                .asSequence()
+                .filter { Imgproc.contourArea(it) >= width * height * 0.06 }
+                .sortedByDescending { Imgproc.contourArea(it) }
+                .take(24)
+                .mapNotNull { scoreQuadrilateral(it, width, height) }
+                .maxByOrNull { it.confidence }
 
-            val left = strongestIn(verticalProfile, width * 3 / 100, width * 45 / 100)
-            val right = strongestIn(verticalProfile, width * 55 / 100, width * 97 / 100)
-            val top = strongestIn(horizontalProfile, height * 3 / 100, height * 45 / 100)
-            val bottom = strongestIn(horizontalProfile, height * 55 / 100, height * 97 / 100)
-
-            if (left < 0 || right < 0 || top < 0 || bottom < 0) return fallback()
-
-            val widthRatio = (right - left).toFloat() / width
-            val heightRatio = (bottom - top).toFloat() / height
-            val lineStrengths = floatArrayOf(
-                verticalProfile[left], verticalProfile[right],
-                horizontalProfile[top], horizontalProfile[bottom]
-            )
-            val averageGradient = gradients.average().toFloat()
-            val minimumExpected = max(12f, averageGradient * 1.25f)
-            val meanLineStrength = lineStrengths.average().toFloat()
-            val weakestLine = lineStrengths.minOrNull() ?: 0f
-            val geometryValid = widthRatio in 0.40f..0.96f && heightRatio in 0.40f..0.96f
-            val strengthConfidence = (meanLineStrength / (minimumExpected * 1.8f)).coerceIn(0f, 1f)
-            val consistencyConfidence = (weakestLine / minimumExpected).coerceIn(0f, 1f)
-            val geometryConfidence = min(widthRatio, heightRatio).coerceIn(0f, 1f)
-            val confidence = (
-                strengthConfidence * 0.55f +
-                    consistencyConfidence * 0.30f +
-                    geometryConfidence * 0.15f
-                ).coerceIn(0f, 1f)
-
-            val isValid = geometryValid &&
-                meanLineStrength >= minimumExpected &&
-                weakestLine >= minimumExpected * 0.68f &&
-                confidence >= 0.42f
-            if (!isValid) return fallback(confidence)
-
-            Result(
-                left = (left.toFloat() / width).coerceIn(FALLBACK_INSET, 1f - FALLBACK_INSET),
-                top = (top.toFloat() / height).coerceIn(FALLBACK_INSET, 1f - FALLBACK_INSET),
-                right = (right.toFloat() / width).coerceIn(FALLBACK_INSET, 1f - FALLBACK_INSET),
-                bottom = (bottom.toFloat() / height).coerceIn(FALLBACK_INSET, 1f - FALLBACK_INSET),
-                isDocumentDetected = true,
-                confidence = confidence
-            )
+            candidate?.result ?: fallback()
         } catch (_: Throwable) {
             fallback()
         } finally {
+            input.release(); grayscale.release(); enhanced.release(); blurred.release(); edges.release(); kernel.release()
             if (working !== source && !working.isRecycled) working.recycle()
         }
     }
 
+    /** يحول رباعي الزوايا المرتب (أعلى يسار، أعلى يمين، أسفل يمين، أسفل يسار) إلى مستند مستقيم. */
+    fun straighten(source: Bitmap, corners: List<PointF>): Bitmap? {
+        if (source.isRecycled || corners.size != 4 || !initialize()) return null
+        val sourceMat = Mat()
+        val targetMat = Mat()
+        val sourcePoints = MatOfPoint2f()
+        val targetPoints = MatOfPoint2f()
+        var transform = Mat()
+        return try {
+            val points = corners.map { Point(it.x.toDouble() * source.width, it.y.toDouble() * source.height) }
+            val targetWidth = max(distance(points[0], points[1]), distance(points[2], points[3])).toInt().coerceIn(140, source.width * 2)
+            val targetHeight = max(distance(points[0], points[3]), distance(points[1], points[2])).toInt().coerceIn(140, source.height * 2)
+            sourcePoints.fromArray(*points.toTypedArray())
+            targetPoints.fromArray(
+                Point(0.0, 0.0), Point((targetWidth - 1).toDouble(), 0.0),
+                Point((targetWidth - 1).toDouble(), (targetHeight - 1).toDouble()), Point(0.0, (targetHeight - 1).toDouble())
+            )
+            Utils.bitmapToMat(source, sourceMat)
+            transform = Imgproc.getPerspectiveTransform(sourcePoints, targetPoints)
+            Imgproc.warpPerspective(sourceMat, targetMat, transform, Size(targetWidth.toDouble(), targetHeight.toDouble()), Imgproc.INTER_CUBIC)
+            Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888).also { Utils.matToBitmap(targetMat, it) }
+        } catch (_: Throwable) {
+            null
+        } finally {
+            sourceMat.release(); targetMat.release(); sourcePoints.release(); targetPoints.release(); transform.release()
+        }
+    }
+
+    private data class Candidate(val result: Result, val confidence: Float)
+
+    private fun scoreQuadrilateral(contour: MatOfPoint, width: Int, height: Int): Candidate? {
+        val contour2f = MatOfPoint2f(*contour.toArray())
+        val approx = MatOfPoint2f()
+        return try {
+            Imgproc.approxPolyDP(contour2f, approx, Imgproc.arcLength(contour2f, true) * 0.02, true)
+            val points = approx.toArray()
+            if (points.size != 4) return null
+            val polygon = MatOfPoint(*points)
+            if (!Imgproc.isContourConvex(polygon)) return null
+            val ordered = orderCorners(points) ?: return null
+            val area = abs(Imgproc.contourArea(MatOfPoint(*ordered.toTypedArray())))
+            val areaRatio = area / (width.toDouble() * height.toDouble())
+            if (areaRatio !in 0.12..0.98) return null
+
+            val areaScore = ((areaRatio - 0.12) / 0.70).toFloat().coerceIn(0f, 1f)
+            val angleScore = cornerAngleScore(ordered)
+            val sideScore = sideBalanceScore(ordered)
+            val margin = ordered.minOf { min(min(it.x, width - it.x), min(it.y, height - it.y)) } / min(width, height).toDouble()
+            val marginScore = if (margin > 0.008) 1f else 0.78f
+            val confidence = (areaScore * 0.40f + angleScore * 0.35f + sideScore * 0.15f + marginScore * 0.10f).coerceIn(0f, 1f)
+            if (confidence < 0.52f) return null
+
+            val normalized = ordered.map { PointF((it.x / width).toFloat(), (it.y / height).toFloat()) }
+            val left = normalized.minOf { it.x }.coerceIn(FALLBACK_INSET, 1f - FALLBACK_INSET)
+            val top = normalized.minOf { it.y }.coerceIn(FALLBACK_INSET, 1f - FALLBACK_INSET)
+            val right = normalized.maxOf { it.x }.coerceIn(FALLBACK_INSET, 1f - FALLBACK_INSET)
+            val bottom = normalized.maxOf { it.y }.coerceIn(FALLBACK_INSET, 1f - FALLBACK_INSET)
+            Candidate(
+                Result(left, top, right, bottom, normalized, true, confidence, confidence >= AUTO_CORRECT_CONFIDENCE),
+                confidence
+            )
+        } finally {
+            contour2f.release(); approx.release()
+        }
+    }
+
+    private fun orderCorners(points: Array<Point>): List<Point>? {
+        if (points.size != 4) return null
+        val byY = points.sortedBy { it.y }
+        val top = byY.take(2).sortedBy { it.x }
+        val bottom = byY.takeLast(2).sortedBy { it.x }
+        return listOf(top[0], top[1], bottom[1], bottom[0])
+    }
+
+    private fun cornerAngleScore(points: List<Point>): Float {
+        val deviations = (0 until 4).map { index ->
+            val previous = points[(index + 3) % 4]
+            val current = points[index]
+            val next = points[(index + 1) % 4]
+            val ax = previous.x - current.x; val ay = previous.y - current.y
+            val bx = next.x - current.x; val by = next.y - current.y
+            abs((ax * bx + ay * by) / (hypot(ax, ay) * hypot(bx, by)).coerceAtLeast(0.0001))
+        }
+        return (1f - (deviations.average() / 0.55).toFloat()).coerceIn(0f, 1f)
+    }
+
+    private fun sideBalanceScore(points: List<Point>): Float {
+        val sides = (0 until 4).map { distance(points[it], points[(it + 1) % 4]) }
+        return ((sides.minOrNull()!! / sides.maxOrNull()!! - 0.18) / 0.62).toFloat().coerceIn(0f, 1f)
+    }
+
+    private fun distance(first: Point, second: Point): Double = hypot(first.x - second.x, first.y - second.y)
+
     private fun fallback(confidence: Float = 0f): Result = Result(
-        left = FALLBACK_INSET,
-        top = FALLBACK_INSET,
-        right = 1f - FALLBACK_INSET,
-        bottom = 1f - FALLBACK_INSET,
-        isDocumentDetected = false,
-        confidence = confidence
+        FALLBACK_INSET, FALLBACK_INSET, 1f - FALLBACK_INSET, 1f - FALLBACK_INSET,
+        emptyList(), false, confidence, false
     )
-
-    private fun blur3x3(source: IntArray, width: Int, height: Int): IntArray {
-        val out = IntArray(source.size)
-        for (y in 0 until height) {
-            for (x in 0 until width) {
-                var sum = 0
-                var count = 0
-                for (offsetY in -1..1) {
-                    val row = (y + offsetY).coerceIn(0, height - 1)
-                    for (offsetX in -1..1) {
-                        val column = (x + offsetX).coerceIn(0, width - 1)
-                        sum += source[row * width + column]
-                        count++
-                    }
-                }
-                out[y * width + x] = sum / count
-            }
-        }
-        return out
-    }
-
-    private fun sobel(source: IntArray, width: Int, height: Int): IntArray {
-        val out = IntArray(source.size)
-        for (y in 1 until height - 1) {
-            for (x in 1 until width - 1) {
-                val topLeft = source[(y - 1) * width + x - 1]
-                val top = source[(y - 1) * width + x]
-                val topRight = source[(y - 1) * width + x + 1]
-                val left = source[y * width + x - 1]
-                val right = source[y * width + x + 1]
-                val bottomLeft = source[(y + 1) * width + x - 1]
-                val bottom = source[(y + 1) * width + x]
-                val bottomRight = source[(y + 1) * width + x + 1]
-                val horizontal = -topLeft + topRight - 2 * left + 2 * right - bottomLeft + bottomRight
-                val vertical = -topLeft - 2 * top - topRight + bottomLeft + 2 * bottom + bottomRight
-                out[y * width + x] = abs(horizontal) + abs(vertical)
-            }
-        }
-        return out
-    }
-
-    private fun verticalProfile(gradients: IntArray, width: Int, height: Int): FloatArray {
-        val result = FloatArray(width)
-        val startY = height * 8 / 100
-        val endY = max(startY + 1, height * 92 / 100)
-        for (x in 0 until width) {
-            var sum = 0L
-            for (y in startY until endY) sum += gradients[y * width + x]
-            result[x] = sum.toFloat() / (endY - startY)
-        }
-        return result
-    }
-
-    private fun horizontalProfile(gradients: IntArray, width: Int, height: Int): FloatArray {
-        val result = FloatArray(height)
-        val startX = width * 8 / 100
-        val endX = max(startX + 1, width * 92 / 100)
-        for (y in 0 until height) {
-            var sum = 0L
-            for (x in startX until endX) sum += gradients[y * width + x]
-            result[y] = sum.toFloat() / (endX - startX)
-        }
-        return result
-    }
-
-    private fun smooth(profile: FloatArray): FloatArray {
-        val result = FloatArray(profile.size)
-        for (index in profile.indices) {
-            var sum = 0f
-            var count = 0
-            for (offset in -3..3) {
-                val sourceIndex = index + offset
-                if (sourceIndex in profile.indices) {
-                    sum += profile[sourceIndex]
-                    count++
-                }
-            }
-            result[index] = sum / count
-        }
-        return result
-    }
-
-    private fun strongestIn(profile: FloatArray, from: Int, toExclusive: Int): Int {
-        val start = from.coerceIn(0, profile.lastIndex)
-        val end = toExclusive.coerceIn(start + 1, profile.size)
-        var bestIndex = -1
-        var bestValue = Float.NEGATIVE_INFINITY
-        for (index in start until end) {
-            if (profile[index] > bestValue) {
-                bestValue = profile[index]
-                bestIndex = index
-            }
-        }
-        return bestIndex
-    }
 }

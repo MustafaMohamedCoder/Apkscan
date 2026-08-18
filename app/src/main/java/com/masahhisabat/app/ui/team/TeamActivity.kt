@@ -143,10 +143,9 @@ class TeamActivity : AppCompatActivity() {
                 setTextColor(getColor(R.color.accent))
             }
 
-            // صف كلمة المرور: عرضها الحالية + نسخ/إظهار + تعديل مباشر بالضغط
-            // صف كلمة المرور: عرض/إخفاء بأيقونة العين (بدون نسخ وبدون تعديل منفصل)
+            // صف كلمة المرور: عرض/إخفاء بأيقونة العين داخل التطبيق فقط، دون نسخ للحافظة.
             val passwordText = holder.itemView.findViewById<TextView>(R.id.member_password)
-            val ivPassword = holder.itemView.findViewById<ImageView>(R.id.iv_copy_password)
+            val ivPassword = holder.itemView.findViewById<ImageView>(R.id.iv_password_visibility)
             val decoded = com.masahhisabat.app.data.HashUtil.decodePlain(user.passwordHash)
             val hiddenMarker = "••••••••"
             var passwordHidden = true
@@ -155,8 +154,9 @@ class TeamActivity : AppCompatActivity() {
                 passwordText.setTextColor(textSec)
                 ivPassword.visibility = View.VISIBLE
                 ivPassword.setColorFilter(textSec)
+                ivPassword.contentDescription = "إظهار كلمة المرور"
             } else {
-                passwordText.text = "كلمة المرور: غير قابلة للعرض"
+                passwordText.text = "كلمة المرور قديمة وغير قابلة للفك — عدّل العضو لتعيين كلمة مرور جديدة"
                 passwordText.setTextColor(androidx.core.content.ContextCompat.getColor(ctx, R.color.error))
                 ivPassword.visibility = View.GONE
             }
@@ -165,6 +165,7 @@ class TeamActivity : AppCompatActivity() {
                     passwordHidden = !passwordHidden
                     passwordText.text = if (passwordHidden) "$hiddenMarker (اضغط العين للإظهار)" else "كلمة المرور: $decoded"
                     passwordText.setTextColor(if (passwordHidden) textSec else text)
+                    ivPassword.contentDescription = if (passwordHidden) "إظهار كلمة المرور" else "إخفاء كلمة المرور"
                 }
             }
 

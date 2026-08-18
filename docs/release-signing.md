@@ -32,6 +32,17 @@ apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-relea
 sha256sum app/build/outputs/apk/release/app-release.apk
 ```
 
+## مسار بديل لملفات APK الكبيرة
+
+عند احتواء التطبيق على مكتبات أصلية كبيرة، مثل OpenCV، قد يكون بناء حزمة `AAB` ثم إنشاء APK عام منها أكثر استقرارًا في بيئات البناء محدودة الذاكرة. ابنِ الحزمة أولًا:
+
+```bash
+export ANDROID_HOME=/home/ubuntu/android_app/sdk
+./gradlew bundleRelease --no-daemon --max-workers=1
+```
+
+ثم استخدم [Bundletool الرسمي](https://github.com/google/bundletool) لإنشاء ملف `universal.apk` موقّع. استخدم ملفات كلمات مرور مؤقتة أو متغيرات بيئية آمنة بدل تمرير كلمات المرور كنص صريح في الأمر، ثم تحقّق من الملف بواسطة `apksigner` وأنشئ بصمة SHA-256 قبل النشر.
+
 ## حفظ المفتاح
 
 احتفظ بنسختين مشفرتين من ملف `.jks` في موقعين آمنين منفصلين. يجب استخدام **المفتاح نفسه** في كل تحديث لاحق؛ فقدانه يمنع نشر تحديث متوافق مع النسخة الموقعة السابقة.

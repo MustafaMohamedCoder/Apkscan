@@ -201,7 +201,8 @@ class SettingsFragment : Fragment() {
                                             "اكتملت مزامنة ${peer.name}. استُقبلت ${result.itemsReceived} عناصر و${result.usersReceived} مستخدمين."
                                     } else {
                                         "فشلت المزامنة" to
-                                            "تعذر الاتصال بـ ${peer.name}. تأكد أن التطبيق مفتوح على الجهاز الآخر وأنكما على نفس شبكة Wi-Fi."
+                                            (result.errorMessage
+                                                ?: "تعذر الاتصال بـ ${peer.name}. تأكد أن التطبيق مفتوح على الجهاز الآخر وأنكما على نفس شبكة Wi-Fi.")
                                     }
                                     if (isAdded) {
                                         MaterialAlertDialogBuilder(ctx)

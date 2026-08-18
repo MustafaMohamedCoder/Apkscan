@@ -3,12 +3,19 @@ package com.masahhisabat.app.data
 import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
+import java.io.EOFException
 import java.io.File
+import java.io.IOException
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.ConnectException
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -22,6 +29,8 @@ object SyncManager {
     private const val TAG = "SyncManager"
     private const val TCP_PORT = 8765
     private const val UDP_PORT = 8766
+    private const val CONNECT_TIMEOUT_MS = 15_000
+    private const val READ_TIMEOUT_MS = 60_000
     private val gson = Gson()
 
     @Volatile private var server: ServerSocket? = null
@@ -31,10 +40,11 @@ object SyncManager {
     // ---------- إدارة الخادم ----------
     fun startServer(context: Context) {
         if (isServing) return
+        // تُضبط قبل إطلاق الخيوط حتى لا تنتهي خدمة اكتشاف UDP بسبب سباق بدء التشغيل.
+        isServing = true
         Thread {
             try {
                 server = ServerSocket(TCP_PORT)
-                isServing = true
                 AppRepository.logSync(SyncEntry("بدء الاستماع", "خادم المزامنة نشط", true))
                 while (isServing) {
                     val client = try { server?.accept() } catch (_: Throwable) { break } ?: break
@@ -42,7 +52,11 @@ object SyncManager {
                 }
             } catch (e: Throwable) {
                 Log.e(TAG, "server error", e)
+                AppRepository.logSync(SyncEntry("بدء الاستماع", "تعذر بدء خادم المزامنة: ${syncErrorMessage(e)}", false))
                 isServing = false
+            } finally {
+                try { server?.close() } catch (_: Throwable) {}
+                server = null
             }
         }.name = "sync-server"
         Thread {
@@ -61,22 +75,24 @@ object SyncManager {
 
     private fun handleClient(socket: Socket, context: Context) {
         Thread {
-            try {
-                socket.soTimeout = 60000
-                val reader = socket.getInputStream().bufferedReader()
-                val payloadJson = reader.readLine() ?: return@Thread
-                val payload = gson.fromJson(payloadJson, SyncPayload::class.java)
-                val result = applyPayload(context, payload)
-                // رد: عدد العناصر المستقبلة + عدد المستخدمين المستقبلة
-                val ack = "OK ${result.items} ${result.users}"
-                socket.getOutputStream().write((ack + "\n").toByteArray())
-                socket.getOutputStream().flush()
-                AppRepository.logSync(SyncEntry("استقبال", "استُقبلت ${result.items} عناصر و${result.users} مستخدمين من ${socket.inetAddress.hostAddress}", true))
-            } catch (e: Throwable) {
-                Log.e(TAG, "client error", e)
-                AppRepository.logSync(SyncEntry("استقبال", "فشل: ${e.message}", false))
-            } finally {
-                try { socket.close() } catch (_: Throwable) {}
+            socket.use { client ->
+                try {
+                    client.soTimeout = READ_TIMEOUT_MS
+                    val reader = client.getInputStream().bufferedReader()
+                    val payloadJson = reader.readLine()
+                        ?: throw EOFException("انقطع الاتصال قبل اكتمال بيانات المزامنة")
+                    val payload = gson.fromJson(payloadJson, SyncPayload::class.java)
+                        ?: throw IOException("بيانات المزامنة غير صالحة")
+                    val result = applyPayload(context, payload)
+                    // رد: عدد العناصر المستقبلة + عدد المستخدمين المستقبلة.
+                    val ack = "OK ${result.items} ${result.users}\n"
+                    client.getOutputStream().write(ack.toByteArray())
+                    client.getOutputStream().flush()
+                    AppRepository.logSync(SyncEntry("استقبال", "استُقبلت ${result.items} عناصر و${result.users} مستخدمين من ${client.inetAddress.hostAddress}", true))
+                } catch (e: Throwable) {
+                    Log.e(TAG, "client error", e)
+                    AppRepository.logSync(SyncEntry("استقبال", "فشلت المزامنة: ${syncErrorMessage(e)}", false))
+                }
             }
         }.name = "sync-client-handler"
     }
@@ -88,34 +104,52 @@ object SyncManager {
         host: String,
         onProgress: (percent: Int, status: String) -> Unit = { _, _ -> }
     ): SyncResult {
+        var payload: SyncPayload? = null
         try {
             onProgress(10, "جارٍ الاتصال بالجهاز الآخر...")
-            val socket = Socket(InetAddress.getByName(host), TCP_PORT)
-            socket.soTimeout = 120000
-            onProgress(25, "تم الاتصال. جارٍ تجهيز البيانات...")
-            val payload = buildPayload(context)
-            onProgress(45, "جارٍ إرسال ${payload.totalItems} عناصر و${payload.users.size} مستخدمين...")
-            val writer = socket.getOutputStream().bufferedWriter()
-            writer.write(gson.toJson(payload))
-            writer.newLine()
-            writer.flush()
-            onProgress(75, "اكتمل الإرسال. جارٍ انتظار تأكيد الجهاز الآخر...")
-            val reader = socket.getInputStream().bufferedReader()
-            val ack = reader.readLine() ?: "FAIL"
-            socket.close()
-            val parts = ack.split(" ")
-            val ok = parts[0] == "OK"
-            val gotItems = parts.getOrNull(1)?.toIntOrNull() ?: 0
-            val gotUsers = parts.getOrNull(2)?.toIntOrNull() ?: 0
-            AppRepository.logSync(SyncEntry("إرسال", "إلى $host: أُرسلت ${payload.users.size} مستخدمين و${payload.totalItems} عناصر — استُقبلت $gotItems عناصر و$gotUsers مستخدمين", ok))
-            if (ok) onProgress(100, "اكتملت المزامنة بنجاح")
-            return SyncResult(true, gotItems, gotUsers)
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(host, TCP_PORT), CONNECT_TIMEOUT_MS)
+                socket.soTimeout = READ_TIMEOUT_MS
+                onProgress(25, "تم الاتصال. جارٍ تجهيز البيانات...")
+                val currentPayload = buildPayload(context)
+                payload = currentPayload
+                onProgress(45, "جارٍ إرسال ${currentPayload.totalItems} عناصر و${currentPayload.users.size} مستخدمين...")
+                val writer = socket.getOutputStream().bufferedWriter()
+                writer.write(gson.toJson(currentPayload))
+                writer.newLine()
+                writer.flush()
+                onProgress(75, "اكتمل الإرسال. جارٍ انتظار تأكيد الجهاز الآخر...")
+                val ack = socket.getInputStream().bufferedReader().readLine()
+                    ?: throw EOFException("انقطع الاتصال قبل تأكيد المزامنة")
+                val parts = ack.trim().split(Regex("\\s+"))
+                val gotItems = parts.getOrNull(1)?.toIntOrNull()
+                val gotUsers = parts.getOrNull(2)?.toIntOrNull()
+                if (parts.firstOrNull() != "OK" || gotItems == null || gotUsers == null) {
+                    throw IOException("استجابة غير مكتملة من الجهاز الآخر")
+                }
+                AppRepository.logSync(SyncEntry("إرسال", "إلى $host: أُرسلت ${currentPayload.users.size} مستخدمين و${currentPayload.totalItems} عناصر — استُقبلت $gotItems عناصر و$gotUsers مستخدمين", true))
+                onProgress(100, "اكتملت المزامنة بنجاح")
+                return SyncResult(true, gotItems, gotUsers)
+            }
         } catch (e: Throwable) {
+            val errorMessage = syncErrorMessage(e)
             Log.e(TAG, "sync error", e)
-            AppRepository.logSync(SyncEntry("إرسال", "فشل الاتصال بـ $host: ${e.message}", false))
-            onProgress(0, "فشلت المزامنة")
-            return SyncResult(false, 0, 0)
+            val sentSummary = payload?.let { " بعد تجهيز ${it.totalItems} عناصر و${it.users.size} مستخدمين" }.orEmpty()
+            AppRepository.logSync(SyncEntry("إرسال", "فشلت المزامنة مع $host$sentSummary: $errorMessage", false))
+            onProgress(0, errorMessage)
+            return SyncResult(false, 0, 0, errorMessage)
         }
+    }
+
+    /** يحول أخطاء الشبكة المتوقعة إلى رسائل عربية مفهومة، بلا كشف تفاصيل داخلية للمستخدم. */
+    private fun syncErrorMessage(error: Throwable): String = when (error) {
+        is UnknownHostException -> "تعذر الوصول للجهاز الآخر. تحقق من اتصال الشبكة."
+        is SocketTimeoutException -> "انتهت مهلة المزامنة. ربما انقطع الاتصال أو استغرق الجهاز الآخر وقتًا طويلًا."
+        is ConnectException -> "تعذر الاتصال بالجهاز الآخر. تأكد أن التطبيق مفتوح وأنكما على الشبكة نفسها."
+        is EOFException -> "انقطع الاتصال قبل اكتمال المزامنة."
+        is SocketException -> "انقطع اتصال الشبكة أثناء المزامنة."
+        is IOException -> "لم تكتمل المزامنة بسبب استجابة غير صالحة أو اتصال غير مستقر."
+        else -> "حدث خطأ غير متوقع أثناء المزامنة. أعد المحاولة."
     }
 
     private fun buildPayload(context: Context): SyncPayload {
@@ -234,7 +268,12 @@ object SyncManager {
     }
 
     data class DiscoveredPeer(val address: String, val name: String)
-    data class SyncResult(val ok: Boolean, val itemsReceived: Int, val usersReceived: Int)
+    data class SyncResult(
+        val ok: Boolean,
+        val itemsReceived: Int,
+        val usersReceived: Int,
+        val errorMessage: String? = null
+    )
 
     // ---------- نماذج المزامنة ----------
     data class UserPayload(val username: String, val passwordHash: String, val roleName: String, val enabled: Boolean)

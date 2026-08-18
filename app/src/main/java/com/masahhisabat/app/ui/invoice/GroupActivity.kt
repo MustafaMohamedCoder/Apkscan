@@ -260,10 +260,14 @@ class GroupActivity : AppCompatActivity() {
             val input = contentResolver.openInputStream(uri) ?: return null
             input.use { stream -> rawFile.outputStream().use { output -> stream.copyTo(output) } }
             // فك الصورة بحجم محدود في الخلفية قبل ضغطها، لتجنب ضغط الذاكرة مع صور الكاميرا الكبيرة.
-            bitmap = ImageProcessor.loadBitmap(rawFile.absolutePath, 1920)
+            val decodedBitmap = ImageProcessor.loadBitmap(rawFile.absolutePath, 1920)
+            bitmap = decodedBitmap
             val compressedFile = File(cacheDir, "attach_${System.currentTimeMillis()}.jpg")
             compressed = compressedFile
-            compressedFile.outputStream().use { bitmap!!.compress(android.graphics.Bitmap.CompressFormat.JPEG, 86, it) }
+            val compressedSuccessfully = compressedFile.outputStream().use {
+                decodedBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 86, it)
+            }
+            if (!compressedSuccessfully) return null
             complete = true
             compressedFile.absolutePath
         } catch (_: Exception) {

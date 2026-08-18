@@ -40,15 +40,18 @@ class ScannerFragment : Fragment() {
     private val cameraLauncher = registerForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
-        if (success && lastCapturePath != null) {
-            showPostScanOptions(lastCapturePath!!)
+        val capturePath = lastCapturePath
+        if (success && capturePath != null && isAdded) {
+            showPostScanOptions(capturePath)
+        } else if (!success) {
+            lastCapturePath = null
         }
     }
 
     private val galleryLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
-        if (uri != null) {
+        if (uri != null && isAdded) {
             val copied = copyToInternal(uri)
             if (copied != null) showPostScanOptions(copied)
             else Toast.makeText(requireContext(), "تعذر قراءة الصورة", Toast.LENGTH_SHORT).show()
@@ -106,13 +109,23 @@ class ScannerFragment : Fragment() {
     }
 
     private fun copyToInternal(uri: Uri): String? {
+        val file = File(requireContext().cacheDir, "gallery_${System.currentTimeMillis()}.jpg")
         return try {
-            val file = File(requireContext().cacheDir, "gallery_${System.currentTimeMillis()}.jpg")
-            requireContext().contentResolver.openInputStream(uri)?.use { input ->
-                file.outputStream().use { output -> input.copyTo(output) }
+            val input = requireContext().contentResolver.openInputStream(uri) ?: return null
+            input.use {
+                val inputStream = it
+                file.outputStream().use { output -> inputStream.copyTo(output) }
             }
-            file.absolutePath
-        } catch (e: Exception) { null }
+            if (file.exists() && file.length() > 0L) {
+                file.absolutePath
+            } else {
+                file.delete()
+                null
+            }
+        } catch (_: Exception) {
+            file.delete()
+            null
+        }
     }
 
     private fun showPostScanOptions(imagePath: String) {
@@ -151,8 +164,12 @@ class ScannerFragment : Fragment() {
 
     private fun saveToGallery(path: String) {
         val ctx = requireContext()
+        val bmp = BitmapFactory.decodeFile(path)
+        if (bmp == null) {
+            Toast.makeText(ctx, "تعذر قراءة الصورة", Toast.LENGTH_SHORT).show()
+            return
+        }
         try {
-            val bmp = BitmapFactory.decodeFile(path)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val resolver = ctx.contentResolver
                 val values = android.content.ContentValues().apply {
@@ -161,19 +178,28 @@ class ScannerFragment : Fragment() {
                     put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/MasahHisabat")
                 }
                 val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-                uri?.let {
-                    resolver.openOutputStream(it)?.use { out -> bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, out) }
-                }
+                    ?: throw IllegalStateException("تعذر إنشاء ملف الصورة")
+                resolver.openOutputStream(uri)?.use { out ->
+                    if (!bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, out)) {
+                        throw IllegalStateException("تعذر ضغط الصورة")
+                    }
+                } ?: throw IllegalStateException("تعذر فتح ملف الصورة")
             } else {
                 val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "MasahHisabat")
                 dir.mkdirs()
                 val file = File(dir, "masah_${System.currentTimeMillis()}.jpg")
-                file.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, it) }
+                file.outputStream().use {
+                    if (!bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, it)) {
+                        throw IllegalStateException("تعذر ضغط الصورة")
+                    }
+                }
                 ctx.sendBroadcast(Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE).apply { data = Uri.fromFile(file) })
             }
             Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(ctx, "فشل الحفظ: ${e.message}", Toast.LENGTH_SHORT).show()
+        } finally {
+            bmp.recycle()
         }
     }
 

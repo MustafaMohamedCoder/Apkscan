@@ -108,6 +108,12 @@ class GroupActivity : AppCompatActivity() {
         messageInput = etMessage
         val btnAttach = findViewById<ImageView>(R.id.btn_attach)
         val btnSend = findViewById<ImageView>(R.id.btn_send)
+        findViewById<MaterialButton>(R.id.btn_add_attachment).setOnClickListener {
+            btnSend.performClick()
+        }
+        findViewById<ImageView>(R.id.btn_remove_attachment).setOnClickListener {
+            clearPendingAttachment(deleteFile = true)
+        }
 
         // تحفظ مسودة النص محليًا بعد توقف قصير عن الكتابة حتى لا يفقدها المستخدم عند العودة أو الإغلاق.
         val restoredDraft = AppRepository.messageDraft(groupId)
@@ -180,9 +186,10 @@ class GroupActivity : AppCompatActivity() {
                     btnSend.isEnabled = true
                     btnSend.alpha = 1f
                     if (error == null) {
-                        textAttachment?.let { path ->
-                            if (pendingAttach == path) pendingAttach = null
-                            File(path).delete()
+                        if (pendingAttach == textAttachment) {
+                            clearPendingAttachment(deleteFile = true)
+                        } else {
+                            textAttachment?.let { File(it).delete() }
                         }
                         etMessage.setText("")
                         draftHandler.removeCallbacks(saveDraftTask)
@@ -282,40 +289,32 @@ class GroupActivity : AppCompatActivity() {
         }
     }
 
-    /** معاينة صريحة تعطي المستخدم فرصة للإلغاء أو كتابة وصف قبل الإرسال. */
+    /** معاينة ثابتة تتيح كتابة نص مصاحب ثم تأكيد الإضافة أو إلغاء المرفق. */
     private fun showAttachmentPreview(path: String) {
+        val thumb = findViewById<ImageView>(R.id.attachment_thumb)
         val previewBitmap = try {
-            ImageProcessor.loadBitmap(path, 1200)
+            ImageProcessor.loadBitmap(path, 480)
         } catch (_: Exception) {
-            File(path).delete()
-            pendingAttach = null
+            clearPendingAttachment(deleteFile = true)
             Toast.makeText(this, "تعذر تجهيز معاينة الصورة", Toast.LENGTH_SHORT).show()
             return
         }
-        val preview = ImageView(this).apply {
-            setImageBitmap(previewBitmap)
-            adjustViewBounds = true
-            setPadding(28, 16, 28, 0)
-        }
-        val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle("معاينة الصورة")
-            .setMessage("يمكنك إرسالها الآن أو إضافة نص معها في نفس الرسالة.")
-            .setView(preview)
-            .setPositiveButton("إرسال الآن") { _, _ -> findViewById<ImageView>(R.id.btn_send).performClick() }
-            .setNeutralButton("إضافة نص") { _, _ ->
-                findViewById<EditText>(R.id.et_message).apply {
-                    hint = "الصورة جاهزة — اكتب نصًا اختياريًا ثم أرسل"
-                    requestFocus()
-                    showSoftKeyboard(this)
-                }
-            }
-            .setNegativeButton("إلغاء") { _, _ -> pendingAttach = null; File(path).delete() }
-            .create()
-        dialog.setOnDismissListener {
-            preview.setImageDrawable(null)
-            if (!previewBitmap.isRecycled) previewBitmap.recycle()
-        }
-        dialog.show()
+        thumb.setImageDrawable(null)
+        thumb.setImageBitmap(previewBitmap)
+        findViewById<TextView>(R.id.attachment_label).text = "الصورة جاهزة — اكتب نصًا اختياريًا ثم أضفها"
+        findViewById<View>(R.id.attachment_preview).visibility = View.VISIBLE
+        findViewById<MaterialButton>(R.id.btn_add_attachment).isEnabled = true
+        findViewById<EditText>(R.id.et_message).hint = "اكتب نصًا مصاحبًا للصورة..."
+    }
+
+    private fun clearPendingAttachment(deleteFile: Boolean) {
+        val path = pendingAttach
+        pendingAttach = null
+        if (deleteFile) path?.let { File(it).delete() }
+        findViewById<ImageView>(R.id.attachment_thumb).setImageDrawable(null)
+        findViewById<View>(R.id.attachment_preview).visibility = View.GONE
+        findViewById<MaterialButton>(R.id.btn_add_attachment).isEnabled = false
+        findViewById<EditText>(R.id.et_message).hint = "اكتب رسالة..."
     }
 
     private fun showSoftKeyboard(view: android.view.View) {

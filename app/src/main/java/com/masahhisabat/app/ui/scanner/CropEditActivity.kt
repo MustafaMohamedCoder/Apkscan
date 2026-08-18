@@ -89,7 +89,13 @@ class CropEditActivity : AppCompatActivity() {
             return
         }
 
-        originalBmp = ImageProcessor.loadBitmap(imagePath)
+        originalBmp = try {
+            ImageProcessor.loadBitmap(imagePath)
+        } catch (_: Exception) {
+            Toast.makeText(this, "تعذر فتح الصورة الملتقطة، أعد المحاولة", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
 
         cropView = findViewById(R.id.crop_view)
         cropView.setBitmap(originalBmp)

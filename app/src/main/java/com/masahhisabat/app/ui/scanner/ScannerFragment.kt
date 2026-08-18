@@ -42,7 +42,13 @@ class ScannerFragment : Fragment() {
     ) { success ->
         val capturePath = lastCapturePath
         if (success && capturePath != null && isAdded) {
-            showPostScanOptions(capturePath)
+            val captureFile = File(capturePath)
+            if (captureFile.exists() && captureFile.length() > 0L) {
+                showPostScanOptions(capturePath)
+            } else {
+                lastCapturePath = null
+                Toast.makeText(requireContext(), "تعذر حفظ صورة الكاميرا، أعد المحاولة", Toast.LENGTH_LONG).show()
+            }
         } else if (!success) {
             lastCapturePath = null
         }

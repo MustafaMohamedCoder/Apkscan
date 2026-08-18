@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -25,6 +26,7 @@ import com.masahhisabat.app.ui.settings.SettingsFragment
 class MainActivity : AppCompatActivity() {
 
     private var lastTab = 0
+    private var renderedTab = -1
     private val tabIds = intArrayOf(
         R.id.nav_home, R.id.nav_groups, R.id.nav_scanner,
         R.id.nav_search, R.id.nav_theme, R.id.nav_settings
@@ -61,6 +63,7 @@ class MainActivity : AppCompatActivity() {
             val listeners = View.OnClickListener { v ->
                 val idx = tabIds.indexOf(v.id)
                 if (idx < 0) return@OnClickListener
+                v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 if (idx == 4) {
                     toggleTheme()
                 } else {
@@ -95,15 +98,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun switchTab(index: Int, animate: Boolean = true) {
         lastTab = index
-        val transaction = supportFragmentManager.beginTransaction()
-        if (animate) {
-            transaction
-                .setCustomAnimations(
-                    android.R.anim.fade_in, android.R.anim.fade_out,
-                    android.R.anim.fade_in, android.R.anim.fade_out
-                )
+        // لمس التبويب المفتوح لا يعيد إنشاء Fragment أو يصفّر موضع القوائم.
+        if (index != renderedTab) {
+            val transaction = supportFragmentManager.beginTransaction()
+            if (animate) {
+                transaction
+                    .setCustomAnimations(
+                        android.R.anim.fade_in, android.R.anim.fade_out,
+                        android.R.anim.fade_in, android.R.anim.fade_out
+                    )
+            }
+            transaction.replace(R.id.fragment_container, fragments[index]).commit()
+            renderedTab = index
         }
-        transaction.replace(R.id.fragment_container, fragments[index]).commit()
         // تحديث مظهر التبويب النشط بحركة ناعمة
         val activeColor = ThemeHelper.accent(this)
         val inactiveColor = ThemeHelper.inactiveLabel(this)

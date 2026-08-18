@@ -3,6 +3,7 @@ package com.masahhisabat.app.ui.home
 import android.content.Intent
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -25,6 +26,9 @@ import com.masahhisabat.app.ui.invoice.InvoiceActivity
 
 class HomeFragment : Fragment() {
 
+    private var lastRefreshAt = 0L
+    private var isRefreshing = false
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return inflater.inflate(R.layout.fragment_home, container, false)
     }
@@ -36,7 +40,7 @@ class HomeFragment : Fragment() {
         val isMustafa = com.masahhisabat.app.ui.auth.SessionStore.currentUser(requireContext()) == "mustafa"
         view.findViewById<View>(R.id.recent_header)?.visibility = if (isMustafa) View.VISIBLE else View.GONE
         view.findViewById<View>(R.id.recent_panel)?.visibility = if (isMustafa) View.VISIBLE else View.GONE
-        refresh()
+        refresh(force = true)
 
         view.findViewById<MaterialButton>(R.id.btn_start_scan).setOnClickListener {
             // الانتقال إلى تبويب السكانر (الشريط السفلي مخصص - LinearLayout)
@@ -82,6 +86,7 @@ class HomeFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        // يمنع إعادة بناء كل بطاقات اللوحة وحساب الإحصاءات مرتين أثناء فتح التبويب نفسه.
         if (view != null) refresh()
     }
 
@@ -112,7 +117,7 @@ class HomeFragment : Fragment() {
             .setMultiChoiceItems(labels, checked) { _, which, selected -> checked[which] = selected }
             .setPositiveButton("حفظ") { _, _ ->
                 AppRepository.setFavoriteGroupIds(groups.filterIndexed { index, _ -> checked[index] }.map { it.id }.toSet())
-                refresh()
+                refresh(force = true)
             }
             .setNegativeButton("إلغاء", null)
             .show()
@@ -193,8 +198,11 @@ class HomeFragment : Fragment() {
         view.findViewById<TextView>(R.id.recent_empty)?.setTextColor(textSec)
     }
 
-    private fun refresh() {
+    private fun refresh(force: Boolean = false) {
+        val now = SystemClock.elapsedRealtime()
+        if (isRefreshing || (!force && now - lastRefreshAt < 900L)) return
         val view = try { requireView() } catch (e: Exception) { return }
+        isRefreshing = true
         try {
         val invCount = AppRepository.totalInvoiceCount()
         val grpCount = AppRepository.groups().size
@@ -227,7 +235,7 @@ class HomeFragment : Fragment() {
         populateFavorites(view)
 
         val recent = view.findViewById<RecyclerView>(R.id.recent_list)
-        recent.layoutManager = LinearLayoutManager(requireContext())
+        if (recent.layoutManager == null) recent.layoutManager = LinearLayoutManager(requireContext())
         val entries = AppRepository.activityLog().take(5)
         if (entries.isEmpty()) {
             view.findViewById<TextView>(R.id.recent_empty).visibility = View.VISIBLE
@@ -248,6 +256,9 @@ class HomeFragment : Fragment() {
                 view.findViewById<TextView>(R.id.recent_empty)?.visibility = View.VISIBLE
                 view.findViewById<RecyclerView>(R.id.recent_list)?.visibility = View.GONE
             } catch (_: Exception) {}
+        } finally {
+            lastRefreshAt = SystemClock.elapsedRealtime()
+            isRefreshing = false
         }
     }
 

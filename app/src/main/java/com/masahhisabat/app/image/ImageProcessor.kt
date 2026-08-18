@@ -50,13 +50,23 @@ object ImageProcessor {
     }
 
     fun loadBitmap(path: String, maxDim: Int = 2048): Bitmap {
+        require(maxDim > 0) { "maxDim must be greater than zero" }
         val opts = BitmapFactory.Options()
         opts.inJustDecodeBounds = true
         BitmapFactory.decodeFile(path, opts)
-        val scale = maxOf(opts.outWidth / maxDim, opts.outHeight / maxDim, 1)
+        if (opts.outWidth <= 0 || opts.outHeight <= 0) {
+            throw IllegalArgumentException("تعذر قراءة أبعاد الصورة")
+        }
+
+        // inSampleSize يجب أن يكون قوة للعدد 2. نحسبه قبل فك الصورة بالكامل
+        // حتى لا تؤدي صورة كاميرا كبيرة إلى استهلاك ذاكرة غير ضروري.
+        var sample = 1
+        while (maxOf(opts.outWidth / sample, opts.outHeight / sample) > maxDim) {
+            sample *= 2
+        }
         val o2 = BitmapFactory.Options()
-        o2.inSampleSize = scale
-        return BitmapFactory.decodeFile(path, o2)!!
+        o2.inSampleSize = sample
+        return requireNotNull(BitmapFactory.decodeFile(path, o2)) { "تعذر فك ترميز الصورة" }
     }
 
     /** تحسين تلقائي للإضاءة والتباين: تمديد المدى الديناميكي + تصحيح غاما خفيف */

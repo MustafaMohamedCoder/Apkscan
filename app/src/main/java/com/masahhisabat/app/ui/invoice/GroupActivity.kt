@@ -50,6 +50,8 @@ class GroupActivity : AppCompatActivity() {
     private lateinit var adapter: ItemsAdapter
     private lateinit var searchInput: EditText
     private var savedQuery: String = ""
+    private var isSending = false
+    private var isPreparingAttachment = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         com.masahhisabat.app.data.AppRepository.initAppContext(this)
@@ -99,6 +101,14 @@ class GroupActivity : AppCompatActivity() {
 
         btnSend.setOnClickListener {
             val ctx = this
+            if (isSending) {
+                Toast.makeText(ctx, "يجري حفظ الرسالة…", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (isPreparingAttachment) {
+                Toast.makeText(ctx, "يجري تجهيز الصورة…", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             val role = SessionStore.currentRole(ctx)
             if (!AppRepository.canEdit(role)) {
                 Toast.makeText(ctx, "لا تملك صلاحية للإضافة", Toast.LENGTH_SHORT).show()
@@ -110,39 +120,49 @@ class GroupActivity : AppCompatActivity() {
                 Toast.makeText(ctx, "اكتب نصًا أو أرفق صورة", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            if (textAttachment != null) {
-                // صورة (+ نص اختياري) في بطاقة واحدة — نُنسخها أولًا إلى المجلد الدائم
-                // الخارجي حتى لا تُفقد عند حذف التطبيق وإعادة التثبيت
-                val permanentPath = com.masahhisabat.app.data.AppRepository.persistAppImage(textAttachment)
-                if (permanentPath == null) {
-                    Toast.makeText(
-                        ctx,
-                        "تعذر حفظ الصورة بشكل دائم. فعّل إذن الوصول إلى الملفات ثم أعد المحاولة.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    return@setOnClickListener
+            isSending = true
+            btnSend.isEnabled = false
+            btnSend.alpha = 0.55f
+            try {
+                if (textAttachment != null) {
+                    // صورة (+ نص اختياري) في بطاقة واحدة — نُنسخها أولًا إلى المجلد الدائم
+                    // الخارجي حتى لا تُفقد عند حذف التطبيق وإعادة التثبيت.
+                    val permanentPath = AppRepository.persistAppImage(textAttachment)
+                    if (permanentPath == null) {
+                        Toast.makeText(
+                            ctx,
+                            "تعذر حفظ الصورة بشكل دائم. فعّل إذن الوصول إلى الملفات ثم أعد المحاولة.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        return@setOnClickListener
+                    }
+                    val item = InvoiceItem(
+                        type = "image",
+                        imagePath = permanentPath,
+                        processedPath = null,
+                        text = text.ifBlank { null }
+                    )
+                    AppRepository.addItem(groupId, item)
+                    val user = SessionStore.currentUser(ctx) ?: "?"
+                    AppRepository.logActivity(ActivityEntry(user, "أضاف $user صورة${if (text.isNotBlank()) " ونصًا" else ""} في $groupName"))
+                    pendingAttach = null
+                    Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
+                } else {
+                    AppRepository.addItem(groupId, InvoiceItem(type = "text", text = text))
+                    val user = SessionStore.currentUser(ctx) ?: "?"
+                    AppRepository.logActivity(ActivityEntry(user, "أضاف $user نصًا يدويًا في $groupName"))
+                    Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
                 }
-                val item = InvoiceItem(
-                    type = "image",
-                    imagePath = permanentPath,
-                    processedPath = null,
-                    text = text.ifBlank { null }
-                )
-                AppRepository.addItem(groupId, item)
-                val user = SessionStore.currentUser(ctx) ?: "?"
-                AppRepository.logActivity(ActivityEntry(user, "أضاف $user صورة${if (text.isNotBlank()) " ونصًا" else ""} في $groupName"))
-                pendingAttach = null
-                Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
-            } else {
-                // نص فقط
-                AppRepository.addItem(groupId, InvoiceItem(type = "text", text = text))
-                val user = SessionStore.currentUser(ctx) ?: "?"
-                AppRepository.logActivity(ActivityEntry(user, "أضاف $user نصًا يدويًا في $groupName"))
-                Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
+                etMessage.setText("")
+                hideSoftKeyboard(etMessage)
+                refresh()
+            } catch (_: Exception) {
+                Toast.makeText(ctx, "تعذر حفظ الرسالة. أعد المحاولة.", Toast.LENGTH_LONG).show()
+            } finally {
+                isSending = false
+                btnSend.isEnabled = true
+                btnSend.alpha = 1f
             }
-            etMessage.setText("")
-            hideSoftKeyboard(etMessage)
-            refresh()
         }
 
         // إرسال بالضغط على زر الإرسال في لوحة المفاتيح
@@ -166,41 +186,56 @@ class GroupActivity : AppCompatActivity() {
     private val attachLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
-        val copied = uri?.let { copyToInternal(it) }
-        if (copied != null) {
-            pendingAttach = copied
-            showAttachmentPreview(copied)
-        } else {
-            Toast.makeText(this, "تعذر قراءة الصورة", Toast.LENGTH_SHORT).show()
-        }
+        if (uri == null || isPreparingAttachment) return@registerForActivityResult
+        isPreparingAttachment = true
+        findViewById<ImageView>(R.id.btn_attach).isEnabled = false
+        Toast.makeText(this, "يجري تجهيز الصورة…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val copied = copyToInternal(uri)
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                isPreparingAttachment = false
+                findViewById<ImageView>(R.id.btn_attach).isEnabled = true
+                if (copied != null) {
+                    pendingAttach = copied
+                    showAttachmentPreview(copied)
+                } else {
+                    Toast.makeText(this, "تعذر قراءة الصورة", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
     }
 
     private fun copyToInternal(uri: Uri): String? {
+        var raw: File? = null
+        var compressed: File? = null
+        var bitmap: android.graphics.Bitmap? = null
+        var complete = false
         return try {
-            val raw = File(cacheDir, "attach_raw_${System.currentTimeMillis()}.jpg")
-            contentResolver.openInputStream(uri)?.use { input ->
-                raw.outputStream().use { output -> input.copyTo(output) }
-            }
-            // ضغط معتدل: يحافظ على صورة قابلة للتكبير ويقلل استهلاك التخزين ونقل الشبكة.
-            val source = android.graphics.BitmapFactory.decodeFile(raw.absolutePath) ?: return raw.absolutePath
-            val maxSide = maxOf(source.width, source.height)
-            val bitmap = if (maxSide > 1920) {
-                val ratio = 1920f / maxSide
-                android.graphics.Bitmap.createScaledBitmap(source, (source.width * ratio).toInt(), (source.height * ratio).toInt(), true)
-            } else source
-            val compressed = File(cacheDir, "attach_${System.currentTimeMillis()}.jpg")
-            compressed.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 86, it) }
-            if (bitmap !== source) bitmap.recycle()
-            source.recycle()
-            raw.delete()
-            compressed.absolutePath
-        } catch (e: Exception) { null }
+            val rawFile = File(cacheDir, "attach_raw_${System.currentTimeMillis()}.jpg")
+            raw = rawFile
+            val input = contentResolver.openInputStream(uri) ?: return null
+            input.use { stream -> rawFile.outputStream().use { output -> stream.copyTo(output) } }
+            // فك الصورة بحجم محدود في الخلفية قبل ضغطها، لتجنب ضغط الذاكرة مع صور الكاميرا الكبيرة.
+            bitmap = ImageProcessor.loadBitmap(rawFile.absolutePath, 1920)
+            val compressedFile = File(cacheDir, "attach_${System.currentTimeMillis()}.jpg")
+            compressed = compressedFile
+            compressedFile.outputStream().use { bitmap!!.compress(android.graphics.Bitmap.CompressFormat.JPEG, 86, it) }
+            complete = true
+            compressedFile.absolutePath
+        } catch (_: Exception) {
+            null
+        } finally {
+            bitmap?.recycle()
+            raw?.delete()
+            if (!complete) compressed?.delete()
+        }
     }
 
     /** معاينة صريحة تعطي المستخدم فرصة للإلغاء أو كتابة وصف قبل الإرسال. */
     private fun showAttachmentPreview(path: String) {
         val preview = ImageView(this).apply {
-            setImageBitmap(android.graphics.BitmapFactory.decodeFile(path))
+            setImageBitmap(ImageProcessor.loadBitmap(path, 1200))
             adjustViewBounds = true
             setPadding(28, 16, 28, 0)
         }

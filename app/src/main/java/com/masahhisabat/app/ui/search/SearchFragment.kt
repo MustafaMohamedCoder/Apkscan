@@ -102,7 +102,7 @@ class SearchFragment : Fragment() {
                         loadingBar.visibility = View.GONE
                         emptyText.visibility = View.GONE
                     }
-                }, 250)
+                }, 300)
             }
         })
     }
@@ -122,11 +122,6 @@ class SearchFragment : Fragment() {
     }
 
     private fun searchDebounced() {
-        Thread {
-            try {
-                Thread.sleep(350) // محاكاة تأثير تحميل
-            } catch (_: InterruptedException) {}
-        }.start()
         performSearch()
     }
 

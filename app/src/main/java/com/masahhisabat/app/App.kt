@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 import com.masahhisabat.app.data.AppRepository
+import com.masahhisabat.app.ui.ThemeHelper
 import java.io.PrintWriter
 import java.io.StringWriter
 
@@ -16,6 +17,8 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         AppRepository.initAppContext(this)
+        // يُطبَّق قبل عرض شاشة الدخول حتى يتبع التطبيق مظهر النظام من أول إطار.
+        ThemeHelper.applyTheme(this)
         Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
             try {
                 val sw = StringWriter()

@@ -2,6 +2,8 @@ package com.masahhisabat.app.ui
 
 import android.content.Context
 import android.content.res.ColorStateList
+import android.content.res.Configuration
+import androidx.appcompat.app.AppCompatDelegate
 import com.google.android.material.color.MaterialColors
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
@@ -12,10 +14,48 @@ import com.masahhisabat.app.data.AppRepository
  */
 object ThemeHelper {
 
-    fun isNight(context: Context): Boolean = AppRepository.isNightMode()
+    /** الخيارات المتاحة للمستخدم: تلقائي من الجهاز أو نهاري أو ليلي يدوي. */
+    enum class Mode(val preferenceValue: String, val label: String) {
+        SYSTEM("system", "تلقائي (إعداد الجهاز)"),
+        LIGHT("light", "الوضع النهاري"),
+        DARK("dark", "الوضع الليلي");
+
+        companion object {
+            fun fromPreference(value: String): Mode = entries.firstOrNull {
+                it.preferenceValue == value
+            } ?: SYSTEM
+        }
+    }
+
+    fun mode(): Mode = Mode.fromPreference(AppRepository.themeMode())
+
+    /** يقرأ لون النظام الحقيقي عند اختيار الوضع التلقائي. */
+    fun isNight(context: Context): Boolean = when (mode()) {
+        Mode.DARK -> true
+        Mode.LIGHT -> false
+        Mode.SYSTEM -> (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+    }
+
+    /** تطبيق اختيار AppCompat قبل إنشاء أو إعادة إنشاء الواجهات. */
+    fun applyTheme(context: Context) {
+        val nightMode = when (mode()) {
+            Mode.SYSTEM -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            Mode.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+            Mode.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+        }
+        AppCompatDelegate.setDefaultNightMode(nightMode)
+    }
+
+    fun setMode(context: Context, selected: Mode) {
+        AppRepository.setThemeMode(selected.preferenceValue)
+        applyTheme(context)
+    }
 
     fun toggleTheme(context: Context) {
-        AppRepository.setNightMode(!isNight(context))
+        // زر الشريط السفلي يوفّر تبديلًا سريعًا يدويًا. إذا كان المظهر تلقائيًا
+        // يبدأ من العكس الفعلي لمظهر الجهاز حتى تكون النتيجة ظاهرة فورًا.
+        setMode(context, if (isNight(context)) Mode.LIGHT else Mode.DARK)
     }
 
     fun bg(context: Context): Int =

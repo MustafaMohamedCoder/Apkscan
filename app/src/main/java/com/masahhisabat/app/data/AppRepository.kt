@@ -319,6 +319,23 @@ object AppRepository {
     // ---------- التفضيلات ----------
     fun isNightMode(): Boolean = prefs.getBoolean("night_mode", true)
     fun setNightMode(night: Boolean) = prefs.edit().putBoolean("night_mode", night).apply()
+    /**
+     * اختيار المظهر المحفوظ. النسخ السابقة كانت تحفظ boolean فقط؛ لذلك نقرأه
+     * كخيار يدوي عند عدم وجود القيمة النصية الجديدة، حتى لا يتغير مظهر المستخدم فجأة.
+     */
+    fun themeMode(): String {
+        val saved = prefs.getString("theme_mode", null)
+        if (saved in setOf("system", "light", "dark")) return saved!!
+        return if (isNightMode()) "dark" else "light"
+    }
+    fun setThemeMode(mode: String) {
+        val valid = mode.takeIf { it in setOf("system", "light", "dark") } ?: "system"
+        prefs.edit()
+            .putString("theme_mode", valid)
+            // الإبقاء على المفتاح القديم متزامنًا للتوافق مع أي إصدار سابق.
+            .putBoolean("night_mode", valid == "dark")
+            .apply()
+    }
     fun rememberLogin(username: String) = prefs.edit().putString("remember_user", username).apply()
     fun rememberedLogin(): String? = prefs.getString("remember_user", null)
     fun clearRemember() = prefs.edit().remove("remember_user").apply()

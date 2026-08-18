@@ -139,7 +139,7 @@ class MainActivity : AppCompatActivity() {
     private fun toggleTheme() {
         val v = getSystemService(VIBRATOR_SERVICE) as? Vibrator
         v?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
-        AppRepository.setNightMode(!ThemeHelper.isNight(this))
+        ThemeHelper.toggleTheme(this)
         // إعادة إنشاء النشاط بالكامل ليُطبَّق الوضع على كل الشاشات
         recreate()
     }

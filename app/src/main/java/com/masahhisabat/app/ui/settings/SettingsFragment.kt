@@ -46,10 +46,7 @@ class SettingsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         applyTheme(view)
-        setupItem(view, R.id.item_theme, R.id.tv_theme_title, getString(R.string.toggle_theme)) {
-            ThemeHelper.toggleTheme(requireContext())
-            activity?.recreate()
-        }
+        setupItem(view, R.id.item_theme, R.id.tv_theme_title, themeTitle()) { showThemeDialog() }
         // إخفاء «إدارة الفريق» عن كل الحسابات عدا mustafa فقط
         // إخفاء «إدارة الفريق» وخيار تغيير كلمة المرور عن كل الحسابات عدا mustafa فقط
         view.findViewById<LinearLayout>(R.id.item_accounts)?.visibility =
@@ -81,6 +78,25 @@ class SettingsFragment : Fragment() {
         tv.text = title
         if (errorText) tv.setTextColor(resources.getColor(R.color.error, null))
         row.setOnClickListener { action() }
+    }
+
+    private fun themeTitle(): String = "المظهر: ${ThemeHelper.mode().label}"
+
+    /** يسمح باختيار مظهر الهاتف التلقائي إلى جانب الخيارين اليدويين. */
+    private fun showThemeDialog() {
+        val modes = ThemeHelper.Mode.entries.toTypedArray()
+        val labels = modes.map { it.label }.toTypedArray()
+        val current = modes.indexOf(ThemeHelper.mode()).coerceAtLeast(0)
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("مظهر التطبيق")
+            .setSingleChoiceItems(labels, current) { dialog, which ->
+                ThemeHelper.setMode(requireContext(), modes[which])
+                dialog.dismiss()
+                // إعادة إنشاء الشاشة تضمن إعادة تلوين جميع العناصر المخصصة فورًا.
+                activity?.recreate()
+            }
+            .setNegativeButton(R.string.close, null)
+            .show()
     }
 
     private fun applyTheme(view: View) {

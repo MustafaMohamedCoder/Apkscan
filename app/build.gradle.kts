@@ -24,6 +24,12 @@ android {
         targetSdk = 34
         versionCode = 2
         versionName = "1.1"
+
+        // أجهزة Android الفعلية المستهدفة تعمل بمعماريات ARM؛ استبعاد x86 يزيل نسخ OpenCV غير اللازمة.
+        ndk {
+            abiFilters += setOf("armeabi-v7a", "arm64-v8a")
+        }
+        resourceConfigurations += setOf("ar", "en")
     }
 
     signingConfigs {
@@ -39,7 +45,12 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             if (isReleaseSigningConfigured) {
                 signingConfig = signingConfigs.getByName("release")
             }

@@ -1,5 +1,8 @@
 package com.masahhisabat.app.data
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -9,8 +12,13 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.masahhisabat.app.BuildConfig
+import com.masahhisabat.app.R
 import com.google.gson.Gson
 import java.io.EOFException
 import java.io.File
@@ -46,6 +54,8 @@ object SyncManager {
     private const val CONNECT_TIMEOUT_MS = 15_000
     private const val READ_TIMEOUT_MS = 60_000
     private const val MAX_UPDATE_BYTES = 250L * 1024L * 1024L
+    private const val UPDATE_NOTIFICATION_CHANNEL = "local_update_ready"
+    private const val UPDATE_NOTIFICATION_ID = 9_303
     private const val SELF_TEST_TIMEOUT_MS = 600
     private const val AUTO_SYNC_DISCOVERY_TIMEOUT_MS = 1_500L
     private const val AUTO_SYNC_INTERVAL_MS = 8_000L
@@ -244,7 +254,10 @@ object SyncManager {
                 if (targetFile.exists()) targetFile.delete()
                 if (!partialFile.renameTo(targetFile)) throw IOException("تعذر تجهيز ملف التحديث")
                 AppRepository.logSync(SyncEntry("تنزيل تحديث", "تم تنزيل الإصدار ${header.versionName} من ${peer.name}", true))
-                Handler(Looper.getMainLooper()).post { requestPackageInstall(context, targetFile, header.versionName) }
+                Handler(Looper.getMainLooper()).post {
+                    notifyUpdateReady(context, targetFile, header.versionName, peer.name)
+                    requestPackageInstall(context, targetFile, header.versionName)
+                }
                 return true
             }
         } catch (e: Throwable) {
@@ -286,22 +299,65 @@ object SyncManager {
 
     private fun requestPackageInstall(context: Context, file: File, versionName: String) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
-                AppRepository.logSync(SyncEntry("تحديث جاهز", "تم تنزيل الإصدار $versionName؛ اسمح بالتثبيت من هذا التطبيق لإكماله.", true))
-                context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                    data = Uri.parse("package:${context.packageName}")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                })
-                return
-            }
-            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-            context.startActivity(Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            })
+            context.startActivity(buildInstallOrPermissionIntent(context, file))
         } catch (e: Throwable) {
             Log.w(TAG, "تعذر فتح مثبّت أندرويد", e)
             AppRepository.logSync(SyncEntry("تحديث جاهز", "تم تنزيل التحديث لكن تعذر فتح مثبّت أندرويد.", false))
+        }
+    }
+
+    private fun buildInstallOrPermissionIntent(context: Context, file: File): Intent {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
+            return Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                data = Uri.parse("package:${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        return Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+
+    private fun notifyUpdateReady(context: Context, file: File, versionName: String, peerName: String) {
+        val installIntent = try { buildInstallOrPermissionIntent(context, file) } catch (e: Throwable) {
+            Log.w(TAG, "تعذر تجهيز إجراء إشعار التحديث", e)
+            Toast.makeText(context, "تم تنزيل تحديث $versionName من $peerName", Toast.LENGTH_LONG).show()
+            return
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            UPDATE_NOTIFICATION_ID,
+            installIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        Toast.makeText(context, "تم تنزيل تحديث $versionName بنجاح من $peerName", Toast.LENGTH_LONG).show()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) return
+        try {
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                manager.createNotificationChannel(NotificationChannel(
+                    UPDATE_NOTIFICATION_CHANNEL,
+                    "تحديثات محلية",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply { description = "إشعارات اكتمال تحديث التطبيق بين الأجهزة" })
+            }
+            val notification = NotificationCompat.Builder(context, UPDATE_NOTIFICATION_CHANNEL)
+                .setSmallIcon(R.drawable.ic_sync)
+                .setContentTitle("تم تنزيل التحديث بنجاح")
+                .setContentText("الإصدار $versionName جاهز للتثبيت من $peerName")
+                .setStyle(NotificationCompat.BigTextStyle().bigText("تم نقل الإصدار $versionName والتحقق من سلامته. اضغط لتثبيته."))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+                .addAction(R.drawable.ic_sync, "تثبيت التحديث", pendingIntent)
+                .build()
+            NotificationManagerCompat.from(context).notify(UPDATE_NOTIFICATION_ID, notification)
+        } catch (e: Throwable) {
+            Log.w(TAG, "تعذر عرض إشعار التحديث", e)
         }
     }
 

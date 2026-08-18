@@ -2,6 +2,7 @@ package com.masahhisabat.app.ui.auth
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -24,6 +25,15 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var binding: ActivityLoginBinding
 
     private val storageRequestCode = 9001
+    private val notificationRequestCode = 9002
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), notificationRequestCode)
+        }
+    }
 
     private fun requestExternalStoragePermissionIfNeeded() {
         try {
@@ -59,6 +69,7 @@ class LoginActivity : AppCompatActivity() {
         requestExternalStoragePermissionIfNeeded()
         binding = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        requestNotificationPermissionIfNeeded()
 
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
         window.statusBarColor = getColor(android.R.color.transparent)

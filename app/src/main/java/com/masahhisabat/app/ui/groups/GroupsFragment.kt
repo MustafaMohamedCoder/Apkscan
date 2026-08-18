@@ -7,6 +7,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.content.Context
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -36,6 +38,8 @@ import com.masahhisabat.app.ui.invoice.GroupActivity
 class GroupsFragment : Fragment() {
 
     private lateinit var recycler: RecyclerView
+    private var groupQuery = ""
+    private var allGroups: List<Group> = emptyList()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return inflater.inflate(R.layout.fragment_groups, container, false)
@@ -52,6 +56,19 @@ class GroupsFragment : Fragment() {
             recycler.layoutManager = if (columns == 1) LinearLayoutManager(requireContext())
             else GridLayoutManager(requireContext(), columns)
             recycler.setHasFixedSize(true)
+
+            val search = view.findViewById<EditText>(R.id.et_group_search)
+            val clearSearch = view.findViewById<ImageView>(R.id.btn_clear_group_search)
+            search.addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    groupQuery = s?.toString().orEmpty()
+                    clearSearch.visibility = if (groupQuery.isBlank()) View.GONE else View.VISIBLE
+                    refresh()
+                }
+                override fun afterTextChanged(s: Editable?) = Unit
+            })
+            clearSearch.setOnClickListener { search.text?.clear() }
 
             val role = SessionStore.currentRole(requireContext())
             val canManage = AppRepository.canEdit(role)
@@ -96,6 +113,13 @@ class GroupsFragment : Fragment() {
             setTextColor(ThemeHelper.textSecondary(requireContext()))
             background?.setTint(ThemeHelper.surfaceHigh(requireContext()))
         }
+        view.findViewById<TextView>(R.id.groups_summary)?.setTextColor(ThemeHelper.textSecondary(requireContext()))
+        view.findViewById<TextView>(R.id.groups_sort_label)?.setTextColor(ThemeHelper.textSecondary(requireContext()))
+        view.findViewById<EditText>(R.id.et_group_search)?.apply {
+            setTextColor(ThemeHelper.inputText(requireContext()))
+            setHintTextColor(ThemeHelper.inputHint(requireContext()))
+        }
+        view.findViewById<ImageView>(R.id.btn_clear_group_search)?.setColorFilter(ThemeHelper.textSecondary(requireContext()))
         view.findViewById<android.widget.ImageButton>(R.id.btn_sort_groups)?.setColorFilter(
             ThemeHelper.textSecondary(requireContext())
         )
@@ -209,11 +233,22 @@ class GroupsFragment : Fragment() {
             .show()
     }
 
-private fun refresh() {
+    private fun refresh() {
         try {
-            val groups = sortedGroups(AppRepository.groups())
+            allGroups = AppRepository.groups()
+            val totalDocuments = allGroups.sumOf { AppRepository.items(it.id).size }
+            requireView().findViewById<TextView>(R.id.groups_summary).text =
+                "${allGroups.size} مجموعة · $totalDocuments مستند"
+
+            val query = groupQuery.trim()
+            val groups = sortedGroups(allGroups).filter { query.isBlank() || it.name.contains(query, ignoreCase = true) }
             val empty = requireView().findViewById<TextView>(R.id.groups_empty)
             if (groups.isEmpty()) {
+                empty?.text = if (query.isBlank()) {
+                    "لا توجد مجموعات بعد. اضغط هنا لإنشاء مجموعتك الأولى."
+                } else {
+                    "لا توجد مجموعة تطابق «$query». جرّب كلمة أخرى أو أنشئ مجموعة جديدة."
+                }
                 empty?.visibility = View.VISIBLE
                 recycler.visibility = View.GONE
             } else {

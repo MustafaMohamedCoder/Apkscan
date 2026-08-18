@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
@@ -85,6 +86,7 @@ class ScannerFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         applyTheme(view)
+        refreshRecentScans()
 
         view.findViewById<FrameLayout>(R.id.btn_camera).setOnClickListener { checkCameraAndOpen() }
         view.findViewById<FrameLayout>(R.id.btn_gallery).setOnClickListener {
@@ -92,13 +94,107 @@ class ScannerFragment : Fragment() {
         }
     }
 
-    private fun applyTheme(view: View) {
-        view.setBackgroundColor(ThemeHelper.bg(requireContext()))
-        view.findViewById<View>(R.id.scanner_root).setBackgroundColor(ThemeHelper.bg(requireContext()))
-        view.findViewById<TextView>(R.id.title).setTextColor(ThemeHelper.text(requireContext()))
-        view.findViewById<TextView>(R.id.hint).setTextColor(ThemeHelper.textSecondary(requireContext()))
-        // البطاقات بتدرج Teal ثابت ونصوصها بيضاء — لا حاجة لتلوين ديناميكي
+    override fun onResume() {
+        super.onResume()
+        if (isAdded && view != null) refreshRecentScans()
     }
+
+    private fun applyTheme(view: View) {
+        val ctx = requireContext()
+        view.setBackgroundColor(ThemeHelper.bg(ctx))
+        view.findViewById<View>(R.id.scanner_root).setBackgroundColor(ThemeHelper.bg(ctx))
+        view.findViewById<TextView>(R.id.title).apply {
+            setTextColor(ThemeHelper.text(ctx))
+            typeface = ctx.resources.getFont(R.font.tajawal_bold)
+        }
+        view.findViewById<TextView>(R.id.hint).setTextColor(ThemeHelper.textSecondary(ctx))
+        view.findViewById<TextView>(R.id.scanner_summary).setTextColor(ThemeHelper.textSecondary(ctx))
+        view.findViewById<TextView>(R.id.recent_title).setTextColor(ThemeHelper.text(ctx))
+        view.findViewById<TextView>(R.id.recent_scans_empty).setTextColor(ThemeHelper.textSecondary(ctx))
+        // البطاقات الرئيسية بتدرج Teal ثابت ونصوصها بيضاء — لا حاجة لتلوين ديناميكي
+    }
+
+    /** يعرض آخر المستندات المضافة من السكانر ويوفر اختصارًا للعودة إلى مجموعتها. */
+    private fun refreshRecentScans() {
+        if (!isAdded || view == null) return
+        try {
+            val groups = AppRepository.groups()
+            val recent = groups.flatMap { group ->
+                AppRepository.items(group.id)
+                    .filter { it.type == "image" && !it.imagePath.isNullOrBlank() }
+                    .map { group to it }
+            }.sortedByDescending { it.second.createdAt }
+            val ctx = requireContext()
+            view?.findViewById<TextView>(R.id.scanner_summary)?.text =
+                "${recent.size} مستند ممسوح · ${groups.size} مجموعات"
+            val container = view?.findViewById<LinearLayout>(R.id.recent_scans_container) ?: return
+            val empty = view?.findViewById<TextView>(R.id.recent_scans_empty) ?: return
+            container.removeAllViews()
+            val visible = recent.take(3)
+            empty.visibility = if (visible.isEmpty()) View.VISIBLE else View.GONE
+            visible.forEach { (group, item) ->
+                val card = MaterialCardView(ctx).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { bottomMargin = 8.dp(ctx) }
+                    radius = 18.dp(ctx).toFloat()
+                    cardElevation = 2.dp(ctx).toFloat()
+                    setCardBackgroundColor(ThemeHelper.surface(ctx))
+                    strokeColor = ThemeHelper.cardStroke(ctx)
+                    strokeWidth = 1.dp(ctx)
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        startActivity(Intent(ctx, GroupActivity::class.java).putExtra("group_id", group.id))
+                    }
+                }
+                val row = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    setPadding(14.dp(ctx), 12.dp(ctx), 14.dp(ctx), 12.dp(ctx))
+                }
+                val icon = ImageView(ctx).apply {
+                    layoutParams = LinearLayout.LayoutParams(42.dp(ctx), 42.dp(ctx))
+                    setImageResource(R.drawable.ic_invoice)
+                    setColorFilter(ThemeHelper.accent(ctx))
+                    contentDescription = "مستند ممسوح"
+                }
+                val textColumn = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    setPadding(12.dp(ctx), 0, 0, 0)
+                }
+                val title = TextView(ctx).apply {
+                    text = group.name
+                    setTextColor(ThemeHelper.text(ctx))
+                    typeface = ctx.resources.getFont(R.font.tajawal_bold)
+                    textSize = 15f
+                    maxLines = 1
+                }
+                val date = TextView(ctx).apply {
+                    val formatted = java.text.SimpleDateFormat("dd/MM/yyyy · HH:mm", java.util.Locale.getDefault())
+                        .format(java.util.Date(item.createdAt))
+                    text = "مستند ممسوح · $formatted"
+                    setTextColor(ThemeHelper.textSecondary(ctx))
+                    typeface = ctx.resources.getFont(R.font.tajawal_medium)
+                    textSize = 12f
+                    setPadding(0, 4.dp(ctx), 0, 0)
+                }
+                textColumn.addView(title)
+                textColumn.addView(date)
+                row.addView(icon)
+                row.addView(textColumn)
+                card.addView(row)
+                container.addView(card)
+            }
+        } catch (_: Exception) {
+            // لا نمنع فتح السكانر إذا تعذر تحميل القائمة الأخيرة.
+        }
+    }
+
+    private fun Int.dp(context: Context): Int =
+        (this * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
 
     private fun checkCameraAndOpen() {
         val ctx = requireContext()

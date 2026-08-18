@@ -83,15 +83,23 @@ object SyncManager {
 
     // ---------- العميل: الاتصال والارسال ----------
     /** إرسال بيانات هذا الجهاز إلى جهاز آخر (يستقبلها بدوره) */
-    fun syncWithHost(context: Context, host: String): SyncResult {
+    fun syncWithHost(
+        context: Context,
+        host: String,
+        onProgress: (percent: Int, status: String) -> Unit = { _, _ -> }
+    ): SyncResult {
         try {
+            onProgress(10, "جارٍ الاتصال بالجهاز الآخر...")
             val socket = Socket(InetAddress.getByName(host), TCP_PORT)
             socket.soTimeout = 120000
+            onProgress(25, "تم الاتصال. جارٍ تجهيز البيانات...")
             val payload = buildPayload(context)
+            onProgress(45, "جارٍ إرسال ${payload.totalItems} عناصر و${payload.users.size} مستخدمين...")
             val writer = socket.getOutputStream().bufferedWriter()
             writer.write(gson.toJson(payload))
             writer.newLine()
             writer.flush()
+            onProgress(75, "اكتمل الإرسال. جارٍ انتظار تأكيد الجهاز الآخر...")
             val reader = socket.getInputStream().bufferedReader()
             val ack = reader.readLine() ?: "FAIL"
             socket.close()
@@ -100,10 +108,12 @@ object SyncManager {
             val gotItems = parts.getOrNull(1)?.toIntOrNull() ?: 0
             val gotUsers = parts.getOrNull(2)?.toIntOrNull() ?: 0
             AppRepository.logSync(SyncEntry("إرسال", "إلى $host: أُرسلت ${payload.users.size} مستخدمين و${payload.totalItems} عناصر — استُقبلت $gotItems عناصر و$gotUsers مستخدمين", ok))
+            if (ok) onProgress(100, "اكتملت المزامنة بنجاح")
             return SyncResult(true, gotItems, gotUsers)
         } catch (e: Throwable) {
             Log.e(TAG, "sync error", e)
             AppRepository.logSync(SyncEntry("إرسال", "فشل الاتصال بـ $host: ${e.message}", false))
+            onProgress(0, "فشلت المزامنة")
             return SyncResult(false, 0, 0)
         }
     }

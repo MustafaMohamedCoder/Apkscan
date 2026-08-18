@@ -187,15 +187,29 @@ class SettingsFragment : Fragment() {
                         .setTitle("الأجهزة المكتشفة — اضغط للمزامنة")
                         .setItems(names) { _, which ->
                             val peer = peers[which]
+                            val syncDialog = showSyncProgressDialog(peer.name)
                             Thread {
-                                val result = SyncManager.syncWithHost(ctx, peer.address)
+                                val result = SyncManager.syncWithHost(ctx, peer.address) { percent, status ->
+                                    activity?.runOnUiThread {
+                                        updateSyncProgress(syncDialog, percent, status)
+                                    }
+                                }
                                 activity?.runOnUiThread {
-                                    Toast.makeText(
-                                        ctx,
-                                        if (result.ok) "تمت المزامنة! استُقبلت ${result.itemsReceived} عناصر و${result.usersReceived} مستخدمين"
-                                        else "فشلت المزامنة مع ${peer.address}",
-                                        Toast.LENGTH_LONG
-                                    ).show()
+                                    if (syncDialog.isShowing) syncDialog.dismiss()
+                                    val (title, message) = if (result.ok) {
+                                        "تمت المزامنة بنجاح" to
+                                            "اكتملت مزامنة ${peer.name}. استُقبلت ${result.itemsReceived} عناصر و${result.usersReceived} مستخدمين."
+                                    } else {
+                                        "فشلت المزامنة" to
+                                            "تعذر الاتصال بـ ${peer.name}. تأكد أن التطبيق مفتوح على الجهاز الآخر وأنكما على نفس شبكة Wi-Fi."
+                                    }
+                                    if (isAdded) {
+                                        MaterialAlertDialogBuilder(ctx)
+                                            .setTitle(title)
+                                            .setMessage(message)
+                                            .setPositiveButton("حسنًا", null)
+                                            .show()
+                                    }
                                 }
                             }.start()
                         }
@@ -204,6 +218,65 @@ class SettingsFragment : Fragment() {
                 }
             }
         }.start()
+    }
+
+    /** نافذة حالة المزامنة: نسبة مرئية تُحدّث من مراحل النقل الفعلية. */
+    private fun showSyncProgressDialog(peerName: String): androidx.appcompat.app.AlertDialog {
+        val ctx = requireContext()
+        val content = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 38, 48, 32)
+
+            addView(TextView(ctx).apply {
+                id = R.id.sync_progress_status
+                text = "جارٍ تجهيز المزامنة مع $peerName..."
+                textSize = 15f
+                gravity = android.view.Gravity.CENTER
+                setTextColor(ThemeHelper.text(ctx))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            })
+
+            addView(android.widget.ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply {
+                id = R.id.sync_progress_bar
+                isIndeterminate = false
+                max = 100
+                progress = 5
+                progressTintList = android.content.res.ColorStateList.valueOf(ThemeHelper.accent(ctx))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    12
+                ).apply { topMargin = 26 }
+            })
+
+            addView(TextView(ctx).apply {
+                id = R.id.sync_progress_percent
+                text = "5%"
+                textSize = 22f
+                gravity = android.view.Gravity.CENTER
+                setTextColor(ThemeHelper.accent(ctx))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = 12 }
+            })
+        }
+        return MaterialAlertDialogBuilder(ctx)
+            .setTitle("جارٍ المزامنة")
+            .setView(content)
+            .setCancelable(false)
+            .create()
+            .also { it.show() }
+    }
+
+    private fun updateSyncProgress(dialog: androidx.appcompat.app.AlertDialog, percent: Int, status: String) {
+        if (!dialog.isShowing) return
+        val progress = percent.coerceIn(0, 100)
+        dialog.findViewById<android.widget.ProgressBar>(R.id.sync_progress_bar)?.progress = progress
+        dialog.findViewById<TextView>(R.id.sync_progress_percent)?.text = "$progress%"
+        dialog.findViewById<TextView>(R.id.sync_progress_status)?.text = status
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

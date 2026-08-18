@@ -1,11 +1,20 @@
 package com.masahhisabat.app.data
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.net.wifi.WifiManager
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import android.util.Log
+import androidx.core.content.FileProvider
+import com.masahhisabat.app.BuildConfig
 import com.google.gson.Gson
 import java.io.EOFException
 import java.io.File
+import java.io.FileInputStream
 import java.io.IOException
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -18,6 +27,7 @@ import java.net.Socket
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -32,8 +42,10 @@ object SyncManager {
     private const val TAG = "SyncManager"
     private const val TCP_PORT = 8765
     private const val UDP_PORT = 8766
+    private const val UPDATE_PORT = 8767
     private const val CONNECT_TIMEOUT_MS = 15_000
     private const val READ_TIMEOUT_MS = 60_000
+    private const val MAX_UPDATE_BYTES = 250L * 1024L * 1024L
     private const val SELF_TEST_TIMEOUT_MS = 600
     private const val AUTO_SYNC_DISCOVERY_TIMEOUT_MS = 1_500L
     private const val AUTO_SYNC_INTERVAL_MS = 8_000L
@@ -41,9 +53,11 @@ object SyncManager {
     private val gson = Gson()
 
     @Volatile private var server: ServerSocket? = null
+    @Volatile private var updateServer: ServerSocket? = null
     @Volatile private var isServing = false
     @Volatile private var autoSyncRunning = false
     @Volatile private var autoSyncThread: Thread? = null
+    @Volatile private var updateCheckRunning = false
     @Volatile private var multicastLock: WifiManager.MulticastLock? = null
     val peers = CopyOnWriteArrayList<String>()
     private val autoSyncedUserFiles = ConcurrentHashMap<String, String>()
@@ -83,6 +97,23 @@ object SyncManager {
             name = "udp-discovery"
             start()
         }
+        Thread {
+            try {
+                updateServer = ServerSocket(UPDATE_PORT)
+                while (isServing) {
+                    val client = try { updateServer?.accept() } catch (_: Throwable) { break } ?: break
+                    handleUpdateClient(client, context.applicationContext)
+                }
+            } catch (e: Throwable) {
+                Log.w(TAG, "تعذر بدء خادم التحديث المحلي", e)
+            } finally {
+                try { updateServer?.close() } catch (_: Throwable) {}
+                updateServer = null
+            }
+        }.apply {
+            name = "local-update-server"
+            start()
+        }
     }
 
     fun stopServer() {
@@ -92,8 +123,186 @@ object SyncManager {
         autoSyncThread = null
         autoSyncedUserFiles.clear()
         try { server?.close() } catch (_: Throwable) {}
+        try { updateServer?.close() } catch (_: Throwable) {}
         server = null
+        updateServer = null
         releaseMulticastLock()
+    }
+
+    /**
+     * فحص محدود أثناء فتح التطبيق؛ يعيد المحاولة عدة مرات حتى يلتقط جهازًا اتصل بالشبكة بعد التشغيل.
+     * لا يستخدم خدمة خلفية أو إشعارًا دائمًا.
+     */
+    fun startAutomaticUpdateCheck(context: Context) {
+        if (updateCheckRunning) return
+        updateCheckRunning = true
+        val appContext = context.applicationContext
+        Thread {
+            try {
+                ensureServer(appContext)
+                val myVersion = BuildConfig.VERSION_CODE.toLong()
+                var updateFound = false
+                for (attempt in 0 until 12) {
+                    if (attempt > 0) Thread.sleep(8_000)
+                    val peer = discover(1_800)
+                        .filter { !isLocalAddress(it.address) && it.versionCode > myVersion }
+                        .maxByOrNull { it.versionCode }
+                    if (peer != null && requestLocalUpdate(appContext, peer)) {
+                        updateFound = true
+                        break
+                    }
+                }
+                if (updateFound) Log.i(TAG, "تم العثور على تحديث محلي وتجهيزه للتثبيت")
+            } catch (e: Throwable) {
+                Log.w(TAG, "فشل فحص التحديث المحلي", e)
+            } finally {
+                updateCheckRunning = false
+            }
+        }.apply {
+            name = "local-update-check"
+            start()
+        }
+    }
+
+    /** يرسل APK التطبيق الجاري فقط إذا كان أحدث من الإصدار الذي طلبه الجهاز الآخر. */
+    private fun handleUpdateClient(socket: Socket, context: Context) {
+        Thread {
+            socket.use { client ->
+                try {
+                    client.soTimeout = READ_TIMEOUT_MS
+                    val request = readNetworkLine(client.getInputStream())
+                    val requesterVersion = request?.removePrefix("GET_UPDATE ")?.trim()?.toLongOrNull()
+                        ?: throw IOException("طلب تحديث محلي غير صالح")
+                    val sourceApk = File(context.applicationInfo.sourceDir)
+                    val currentVersion = BuildConfig.VERSION_CODE.toLong()
+                    if (currentVersion <= requesterVersion || !sourceApk.isFile) {
+                        writeUpdateHeader(client, UpdateHeader(false, currentVersion, BuildConfig.VERSION_NAME, 0L, message = "لا يوجد إصدار أحدث"))
+                        return@use
+                    }
+                    val size = sourceApk.length()
+                    if (size !in 1..MAX_UPDATE_BYTES) throw IOException("حجم ملف التحديث غير صالح")
+                    writeUpdateHeader(client, UpdateHeader(true, currentVersion, BuildConfig.VERSION_NAME, size, sha256(sourceApk)))
+                    FileInputStream(sourceApk).use { input ->
+                        val output = client.getOutputStream()
+                        input.copyTo(output, 64 * 1024)
+                        output.flush()
+                    }
+                    AppRepository.logSync(SyncEntry("إرسال تحديث", "أُرسل الإصدار ${BuildConfig.VERSION_NAME} إلى ${client.inetAddress.hostAddress}", true))
+                } catch (e: Throwable) {
+                    Log.w(TAG, "فشل إرسال التحديث المحلي", e)
+                    AppRepository.logSync(SyncEntry("إرسال تحديث", "تعذر إرسال ملف التحديث", false))
+                }
+            }
+        }.apply {
+            name = "local-update-client"
+            start()
+        }
+    }
+
+    /** ينزّل الجهاز الأقدم APK من الجهاز المكتشف ويتحقق من سلامته قبل عرضه لمثبّت أندرويد. */
+    private fun requestLocalUpdate(context: Context, peer: DiscoveredPeer): Boolean {
+        try {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(peer.address, UPDATE_PORT), CONNECT_TIMEOUT_MS)
+                socket.soTimeout = READ_TIMEOUT_MS
+                socket.getOutputStream().apply {
+                    write("GET_UPDATE ${BuildConfig.VERSION_CODE}\n".toByteArray())
+                    flush()
+                }
+                val headerLine = readNetworkLine(socket.getInputStream())
+                    ?: throw EOFException("لم تصل معلومات التحديث")
+                val header = gson.fromJson(headerLine, UpdateHeader::class.java)
+                    ?: throw IOException("معلومات التحديث غير صالحة")
+                if (!header.ok || header.versionCode <= BuildConfig.VERSION_CODE) return false
+                if (header.size !in 1..MAX_UPDATE_BYTES || header.sha256.isNullOrBlank()) {
+                    throw IOException("حجم أو تحقق ملف التحديث غير صالح")
+                }
+
+                val updateDir = File(context.cacheDir, "local_updates").apply { mkdirs() }
+                val partialFile = File(updateDir, "masah-hisabat-${header.versionCode}.apk.part")
+                val targetFile = File(updateDir, "masah-hisabat-${header.versionCode}.apk")
+                val digest = MessageDigest.getInstance("SHA-256")
+                var remaining = header.size
+                partialFile.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    val input = socket.getInputStream()
+                    while (remaining > 0) {
+                        val requested = minOf(buffer.size.toLong(), remaining).toInt()
+                        val read = input.read(buffer, 0, requested)
+                        if (read < 0) throw EOFException("انقطع تنزيل التحديث قبل اكتماله")
+                        output.write(buffer, 0, read)
+                        digest.update(buffer, 0, read)
+                        remaining -= read
+                    }
+                    output.flush()
+                }
+                val downloadedHash = digest.digest().joinToString("") { "%02x".format(it) }
+                if (!downloadedHash.equals(header.sha256, ignoreCase = true)) {
+                    partialFile.delete()
+                    throw IOException("فشل التحقق من سلامة ملف التحديث")
+                }
+                if (targetFile.exists()) targetFile.delete()
+                if (!partialFile.renameTo(targetFile)) throw IOException("تعذر تجهيز ملف التحديث")
+                AppRepository.logSync(SyncEntry("تنزيل تحديث", "تم تنزيل الإصدار ${header.versionName} من ${peer.name}", true))
+                Handler(Looper.getMainLooper()).post { requestPackageInstall(context, targetFile, header.versionName) }
+                return true
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "فشل تنزيل التحديث المحلي", e)
+            AppRepository.logSync(SyncEntry("تنزيل تحديث", "تعذر تنزيل التحديث من ${peer.name}", false))
+            return false
+        }
+    }
+
+    private fun writeUpdateHeader(socket: Socket, header: UpdateHeader) {
+        socket.getOutputStream().apply {
+            write((gson.toJson(header) + "\n").toByteArray())
+            flush()
+        }
+    }
+
+    private fun readNetworkLine(input: java.io.InputStream): String? {
+        val bytes = ArrayList<Byte>()
+        while (bytes.size < 8_192) {
+            val next = input.read()
+            if (next < 0) return if (bytes.isEmpty()) null else bytes.toByteArray().toString(Charsets.UTF_8)
+            if (next == '\n'.code) return bytes.toByteArray().toString(Charsets.UTF_8).trimEnd('\r')
+            bytes.add(next.toByte())
+        }
+        throw IOException("سطر شبكة طويل بصورة غير صالحة")
+    }
+
+    private fun sha256(file: File): String = MessageDigest.getInstance("SHA-256").let { digest ->
+        FileInputStream(file).use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun requestPackageInstall(context: Context, file: File, versionName: String) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
+                AppRepository.logSync(SyncEntry("تحديث جاهز", "تم تنزيل الإصدار $versionName؛ اسمح بالتثبيت من هذا التطبيق لإكماله.", true))
+                context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+                return
+            }
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            })
+        } catch (e: Throwable) {
+            Log.w(TAG, "تعذر فتح مثبّت أندرويد", e)
+            AppRepository.logSync(SyncEntry("تحديث جاهز", "تم تنزيل التحديث لكن تعذر فتح مثبّت أندرويد.", false))
+        }
     }
 
     private fun handleClient(socket: Socket, context: Context) {
@@ -616,7 +825,7 @@ object SyncManager {
                         } catch (_: Throwable) {
                             "unknown"
                         }
-                        val reply = "HERE $localAddress $me"
+                        val reply = "HERE $localAddress ${BuildConfig.VERSION_CODE} $me"
                         val resp = DatagramPacket(reply.toByteArray(), reply.length, packet.address, packet.port)
                         socket.send(resp)
                         peers.addIfAbsent(packet.address.hostAddress)
@@ -646,8 +855,14 @@ object SyncManager {
                         socket.receive(resp)
                         val text = String(resp.data, 0, resp.length).trim()
                         if (text.startsWith("HERE ")) {
-                            val parts = text.removePrefix("HERE ").split(" ", limit = 2)
-                            found.addIfAbsent(DiscoveredPeer(parts[0], parts.getOrNull(1) ?: parts[0]))
+                            val parts = text.removePrefix("HERE ").split(" ", limit = 3)
+                            val advertisedVersion = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                            val peerName = if (advertisedVersion > 0L) {
+                                parts.getOrNull(2) ?: parts[0]
+                            } else {
+                                text.removePrefix("HERE ").substringAfter(" ", parts[0])
+                            }
+                            found.addIfAbsent(DiscoveredPeer(parts[0], peerName, advertisedVersion))
                         }
                     } catch (_: Exception) { break }
                 }
@@ -678,7 +893,15 @@ object SyncManager {
         if (!isServing) startServer(context)
     }
 
-    data class DiscoveredPeer(val address: String, val name: String)
+    data class DiscoveredPeer(val address: String, val name: String, val versionCode: Long = 0L)
+    data class UpdateHeader(
+        val ok: Boolean,
+        val versionCode: Long,
+        val versionName: String,
+        val size: Long,
+        val sha256: String? = null,
+        val message: String? = null
+    )
     data class SyncResult(
         val ok: Boolean,
         val itemsReceived: Int,

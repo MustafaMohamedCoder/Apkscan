@@ -29,6 +29,8 @@ class App : Application() {
         AppRepository.initAppContext(this)
         // يبقى الجهاز المستقبل مستعدًا لملف مستخدمي mustafa حتى قبل تسجيل الدخول.
         SyncManager.ensureServer(this)
+        // يفحص الإصدار بين الأجهزة المفتوحة على الشبكة المحلية مرة واحدة عند بدء التطبيق.
+        SyncManager.startAutomaticUpdateCheck(this)
         // يُطبَّق قبل عرض شاشة الدخول حتى يتبع التطبيق مظهر النظام من أول إطار.
         ThemeHelper.applyTheme(this)
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {

@@ -17,6 +17,7 @@ import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
+import com.masahhisabat.app.data.DashboardAnalytics
 import com.masahhisabat.app.data.Group
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.invoice.GroupActivity
@@ -66,6 +67,16 @@ class HomeFragment : Fragment() {
         view.findViewById<MaterialButton>(R.id.btn_quick_search).setOnClickListener { openTab(R.id.nav_search) }
         view.findViewById<MaterialButton>(R.id.btn_continue_work).setOnClickListener { openLastGroup() }
         view.findViewById<MaterialButton>(R.id.btn_manage_favorites).setOnClickListener { showFavoritePicker() }
+        view.findViewById<MaterialButton>(R.id.btn_report_details).setOnClickListener {
+            startActivity(Intent(requireContext(), AnalyticsActivity::class.java))
+        }
+        view.findViewById<MaterialButton>(R.id.btn_share_daily_report).setOnClickListener {
+            val share = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, DashboardAnalytics.shareText())
+            }
+            startActivity(Intent.createChooser(share, "مشاركة التقرير اليومي"))
+        }
         view.findViewById<View>(R.id.data_health_card).setOnClickListener { openTab(R.id.nav_settings) }
     }
 
@@ -115,7 +126,7 @@ class HomeFragment : Fragment() {
         val text = ThemeHelper.text(requireContext())
         val textSec = ThemeHelper.textSecondary(requireContext())
 
-        listOf(R.id.card_invoices, R.id.card_groups, R.id.dashboard_info_card, R.id.continue_card, R.id.quick_actions_card, R.id.favorites_card, R.id.data_health_card, R.id.today_activity_card, R.id.alerts_card).forEach { id ->
+        listOf(R.id.card_invoices, R.id.card_groups, R.id.dashboard_info_card, R.id.continue_card, R.id.quick_actions_card, R.id.favorites_card, R.id.data_health_card, R.id.today_activity_card, R.id.alerts_card, R.id.daily_report_card, R.id.advanced_stats_card).forEach { id ->
             val card = view.findViewById<MaterialCardView>(id)
             card.setCardBackgroundColor(surface)
             card.strokeColor = ThemeHelper.cardStroke(requireContext())
@@ -136,9 +147,16 @@ class HomeFragment : Fragment() {
         listOf(R.id.data_health_title, R.id.today_activity_title, R.id.alerts_title).forEach { id ->
             view.findViewById<TextView>(id).setTextColor(text)
         }
+        listOf(R.id.daily_report_title, R.id.advanced_stats_title).forEach { id ->
+            view.findViewById<TextView>(id).setTextColor(text)
+        }
         listOf(R.id.data_health_sync, R.id.data_health_storage, R.id.today_activity_detail).forEach { id ->
             view.findViewById<TextView>(id).setTextColor(textSec)
         }
+        listOf(R.id.daily_items_label, R.id.daily_groups_label, R.id.daily_actions_label, R.id.weekly_average, R.id.top_group_stat, R.id.top_sender_stat).forEach { id ->
+            view.findViewById<TextView>(id).setTextColor(textSec)
+        }
+        view.findViewById<TextView>(R.id.daily_amount).setTextColor(text)
         view.findViewById<TextView>(R.id.invoices_label).setTextColor(textSec)
         view.findViewById<TextView>(R.id.groups_label).setTextColor(textSec)
         listOf(R.id.invoices_count, R.id.groups_count).forEach { id ->
@@ -199,6 +217,7 @@ class HomeFragment : Fragment() {
         }
         updateDataHealth(view, lastSync)
         updateTodayActivity(view)
+        updateDailyReport(view)
         populateAlerts(view, lastSync)
         val lastGroupObject = AppRepository.lastOpenedGroupId()?.let { id -> AppRepository.groups().find { it.id == id } }
         view.findViewById<TextView>(R.id.continue_detail).text = if (lastGroupObject == null) {
@@ -279,6 +298,54 @@ class HomeFragment : Fragment() {
             0 -> "لم تُسجّل عمليات اليوم بعد"
             1 -> "تم تسجيل عملية واحدة اليوم"
             else -> "تم تسجيل $count عمليات اليوم"
+        }
+    }
+
+    private fun updateDailyReport(view: View) {
+        val report = DashboardAnalytics.dailyReport()
+        view.findViewById<TextView>(R.id.daily_items_count).text = report.todayItems.toString()
+        view.findViewById<TextView>(R.id.daily_groups_count).text = report.activeGroups.toString()
+        view.findViewById<TextView>(R.id.daily_actions_count).text = report.todayActions.toString()
+        view.findViewById<TextView>(R.id.daily_amount).text = if (report.totalAmount > 0) {
+            "إجمالي القيم المسجلة اليوم: ${DashboardAnalytics.formatAmount(report.totalAmount)} ${report.currency.orEmpty()}"
+        } else "لا توجد قيم مالية مسجلة اليوم"
+        view.findViewById<TextView>(R.id.weekly_average).text =
+            "آخر 7 أيام: ${report.weeklyTotal} عناصر · متوسط ${"%.1f".format(java.util.Locale.US, report.weeklyAverage)} يوميًا"
+        view.findViewById<TextView>(R.id.top_group_stat).text = report.topGroupName?.let {
+            "المجموعة الأكثر نشاطًا: $it (${report.topGroupItems})"
+        } ?: "المجموعة الأكثر نشاطًا: لا توجد بيانات اليوم"
+        view.findViewById<TextView>(R.id.top_sender_stat).text = report.topSender?.let {
+            "المستخدم الأكثر نشاطًا: $it (${report.topSenderItems})"
+        } ?: "المستخدم الأكثر نشاطًا: لا توجد بيانات اليوم"
+        renderWeeklyTrend(view.findViewById(R.id.week_trend_container), report)
+    }
+
+    /** أعمدة بسيطة محلية بدل مكتبة رسوميات إضافية؛ متجاوبة للهاتف والتابلت. */
+    private fun renderWeeklyTrend(container: LinearLayout, report: DashboardAnalytics.DailyReport) {
+        container.removeAllViews()
+        val max = report.trend.maxOfOrNull { it.count }?.coerceAtLeast(1) ?: 1
+        report.trend.forEach { bucket ->
+            val column = LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL
+            }
+            val height = (12 + (45f * bucket.count / max)).toInt()
+            val bar = View(requireContext()).apply {
+                background = GradientDrawable().apply {
+                    cornerRadius = 10f
+                    setColor(if (bucket.count == max && max > 0) ThemeHelper.accent(requireContext()) else ThemeHelper.cardStroke(requireContext()))
+                }
+                contentDescription = "${bucket.label}: ${bucket.count}"
+            }
+            val label = TextView(requireContext()).apply {
+                text = bucket.label
+                textSize = 10f
+                gravity = android.view.Gravity.CENTER
+                setTextColor(ThemeHelper.textSecondary(requireContext()))
+            }
+            column.addView(bar, LinearLayout.LayoutParams(20, height))
+            column.addView(label, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 18))
+            container.addView(column, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
         }
     }
 

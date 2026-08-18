@@ -48,6 +48,10 @@
             android:exported="false"
             android:excludeFromRecents="true" />
 
+        <activity
+            android:name=".ui.home.AnalyticsActivity"
+            android:exported="false" />
+
         <activity android:name=".ui.scanner.CropEditActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize" />

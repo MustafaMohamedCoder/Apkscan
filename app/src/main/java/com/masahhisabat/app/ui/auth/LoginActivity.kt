@@ -153,11 +153,7 @@ class LoginActivity : AppCompatActivity() {
         val night = com.masahhisabat.app.ui.ThemeHelper.isNight(this)
         // خلفية الشاشة: متدرج Teal داكن في الليلي، فاتح هادئ في النهاري
         val bg = if (night) getDrawable(R.drawable.login_bg) else getDrawable(R.drawable.login_bg_day)
-        window.decorView.background = bg?.mutate()
-        window.decorView.backgroundTintMode = android.graphics.PorterDuff.Mode.SRC
-        binding.loginCard.setCardBackgroundColor(
-            if (night) getColor(R.color.night_surface) else getColor(R.color.day_surface)
-        )
+        binding.loginRoot.background = bg?.mutate()
         binding.usernameInput.setTextColor(com.masahhisabat.app.ui.ThemeHelper.inputText(this))
         binding.usernameInput.setHintTextColor(com.masahhisabat.app.ui.ThemeHelper.inputHint(this))
         binding.passwordInput.setTextColor(com.masahhisabat.app.ui.ThemeHelper.inputText(this))
@@ -166,6 +162,8 @@ class LoginActivity : AppCompatActivity() {
         binding.loginTitleText.setTextColor(getColor(if (night) R.color.night_text else R.color.day_text))
         binding.labelUsername.setTextColor(getColor(if (night) R.color.night_text else R.color.day_text))
         binding.labelPassword.setTextColor(getColor(if (night) R.color.night_text else R.color.day_text))
+        binding.developerText.setTextColor(getColor(if (night) R.color.white else R.color.primary_dark))
+        binding.errorText.setTextColor(getColor(R.color.error))
         // تلوين خلفية حقول الإدخال ديناميكيًا (input_fill يتغير مع الوضع)
         val inputBg = getDrawable(R.drawable.input_bg)?.mutate()
         (inputBg as? android.graphics.drawable.GradientDrawable)?.apply {
@@ -179,13 +177,13 @@ class LoginActivity : AppCompatActivity() {
     private fun shakeError() {
         val v = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         v?.vibrate(VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE))
-        binding.loginCard.animate()
+        binding.loginForm.animate()
             .translationX(0f)
             .setDuration(60)
             .withEndAction {
-                binding.loginCard.animate().translationX(20f).setDuration(60).withEndAction {
-                    binding.loginCard.animate().translationX(-20f).setDuration(60).withEndAction {
-                        binding.loginCard.animate().translationX(0f).setDuration(60).start()
+                binding.loginForm.animate().translationX(20f).setDuration(60).withEndAction {
+                    binding.loginForm.animate().translationX(-20f).setDuration(60).withEndAction {
+                        binding.loginForm.animate().translationX(0f).setDuration(60).start()
                     }.start()
                 }.start()
             }.start()

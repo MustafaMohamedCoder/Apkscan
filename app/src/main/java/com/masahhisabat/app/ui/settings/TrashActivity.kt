@@ -154,7 +154,8 @@ class TrashActivity : AppCompatActivity() {
         root.addView(recycler, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
         emptyButton = MaterialButton(this).apply {
-            text = "إفراغ السلة"
+            text = "إفراغ السلة بالكامل"
+            contentDescription = "إفراغ جميع عناصر سلة المحذوفات نهائيًا"
             isAllCaps = false
             setTextColor(ThemeHelper.text(this@TrashActivity))
             backgroundTintList = ColorStateList.valueOf(ThemeHelper.surfaceHigh(this@TrashActivity))
@@ -238,16 +239,27 @@ class TrashActivity : AppCompatActivity() {
     }
 
     private fun confirmEmptyTrash() {
-        val count = AppRepository.trashEntries().size
+        val entries = AppRepository.trashEntries()
+        val count = entries.size
         if (count == 0) return
+        val groupsCount = entries.count { it.type == "group" }
+        val messagesCount = entries.count { it.type != "group" }
+        val affectedItems = buildList {
+            if (groupsCount > 0) add("$groupsCount مجموعة")
+            if (messagesCount > 0) add("$messagesCount رسالة")
+        }.joinToString(" و")
         MaterialAlertDialogBuilder(this)
-            .setTitle("إفراغ سلة المحذوفات؟")
-            .setMessage("سيُحذف $count عنصر نهائيًا مع أي صور لا تستخدمها عناصر أخرى. لا يمكن التراجع عن هذا الإجراء.")
-            .setPositiveButton("إفراغ السلة") { _, _ ->
+            .setTitle("إفراغ السلة بالكامل؟")
+            .setMessage("أنت على وشك حذف $count عنصر نهائيًا ($affectedItems). ستُحذف أيضًا الصور المرتبطة التي لا تستخدمها عناصر أخرى. لا يمكن استعادة أي عنصر بعد التأكيد.")
+            .setPositiveButton("نعم، إفراغ السلة") { _, _ ->
                 val removed = AppRepository.emptyTrash()
-                val user = SessionStore.currentUser(this) ?: "?"
-                AppRepository.logActivity(ActivityEntry(user, "أفرغ سلة المحذوفات ($removed عنصر)"))
-                Toast.makeText(this, "تم إفراغ السلة", Toast.LENGTH_SHORT).show()
+                if (removed > 0) {
+                    val user = SessionStore.currentUser(this) ?: "?"
+                    AppRepository.logActivity(ActivityEntry(user, "أفرغ سلة المحذوفات بالكامل ($removed عنصر)"))
+                    Toast.makeText(this, "تم إفراغ السلة بالكامل", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "سلة المحذوفات فارغة بالفعل", Toast.LENGTH_SHORT).show()
+                }
                 refresh()
             }
             .setNegativeButton("إلغاء", null)

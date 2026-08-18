@@ -92,6 +92,13 @@ class GroupsFragment : Fragment() {
             typeface = resources.getFont(R.font.tajawal_medium)
             setTextColor(ThemeHelper.textSecondary(requireContext()))
         }
+        view.findViewById<TextView>(R.id.groups_empty)?.apply {
+            setTextColor(ThemeHelper.textSecondary(requireContext()))
+            background?.setTint(ThemeHelper.surfaceHigh(requireContext()))
+        }
+        view.findViewById<android.widget.ImageButton>(R.id.btn_sort_groups)?.setColorFilter(
+            ThemeHelper.textSecondary(requireContext())
+        )
         // أيقونة زر الإضافة سوداء داخل دائرة خضراء — لا نلوّنها ديناميكيًا
     }
 

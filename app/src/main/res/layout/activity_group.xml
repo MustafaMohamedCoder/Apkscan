@@ -133,8 +133,10 @@
         android:gravity="center_vertical"
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp">
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
+        android:elevation="8dp"
+        android:background="@drawable/compose_bar_bg">
 
         <ImageView
             android:id="@+id/btn_attach"

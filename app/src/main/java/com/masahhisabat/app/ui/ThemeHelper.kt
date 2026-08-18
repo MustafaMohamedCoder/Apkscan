@@ -115,8 +115,8 @@ object ThemeHelper {
 
     /** لون label غير النشط في الشريط السفلي */
     fun inactiveLabel(context: Context): Int =
-        if (isNight(context)) 0xFF8FA3A6.toInt()
-        else 0xFF9AA7A4.toInt()
+        if (isNight(context)) context.getColor(R.color.navigation_inactive_night)
+        else context.getColor(R.color.navigation_inactive_day)
 
     /** تظليل أيقونة ممتلئة للعنصر النشط (خلفية Teal شفافة) */
     fun activeTintList(context: Context): ColorStateList =

@@ -446,7 +446,7 @@ class GroupActivity : AppCompatActivity() {
         findViewById<View>(R.id.selection_bar)?.setBackgroundColor(ThemeHelper.surfaceHigh(this))
         findViewById<EditText>(R.id.et_message).setTextColor(ThemeHelper.text(this))
         findViewById<EditText>(R.id.et_message).background?.setTint(ThemeHelper.inputFill(this))
-        findViewById<View>(R.id.compose_bar)?.setBackgroundColor(ThemeHelper.bg(this))
+        findViewById<View>(R.id.compose_bar)?.background?.setTint(ThemeHelper.surface(this))
     }
 
     inner class ItemsAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {

@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.text.Editable
@@ -20,6 +22,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.snackbar.Snackbar
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.ActivityEntry
@@ -49,9 +52,16 @@ class GroupActivity : AppCompatActivity() {
     private var isSelecting = false
     private lateinit var adapter: ItemsAdapter
     private lateinit var searchInput: EditText
+    private lateinit var messageInput: EditText
     private var savedQuery: String = ""
     private var isSending = false
     private var isPreparingAttachment = false
+    private val draftHandler = Handler(Looper.getMainLooper())
+    private val saveDraftTask = Runnable {
+        if (::messageInput.isInitialized) {
+            AppRepository.setMessageDraft(groupId, messageInput.text.toString())
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         com.masahhisabat.app.data.AppRepository.initAppContext(this)
@@ -94,8 +104,25 @@ class GroupActivity : AppCompatActivity() {
 
         // شريط الإرسال السفلي (مثل تليجرام/واتساب)
         val etMessage = findViewById<EditText>(R.id.et_message)
+        messageInput = etMessage
         val btnAttach = findViewById<ImageView>(R.id.btn_attach)
         val btnSend = findViewById<ImageView>(R.id.btn_send)
+
+        // تحفظ مسودة النص محليًا بعد توقف قصير عن الكتابة حتى لا يفقدها المستخدم عند العودة أو الإغلاق.
+        val restoredDraft = AppRepository.messageDraft(groupId)
+        if (restoredDraft.isNotBlank()) {
+            etMessage.setText(restoredDraft)
+            etMessage.setSelection(restoredDraft.length)
+            Snackbar.make(etMessage, "تمت استعادة مسودة غير مرسلة", Snackbar.LENGTH_LONG).show()
+        }
+        etMessage.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                draftHandler.removeCallbacks(saveDraftTask)
+                draftHandler.postDelayed(saveDraftTask, 450L)
+            }
+        })
 
         btnAttach.setOnClickListener { attachLauncher.launch("image/*") }
 
@@ -154,6 +181,8 @@ class GroupActivity : AppCompatActivity() {
                     Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
                 }
                 etMessage.setText("")
+                draftHandler.removeCallbacks(saveDraftTask)
+                AppRepository.clearMessageDraft(groupId)
                 hideSoftKeyboard(etMessage)
                 refresh()
             } catch (_: Exception) {
@@ -179,6 +208,19 @@ class GroupActivity : AppCompatActivity() {
         }
 
         refresh()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (::messageInput.isInitialized) {
+            draftHandler.removeCallbacks(saveDraftTask)
+            AppRepository.setMessageDraft(groupId, messageInput.text.toString())
+        }
+    }
+
+    override fun onDestroy() {
+        draftHandler.removeCallbacks(saveDraftTask)
+        super.onDestroy()
     }
 
     private var pendingAttach: String? = null
@@ -334,14 +376,36 @@ class GroupActivity : AppCompatActivity() {
             .setTitle(R.string.confirm_delete)
             .setMessage(R.string.delete_confirm_msg)
             .setPositiveButton(R.string.delete) { _, _ ->
-                AppRepository.removeItems(groupId, selected.toList())
-                val user = SessionStore.currentUser(this) ?: "?"
-                AppRepository.logActivity(ActivityEntry(user, getString(R.string.log_delete)))
-                Toast.makeText(this, R.string.success, Toast.LENGTH_SHORT).show()
-                selected.clear(); isSelecting = false
-                refresh()
+                deleteWithUndo(selected.toList())
             }
             .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /** يحافظ على الملفات خلال مهلة قصيرة ويعرض زر تراجع قبل الحذف النهائي. */
+    private fun deleteWithUndo(ids: List<String>) {
+        val removed = AppRepository.removeItemsForUndo(groupId, ids)
+        if (removed.isEmpty()) return
+        val user = SessionStore.currentUser(this) ?: "?"
+        AppRepository.logActivity(ActivityEntry(user, getString(R.string.log_delete)))
+        selected.clear()
+        isSelecting = false
+        refresh()
+
+        var restored = false
+        Snackbar.make(recycler, "تم حذف ${removed.size} ${if (removed.size == 1) "رسالة" else "رسائل"}", Snackbar.LENGTH_LONG)
+            .setAction("تراجع") {
+                restored = true
+                AppRepository.restoreItems(groupId, removed)
+                AppRepository.logActivity(ActivityEntry(user, "تراجع عن حذف ${removed.size} رسالة في $groupName"))
+                refresh()
+                Toast.makeText(this, "تمت استعادة الرسالة", Toast.LENGTH_SHORT).show()
+            }
+            .addCallback(object : Snackbar.Callback() {
+                override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
+                    if (!restored) AppRepository.finalizeRemovedItems(removed)
+                }
+            })
             .show()
     }
 
@@ -646,11 +710,7 @@ class GroupActivity : AppCompatActivity() {
                 .setTitle(R.string.confirm_delete)
                 .setMessage(R.string.delete_confirm_msg)
                 .setPositiveButton(R.string.delete) { _, _ ->
-                    AppRepository.removeItem(groupId, item.id)
-                    val user = SessionStore.currentUser(this@GroupActivity) ?: "?"
-                    AppRepository.logActivity(ActivityEntry(user, getString(R.string.log_delete)))
-                    Toast.makeText(this@GroupActivity, R.string.success, Toast.LENGTH_SHORT).show()
-                    refresh()
+                    deleteWithUndo(listOf(item.id))
                 }
                 .setNegativeButton(R.string.cancel, null)
                 .show()

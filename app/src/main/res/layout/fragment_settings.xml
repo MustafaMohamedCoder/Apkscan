@@ -312,15 +312,30 @@
                 android:layout_height="36dp"
                 android:src="@drawable/ic_sync"
                 android:contentDescription="@string/local_sync" />
-            <TextView
-                android:id="@+id/tv_sync_title"
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="16dp"
-                android:textSize="16sp"
-                android:includeFontPadding="false"
-                android:fontFamily="@font/tajawal_bold" />
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/tv_sync_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="16sp"
+                    android:includeFontPadding="false"
+                    android:fontFamily="@font/tajawal_bold" />
+                <TextView
+                    android:id="@+id/tv_sync_summary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:textSize="12sp"
+                    android:includeFontPadding="false"
+                    android:fontFamily="@font/tajawal_regular" />
+            </LinearLayout>
             <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"

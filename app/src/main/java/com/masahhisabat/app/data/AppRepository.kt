@@ -210,6 +210,20 @@ object AppRepository {
         val dir = File(dataDir(), "invoices/$id")
         dir.deleteRecursively()
     }
+    /** يزيل المجموعة من القائمة مؤقتًا ويترك عناصرها متاحة لزر التراجع. */
+    fun removeGroupForUndo(id: String): Group? {
+        val group = groups().find { it.id == id } ?: return null
+        saveList("groups.json", groups().filter { it.id != id })
+        return group
+    }
+    fun restoreGroup(group: Group) {
+        if (groups().none { it.id == group.id }) {
+            saveList("groups.json", (groups() + group).sortedByDescending { it.createdAt })
+        }
+    }
+    fun finalizeRemovedGroup(id: String) {
+        try { File(dataDir(), "invoices/$id").deleteRecursively() } catch (_: Exception) { }
+    }
     fun renameGroup(id: String, name: String) {
         saveList("groups.json", groups().map { if (it.id == id) it.copy(name = name) else it })
     }
@@ -310,6 +324,40 @@ object AppRepository {
         File(dir, "items.json").writeText(gson.toJson(all.filter { it.id !in ids }))
     }
 
+    /**
+     * يحذف العناصر من القائمة فقط ويحتفظ بملفاتها مؤقتًا، حتى يتمكن المستخدم من
+     * التراجع عن الحذف من الواجهة خلال المهلة القصيرة التالية للإجراء.
+     */
+    fun removeItemsForUndo(groupId: String, ids: List<String>): List<InvoiceItem> {
+        if (ids.isEmpty()) return emptyList()
+        val all = items(groupId)
+        val removed = all.filter { it.id in ids }
+        if (removed.isEmpty()) return emptyList()
+        val dir = File(dataDir(), "invoices/$groupId")
+        dir.mkdirs()
+        File(dir, "items.json").writeText(gson.toJson(all.filter { it.id !in ids }))
+        return removed
+    }
+
+    /** يستعيد العناصر المحذوفة مؤقتًا مع الحفاظ على ترتيب الرسائل من الأحدث إلى الأقدم. */
+    fun restoreItems(groupId: String, removed: List<InvoiceItem>) {
+        if (removed.isEmpty()) return
+        val existing = items(groupId)
+        val existingIds = existing.mapTo(mutableSetOf()) { it.id }
+        val restored = (existing + removed.filter { existingIds.add(it.id) })
+            .sortedByDescending { it.createdAt }
+        val dir = File(dataDir(), "invoices/$groupId")
+        dir.mkdirs()
+        File(dir, "items.json").writeText(gson.toJson(restored))
+    }
+
+    /** تنظيف ملفات العناصر بعد انتهاء مهلة التراجع دون استعادة. */
+    fun finalizeRemovedItems(removed: List<InvoiceItem>) {
+        removed.flatMap { listOfNotNull(it.imagePath, it.processedPath) }
+            .distinct()
+            .forEach { path -> try { File(path).delete() } catch (_: Exception) { } }
+    }
+
     // ---------- سجل النشاط ----------
     fun logActivity(entry: ActivityEntry) {
         saveList("activity.json", activityLog().toMutableList().also { it.add(0, entry) }.take(500))
@@ -354,10 +402,28 @@ object AppRepository {
     fun setLastInvoiceName(name: String) = prefs.edit().putString("last_invoice_name", name).apply()
     fun lastSavedSearch(groupId: String): String = prefs.getString("saved_search_$groupId", "") ?: ""
     fun setLastSavedSearch(groupId: String, query: String) = prefs.edit().putString("saved_search_$groupId", query).apply()
+    /** مسودة نص الرسالة؛ تحفظ محليًا لكل مجموعة ولا تُرسل أو تُزامن قبل تأكيد المستخدم. */
+    fun messageDraft(groupId: String): String = prefs.getString("message_draft_$groupId", "") ?: ""
+    fun setMessageDraft(groupId: String, draft: String) {
+        val editor = prefs.edit()
+        if (draft.isBlank()) editor.remove("message_draft_$groupId")
+        else editor.putString("message_draft_$groupId", draft.take(10_000))
+        editor.apply()
+    }
+    fun clearMessageDraft(groupId: String) = prefs.edit().remove("message_draft_$groupId").apply()
     fun lastOpenedGroupId(): String? = prefs.getString("last_opened_group", null)
     fun setLastOpenedGroupId(groupId: String) = prefs.edit().putString("last_opened_group", groupId).apply()
     fun favoriteGroupIds(): Set<String> = prefs.getStringSet("favorite_group_ids", emptySet())?.toSet() ?: emptySet()
     fun setFavoriteGroupIds(ids: Set<String>) = prefs.edit().putStringSet("favorite_group_ids", ids).apply()
+    fun groupSortMode(): String = prefs.getString("group_sort_mode", "recent")
+        ?.takeIf { it in setOf("recent", "name", "created") } ?: "recent"
+    fun setGroupSortMode(mode: String) {
+        prefs.edit().putString("group_sort_mode", mode.takeIf { it in setOf("recent", "name", "created") } ?: "recent").apply()
+    }
+    /** آخر مزامنة بيانات مكتملة، مع استبعاد بدء الخادم والمعاينة والاختبارات. */
+    fun lastSuccessfulSync(): SyncEntry? = syncLog().firstOrNull {
+        it.success && (it.action == "إرسال" || it.action == "استقبال")
+    }
 
     // ---------- دعم المزامنة ----------
     fun currentUserDeviceName(): String {

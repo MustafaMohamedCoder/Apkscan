@@ -39,6 +39,17 @@
         </LinearLayout>
 
         <ImageButton
+            android:id="@+id/btn_sort_groups"
+            android:layout_width="44dp"
+            android:layout_height="50dp"
+            android:layout_marginEnd="6dp"
+            android:padding="11dp"
+            android:src="@drawable/ic_filter"
+            android:tint="@color/day_text_secondary"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="ترتيب المجموعات" />
+
+        <ImageButton
             android:id="@+id/btn_add_group"
             android:layout_width="50dp"
             android:layout_height="50dp"
@@ -63,7 +74,10 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:padding="40dp"
-        android:text="@string/no_items"
+        android:text="لا توجد مجموعات بعد. اضغط هنا لإنشاء مجموعتك الأولى."
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground"
         android:fontFamily="@font/tajawal_medium"
         android:textColor="@color/day_text_secondary"
         android:visibility="visible" />

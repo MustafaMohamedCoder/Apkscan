@@ -71,6 +71,7 @@ class SettingsFragment : Fragment() {
             if (AppRepository.canSync(role)) showSyncDialog()
             else Toast.makeText(requireContext(), "هذه الخاصية للمدير والمشرف فقط", Toast.LENGTH_SHORT).show()
         }
+        view.findViewById<TextView>(R.id.tv_sync_summary)?.text = syncSummary()
         // placeholder to keep edits valid
         setupItem(view, R.id.item_logout, R.id.tv_logout_title, getString(R.string.logout), errorText = true) { confirmLogout() }
     }
@@ -146,8 +147,16 @@ class SettingsFragment : Fragment() {
             R.id.tv_activity_title, R.id.tv_export_title, R.id.tv_import_title, R.id.tv_sync_title).forEach { id ->
             view.findViewById<TextView>(id)?.setTextColor(text)
         }
+        view.findViewById<TextView>(R.id.tv_sync_summary)?.setTextColor(textSec)
         view.findViewById<TextView>(R.id.tv_title)?.setTextColor(text)
         view.findViewById<TextView>(R.id.version_text)?.setTextColor(textSec)
+    }
+
+    /** سطر موجز يوضح وقت ووجهة وعدّاد آخر تبادل ناجح للبيانات. */
+    private fun syncSummary(): String {
+        val entry = AppRepository.lastSuccessfulSync() ?: return "لم تتم مزامنة بيانات بعد"
+        val time = SimpleDateFormat("dd/MM HH:mm", Locale("ar")).format(Date(entry.at))
+        return "آخر نجاح $time • ${entry.detail}".take(170)
     }
 
     private fun showActivityLogDialog() {
@@ -356,7 +365,7 @@ class SettingsFragment : Fragment() {
         val ctx = requireContext()
         val syncDialog = showSyncProgressDialog(peer.name)
         Thread {
-            val result = SyncManager.syncWithHost(ctx, peer.address) { percent, status ->
+            val result = SyncManager.syncWithHost(ctx, peer.address, peer.name) { percent, status ->
                 activity?.runOnUiThread { updateSyncProgress(syncDialog, percent, status) }
             }
             activity?.runOnUiThread {
@@ -370,6 +379,7 @@ class SettingsFragment : Fragment() {
                 }
                 if (isAdded) MaterialAlertDialogBuilder(ctx)
                     .setTitle(title).setMessage(message).setPositiveButton("حسنًا", null).show()
+                view?.findViewById<TextView>(R.id.tv_sync_summary)?.text = syncSummary()
             }
         }.apply { name = "confirmed-local-sync" }.start()
     }

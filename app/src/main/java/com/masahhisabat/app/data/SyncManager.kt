@@ -100,7 +100,8 @@ object SyncManager {
                     val ack = "OK ${result.items} ${result.users}\n"
                     client.getOutputStream().write(ack.toByteArray())
                     client.getOutputStream().flush()
-                    AppRepository.logSync(SyncEntry("استقبال", "استُقبلت ${result.items} عناصر و${result.users} مستخدمين من ${client.inetAddress.hostAddress}", true))
+                    val sender = payload.deviceName?.takeIf { it.isNotBlank() } ?: client.inetAddress.hostAddress
+                    AppRepository.logSync(SyncEntry("استقبال", "استُقبلت ${result.items} عناصر و${result.users} مستخدمين من $sender", true))
                 } catch (e: Throwable) {
                     Log.e(TAG, "client error", e)
                     AppRepository.logSync(SyncEntry("استقبال", "فشلت المزامنة: ${syncErrorMessage(e)}", false))
@@ -114,6 +115,7 @@ object SyncManager {
     fun syncWithHost(
         context: Context,
         host: String,
+        peerName: String = host,
         onProgress: (percent: Int, status: String) -> Unit = { _, _ -> }
     ): SyncResult {
         var payload: SyncPayload? = null
@@ -139,7 +141,7 @@ object SyncManager {
                 if (parts.firstOrNull() != "OK" || gotItems == null || gotUsers == null) {
                     throw IOException("استجابة غير مكتملة من الجهاز الآخر")
                 }
-                AppRepository.logSync(SyncEntry("إرسال", "إلى $host: أُرسلت ${currentPayload.users.size} مستخدمين و${currentPayload.totalItems} عناصر — استُقبلت $gotItems عناصر و$gotUsers مستخدمين", true))
+                AppRepository.logSync(SyncEntry("إرسال", "إلى $peerName: أُرسلت ${currentPayload.users.size} مستخدمين و${currentPayload.totalItems} عناصر — استُقبلت $gotItems عناصر و$gotUsers مستخدمين", true))
                 onProgress(100, "اكتملت المزامنة بنجاح")
                 return SyncResult(true, gotItems, gotUsers)
             }
@@ -147,7 +149,7 @@ object SyncManager {
             val errorMessage = syncErrorMessage(e)
             Log.e(TAG, "sync error", e)
             val sentSummary = payload?.let { " بعد تجهيز ${it.totalItems} عناصر و${it.users.size} مستخدمين" }.orEmpty()
-            AppRepository.logSync(SyncEntry("إرسال", "فشلت المزامنة مع $host$sentSummary: $errorMessage", false))
+            AppRepository.logSync(SyncEntry("إرسال", "فشلت المزامنة مع $peerName$sentSummary: $errorMessage", false))
             onProgress(0, errorMessage)
             return SyncResult(false, 0, 0, errorMessage)
         }
@@ -319,6 +321,7 @@ object SyncManager {
 
     private fun buildPayload(context: Context): SyncPayload {
         return SyncPayload(
+            deviceName = AppRepository.currentUserDeviceName(),
             users = AppRepository.users().map { UserPayload(it.username, it.passwordHash, it.role.name, it.enabled) },
             items = buildList {
                 for (g in AppRepository.groups()) {
@@ -482,7 +485,11 @@ object SyncManager {
     // ---------- نماذج المزامنة ----------
     data class UserPayload(val username: String, val passwordHash: String, val roleName: String, val enabled: Boolean)
     data class SyncItemPayload(val groupId: String, val groupName: String, val item: InvoiceItem)
-    data class SyncPayload(val users: List<UserPayload>, val items: List<SyncItemPayload>) {
+    data class SyncPayload(
+        val deviceName: String? = null,
+        val users: List<UserPayload>,
+        val items: List<SyncItemPayload>
+    ) {
         val totalItems get() = items.size
     }
     data class ApplyResult(val items: Int, val users: Int)

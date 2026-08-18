@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.snackbar.Snackbar
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.ActivityEntry
@@ -60,6 +61,11 @@ class GroupsFragment : Fragment() {
                 }
                 showNewGroupDialog()
             }
+            view.findViewById<View>(R.id.btn_sort_groups).setOnClickListener { showSortGroupsDialog() }
+            view.findViewById<TextView>(R.id.groups_empty).setOnClickListener {
+                if (canManage) showNewGroupDialog()
+                else Toast.makeText(requireContext(), "لا تملك صلاحية إنشاء المجموعات", Toast.LENGTH_SHORT).show()
+            }
 
             if (!canManage) view.findViewById<View>(R.id.btn_add_group).visibility = View.GONE
 
@@ -87,17 +93,46 @@ class GroupsFragment : Fragment() {
         // أيقونة زر الإضافة سوداء داخل دائرة خضراء — لا نلوّنها ديناميكيًا
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::recycler.isInitialized) refresh()
+    }
+
     private fun showNewGroupDialog() {
         val ctx = requireContext()
-        // إنشاء المجموعة فورًا باسم مؤقت، ثم فتح حوار التسمية مباشرة
-        val g = Group(name = "")
-        AppRepository.addGroup(g)
-        val user = SessionStore.currentUser(ctx) ?: "?"
-        AppRepository.logActivity(ActivityEntry(user, getString(R.string.log_create_group, user, "مجموعة جديدة")))
-        refresh()
-
-        // فتح حوار إعادة تسمية فورًا لتسمية المجموعة الجديدة
-        renameGroupDialog(g)
+        val input = EditText(ctx).apply {
+            hint = "اسم المجموعة"
+            setTextColor(ThemeHelper.inputText(ctx))
+            setHintTextColor(ThemeHelper.inputHint(ctx))
+            setSingleLine(true)
+            setPadding(36, 20, 36, 20)
+        }
+        val dialog = MaterialAlertDialogBuilder(ctx)
+            .setTitle("مجموعة جديدة")
+            .setMessage("اكتب اسمًا واضحًا للمجموعة قبل إنشائها.")
+            .setView(input)
+            .setPositiveButton("إنشاء", null)
+            .setNegativeButton(R.string.cancel, null)
+            .setCancelable(false)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val name = input.text.toString().trim()
+                if (name.isBlank()) {
+                    input.error = "اكتب اسم المجموعة أولًا"
+                    return@setOnClickListener
+                }
+                AppRepository.addGroup(Group(name = name))
+                val user = SessionStore.currentUser(ctx) ?: "?"
+                AppRepository.logActivity(ActivityEntry(user, getString(R.string.log_create_group, user, name)))
+                dialog.dismiss()
+                refresh()
+                Toast.makeText(ctx, "تم إنشاء المجموعة", Toast.LENGTH_SHORT).show()
+            }
+            input.requestFocus()
+            dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        }
+        dialog.show()
     }
 
     private fun renameGroupDialog(g: Group) {
@@ -123,9 +158,9 @@ class GroupsFragment : Fragment() {
             .show()
     }
 
-    private fun refresh() {
+private fun refresh() {
         try {
-            val groups = AppRepository.groups()
+            val groups = sortedGroups(AppRepository.groups())
             val empty = requireView().findViewById<TextView>(R.id.groups_empty)
             if (groups.isEmpty()) {
                 empty?.visibility = View.VISIBLE
@@ -138,6 +173,36 @@ class GroupsFragment : Fragment() {
         } catch (e: Exception) {
             logAndToast(e, "قراءة المجموعات")
         }
+    }
+
+    /** تثبت المفضلة أولًا ثم تطبق أسلوب الترتيب الذي اختاره المستخدم. */
+    private fun sortedGroups(groups: List<Group>): List<Group> {
+        val pinned = AppRepository.favoriteGroupIds()
+        val mode = AppRepository.groupSortMode()
+        val lastActivity = if (mode == "recent") groups.associateWith { group ->
+            AppRepository.items(group.id).maxOfOrNull { it.createdAt } ?: group.createdAt
+        } else emptyMap()
+        val order = when (mode) {
+            "name" -> compareBy<Group> { it.name.trim() }
+            "created" -> compareByDescending<Group> { it.createdAt }
+            else -> compareByDescending<Group> { lastActivity[it] ?: it.createdAt }
+        }
+        return groups.sortedWith(compareByDescending<Group> { it.id in pinned }.then(order))
+    }
+
+    private fun showSortGroupsDialog() {
+        val modes = arrayOf("آخر نشاط", "الاسم", "تاريخ الإنشاء")
+        val values = arrayOf("recent", "name", "created")
+        val selected = values.indexOf(AppRepository.groupSortMode()).coerceAtLeast(0)
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("ترتيب المجموعات")
+            .setSingleChoiceItems(modes, selected) { dialog, which ->
+                AppRepository.setGroupSortMode(values[which])
+                dialog.dismiss()
+                refresh()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     private fun logAndToast(e: Exception, tag: String) {
@@ -158,6 +223,7 @@ class GroupsFragment : Fragment() {
             val name: TextView = view.findViewById(R.id.group_name)
             val date: TextView = view.findViewById(R.id.group_date)
             val icon: ImageView = view.findViewById(R.id.group_icon)
+            val pin: ImageView = view.findViewById(R.id.group_pin)
             val more: ImageView = view.findViewById(R.id.group_more)
         }
 
@@ -197,6 +263,8 @@ class GroupsFragment : Fragment() {
             holder.date.typeface = ctx.resources.getFont(R.font.tajawal_medium)
             holder.icon.setColorFilter(android.graphics.Color.WHITE)
             holder.more.setColorFilter(textSec)
+            holder.pin.visibility = if (g.id in AppRepository.favoriteGroupIds()) View.VISIBLE else View.GONE
+            holder.pin.setColorFilter(ThemeHelper.accent(ctx))
 
             // النقر على البطاقة (أو الاسم) يفتح المجموعة
             holder.itemView.setOnClickListener {
@@ -209,11 +277,20 @@ class GroupsFragment : Fragment() {
                     Toast.makeText(ctx, "لا تملك صلاحية", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
+                val isPinned = g.id in AppRepository.favoriteGroupIds()
+                val actions = arrayOf(if (isPinned) "إلغاء التثبيت" else "تثبيت أعلى القائمة", "إعادة تسمية", "حذف")
                 MaterialAlertDialogBuilder(ctx)
-                    .setItems(arrayOf("إعادة تسمية", "حذف")) { _, which ->
+                    .setItems(actions) { _, which ->
                         when (which) {
-                            0 -> renameGroupDialog(g)
-                            1 -> confirmDelete(g)
+                            0 -> {
+                                val pinned = AppRepository.favoriteGroupIds().toMutableSet()
+                                if (isPinned) pinned.remove(g.id) else pinned.add(g.id)
+                                AppRepository.setFavoriteGroupIds(pinned)
+                                refresh()
+                                Toast.makeText(ctx, if (isPinned) "تم إلغاء تثبيت المجموعة" else "تم تثبيت المجموعة", Toast.LENGTH_SHORT).show()
+                            }
+                            1 -> renameGroupDialog(g)
+                            2 -> confirmDelete(g)
                         }
                     }
                     .show()
@@ -227,11 +304,25 @@ class GroupsFragment : Fragment() {
                 .setTitle(R.string.confirm_delete)
                 .setMessage(R.string.delete_confirm_msg)
                 .setPositiveButton(R.string.delete) { _, _ ->
-                    AppRepository.removeGroup(g.id)
+                    val removed = AppRepository.removeGroupForUndo(g.id) ?: return@setPositiveButton
                     val user = SessionStore.currentUser(requireContext()) ?: "?"
                     AppRepository.logActivity(ActivityEntry(user, getString(R.string.log_delete)))
-                    Toast.makeText(requireContext(), R.string.success, Toast.LENGTH_SHORT).show()
                     refresh()
+                    var restored = false
+                    Snackbar.make(requireView(), "تم حذف مجموعة ${g.name}", Snackbar.LENGTH_LONG)
+                        .setAction("تراجع") {
+                            restored = true
+                            AppRepository.restoreGroup(removed)
+                            AppRepository.logActivity(ActivityEntry(user, "تراجع عن حذف المجموعة ${g.name}"))
+                            refresh()
+                            Toast.makeText(requireContext(), "تمت استعادة المجموعة", Toast.LENGTH_SHORT).show()
+                        }
+                        .addCallback(object : Snackbar.Callback() {
+                            override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
+                                if (!restored) AppRepository.finalizeRemovedGroup(removed.id)
+                            }
+                        })
+                        .show()
                 }
                 .setNegativeButton(R.string.cancel, null)
                 .show()

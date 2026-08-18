@@ -6,20 +6,24 @@
     android:layout_marginStart="20dp"
     android:layout_marginEnd="20dp"
     android:layout_marginBottom="10dp"
-    app:cardCornerRadius="24dp"
-    app:cardElevation="4dp"
+    app:cardCornerRadius="20dp"
+    app:cardElevation="2dp"
     app:strokeWidth="1dp"
     app:strokeColor="@color/day_card_stroke">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:minHeight="98dp"
         android:gravity="center_vertical"
-        android:padding="14dp">
+        android:paddingStart="16dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="14dp">
 
         <FrameLayout
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="@drawable/group_icon_bg">
             <ImageView
                 android:layout_width="26dp"
@@ -48,8 +52,9 @@
                     android:id="@+id/member_name"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="15sp"
+                    android:textSize="17sp"
                     android:textStyle="bold"
+                    android:includeFontPadding="false"
                     android:fontFamily="@font/tajawal_bold" />
 
                 <TextView
@@ -58,8 +63,9 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="10dp"
                     android:text="نشط"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:textStyle="bold"
+                    android:includeFontPadding="false"
                     android:textColor="@color/accent" />
             </LinearLayout>
 
@@ -68,8 +74,9 @@
                     android:id="@+id/member_role"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
+                    android:layout_marginTop="6dp"
                     android:textSize="12sp"
+                    android:includeFontPadding="false"
                     android:fontFamily="@font/tajawal_medium"
                     android:paddingStart="10dp"
                     android:paddingEnd="10dp"
@@ -83,7 +90,7 @@
                 android:id="@+id/row_password"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
+                android:layout_marginTop="8dp"
                 android:gravity="center_vertical"
                 android:background="?attr/selectableItemBackground"
                 android:orientation="horizontal">
@@ -93,7 +100,8 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:textSize="13sp"
+                    android:textSize="12sp"
+                    android:includeFontPadding="false"
                     android:fontFamily="@font/tajawal_regular"
                     android:maxLines="1" />
 

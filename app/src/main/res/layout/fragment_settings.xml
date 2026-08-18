@@ -1,4 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -9,31 +8,37 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp">
+        android:paddingStart="18dp"
+        android:paddingTop="20dp"
+        android:paddingEnd="18dp"
+        android:paddingBottom="20dp">
 
         <TextView
             android:id="@+id/tv_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/settings"
-            android:textSize="26sp"
-            android:textStyle="bold" />
+            android:textSize="28sp"
+            android:includeFontPadding="false"
+            android:fontFamily="@font/tajawal_bold" />
 
         <LinearLayout
             android:id="@+id/item_theme"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:minHeight="68dp"
             android:layout_marginTop="20dp"
             android:background="@drawable/card_surface_settings"
             android:gravity="center_vertical"
-            android:padding="18dp">
-
+            android:paddingStart="18dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="14dp">
             <ImageView
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_sun"
                 android:contentDescription="@string/settings" />
-
             <TextView
                 android:id="@+id/tv_theme_title"
                 android:layout_width="0dp"
@@ -41,8 +46,8 @@
                 android:layout_weight="1"
                 android:layout_marginStart="16dp"
                 android:textSize="16sp"
-                android:textStyle="bold" />
-
+                android:includeFontPadding="false"
+                android:fontFamily="@font/tajawal_bold" />
             <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -55,17 +60,19 @@
             android:id="@+id/item_accounts"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:minHeight="68dp"
             android:layout_marginTop="10dp"
             android:background="@drawable/card_surface_settings"
             android:gravity="center_vertical"
-            android:padding="18dp">
-
+            android:paddingStart="18dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="14dp">
             <ImageView
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_people"
                 android:contentDescription="@string/settings" />
-
             <TextView
                 android:id="@+id/tv_accounts_title"
                 android:layout_width="0dp"
@@ -73,8 +80,8 @@
                 android:layout_weight="1"
                 android:layout_marginStart="16dp"
                 android:textSize="16sp"
-                android:textStyle="bold" />
-
+                android:includeFontPadding="false"
+                android:fontFamily="@font/tajawal_bold" />
             <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -83,23 +90,24 @@
                 android:contentDescription="@string/settings" />
         </LinearLayout>
 
-        <!-- تم حذف خيار تغيير كلمة المرور نهائيًا بأمر المستخدم -->
         <LinearLayout
             android:id="@+id/item_password"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:minHeight="68dp"
             android:visibility="gone"
             android:layout_marginTop="10dp"
             android:background="@drawable/card_surface_settings"
             android:gravity="center_vertical"
-            android:padding="18dp">
-
+            android:paddingStart="18dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="14dp">
             <ImageView
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_key"
                 android:contentDescription="@string/settings" />
-
             <TextView
                 android:id="@+id/tv_password_title"
                 android:layout_width="0dp"
@@ -107,8 +115,8 @@
                 android:layout_weight="1"
                 android:layout_marginStart="16dp"
                 android:textSize="16sp"
-                android:textStyle="bold" />
-
+                android:includeFontPadding="false"
+                android:fontFamily="@font/tajawal_bold" />
             <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -121,17 +129,19 @@
             android:id="@+id/item_activity"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:minHeight="68dp"
             android:layout_marginTop="10dp"
             android:background="@drawable/card_surface_settings"
             android:gravity="center_vertical"
-            android:padding="18dp">
-
+            android:paddingStart="18dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="14dp">
             <ImageView
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_history"
                 android:contentDescription="@string/settings" />
-
             <TextView
                 android:id="@+id/tv_activity_title"
                 android:layout_width="0dp"
@@ -139,8 +149,8 @@
                 android:layout_weight="1"
                 android:layout_marginStart="16dp"
                 android:textSize="16sp"
-                android:textStyle="bold" />
-
+                android:includeFontPadding="false"
+                android:fontFamily="@font/tajawal_bold" />
             <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -153,17 +163,19 @@
             android:id="@+id/item_export"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:minHeight="68dp"
             android:layout_marginTop="10dp"
             android:background="@drawable/card_surface_settings"
             android:gravity="center_vertical"
-            android:padding="18dp">
-
+            android:paddingStart="18dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="14dp">
             <ImageView
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_export"
                 android:contentDescription="@string/settings" />
-
             <TextView
                 android:id="@+id/tv_export_title"
                 android:layout_width="0dp"
@@ -171,8 +183,8 @@
                 android:layout_weight="1"
                 android:layout_marginStart="16dp"
                 android:textSize="16sp"
-                android:textStyle="bold" />
-
+                android:includeFontPadding="false"
+                android:fontFamily="@font/tajawal_bold" />
             <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -185,17 +197,19 @@
             android:id="@+id/item_import"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:minHeight="68dp"
             android:layout_marginTop="10dp"
             android:background="@drawable/card_surface_settings"
             android:gravity="center_vertical"
-            android:padding="18dp">
-
+            android:paddingStart="18dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="14dp">
             <ImageView
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_import"
                 android:contentDescription="@string/settings" />
-
             <TextView
                 android:id="@+id/tv_import_title"
                 android:layout_width="0dp"
@@ -203,8 +217,8 @@
                 android:layout_weight="1"
                 android:layout_marginStart="16dp"
                 android:textSize="16sp"
-                android:textStyle="bold" />
-
+                android:includeFontPadding="false"
+                android:fontFamily="@font/tajawal_bold" />
             <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -217,17 +231,19 @@
             android:id="@+id/item_sync"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:minHeight="68dp"
             android:layout_marginTop="10dp"
             android:background="@drawable/card_surface_settings"
             android:gravity="center_vertical"
-            android:padding="18dp">
-
+            android:paddingStart="18dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="14dp">
             <ImageView
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_sync"
                 android:contentDescription="@string/local_sync" />
-
             <TextView
                 android:id="@+id/tv_sync_title"
                 android:layout_width="0dp"
@@ -235,8 +251,8 @@
                 android:layout_weight="1"
                 android:layout_marginStart="16dp"
                 android:textSize="16sp"
-                android:textStyle="bold" />
-
+                android:includeFontPadding="false"
+                android:fontFamily="@font/tajawal_bold" />
             <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -249,17 +265,19 @@
             android:id="@+id/item_logout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:minHeight="68dp"
             android:layout_marginTop="10dp"
             android:background="@drawable/card_surface_settings"
             android:gravity="center_vertical"
-            android:padding="18dp">
-
+            android:paddingStart="18dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="14dp">
             <ImageView
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_logout"
                 android:contentDescription="@string/settings" />
-
             <TextView
                 android:id="@+id/tv_logout_title"
                 android:layout_width="0dp"
@@ -267,8 +285,8 @@
                 android:layout_weight="1"
                 android:layout_marginStart="16dp"
                 android:textSize="16sp"
-                android:textStyle="bold" />
-
+                android:includeFontPadding="false"
+                android:fontFamily="@font/tajawal_bold" />
             <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -284,7 +302,9 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="36dp"
             android:text="الإصدار 1.0.0"
-            android:textSize="13sp" />
+            android:textSize="13sp"
+            android:includeFontPadding="false"
+            android:fontFamily="@font/tajawal_regular" />
 
     </LinearLayout>
 </ScrollView>

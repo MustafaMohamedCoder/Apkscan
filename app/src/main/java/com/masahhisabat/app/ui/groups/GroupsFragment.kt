@@ -181,12 +181,17 @@ class GroupsFragment : Fragment() {
             val text = ThemeHelper.text(ctx)
             val textSec = ThemeHelper.textSecondary(ctx)
             holder.card.setCardBackgroundColor(surface)
+            holder.card.strokeColor = ThemeHelper.cardStroke(ctx)
+            holder.card.strokeWidth = 1
             holder.name.text = g.name
             holder.name.setTextColor(text)
+            holder.name.typeface = ctx.resources.getFont(R.font.tajawal_bold)
             val fmt = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
             holder.date.text = fmt.format(java.util.Date(g.createdAt))
             holder.date.setTextColor(textSec)
-            holder.icon.setColorFilter(ThemeHelper.text(ctx))
+            holder.date.typeface = ctx.resources.getFont(R.font.tajawal_medium)
+            holder.icon.setColorFilter(android.graphics.Color.WHITE)
+            holder.more.setColorFilter(textSec)
 
             // النقر على البطاقة (أو الاسم) يفتح المجموعة
             holder.itemView.setOnClickListener {

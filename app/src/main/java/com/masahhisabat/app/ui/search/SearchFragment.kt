@@ -201,19 +201,20 @@ class SearchFragment : Fragment() {
         val card = MaterialCardView(ctx).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = 10 }
-            radius = 18f
-            cardElevation = 3f
+            ).apply { bottomMargin = 12 }
+            radius = 20f
+            cardElevation = 2f
             strokeColor = ThemeHelper.cardStroke(ctx)
+            strokeWidth = 1
             setCardBackgroundColor(ThemeHelper.surface(ctx))
         }
         val row = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
-            setPadding(16, 14, 16, 14)
+            setPadding(18, 16, 18, 16)
         }
         val icon = ImageView(ctx).apply {
-            layoutParams = LinearLayout.LayoutParams(72, 72)
+            layoutParams = LinearLayout.LayoutParams(56, 56)
             setImageResource(if (item.type == "text") R.drawable.ic_text else R.drawable.ic_invoice)
             if (item.type == "text") setColorFilter(ThemeHelper.accent(ctx))
         }
@@ -229,20 +230,24 @@ class SearchFragment : Fragment() {
         val info = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                .apply { marginStart = 14 }
+                .apply { marginStart = 16 }
         }
         val name = TextView(ctx).apply {
             text = item.storeName ?: item.text ?: "—"
-            textSize = 15f
+            textSize = 16f
             setTextColor(ThemeHelper.text(ctx))
+            typeface = ctx.resources.getFont(R.font.tajawal_bold)
+            includeFontPadding = false
             isSingleLine = true
         }
         val details = TextView(ctx).apply {
             text = listOfNotNull(item.date, item.total?.let { "$it ${item.currency ?: ""}".trim() })
                 .joinToString(" · ")
                 .ifBlank { groupName }
-            textSize = 12f
+            textSize = 13f
             setTextColor(ThemeHelper.textSecondary(ctx))
+            typeface = ctx.resources.getFont(R.font.tajawal_regular)
+            includeFontPadding = false
         }
         info.addView(name)
         info.addView(details)

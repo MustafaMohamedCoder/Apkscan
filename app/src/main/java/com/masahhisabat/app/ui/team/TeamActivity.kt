@@ -125,6 +125,8 @@ class TeamActivity : AppCompatActivity() {
             val ctx = holder.itemView.context
             val card = holder.itemView as MaterialCardView
             card.setCardBackgroundColor(ThemeHelper.surface(ctx))
+            card.strokeColor = ThemeHelper.cardStroke(ctx)
+            card.strokeWidth = 1
             val text = ThemeHelper.text(ctx)
             val textSec = ThemeHelper.textSecondary(ctx)
 
@@ -162,6 +164,7 @@ class TeamActivity : AppCompatActivity() {
                 if (decoded != null) {
                     passwordHidden = !passwordHidden
                     passwordText.text = if (passwordHidden) "$hiddenMarker (اضغط العين للإظهار)" else "كلمة المرور: $decoded"
+                    passwordText.setTextColor(if (passwordHidden) textSec else text)
                 }
             }
 

@@ -6,23 +6,27 @@
     android:layout_height="wrap_content"
     android:layout_marginStart="20dp"
     android:layout_marginEnd="20dp"
-    android:layout_marginBottom="12dp"
-    app:cardCornerRadius="24dp"
-    app:cardElevation="4dp"
+    android:layout_marginBottom="10dp"
+    app:cardCornerRadius="20dp"
+    app:cardElevation="2dp"
     app:strokeWidth="1dp"
     app:strokeColor="@color/day_card_stroke">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:minHeight="84dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="18dp">
+        android:paddingStart="16dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="14dp">
 
         <!-- أيقونة المجلد داخل دائرة بتدرج Teal -->
         <FrameLayout
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
             android:background="@drawable/group_icon_bg"
             android:layout_gravity="center_vertical">
             <ImageView
@@ -46,25 +50,27 @@
                 android:id="@+id/group_name"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="17sp"
+                android:textSize="18sp"
                 android:singleLine="true"
+                android:includeFontPadding="false"
                 android:fontFamily="@font/tajawal_bold" />
 
             <TextView
                 android:id="@+id/group_date"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
-                android:textSize="12sp"
+                android:layout_marginTop="4dp"
+                android:textSize="13sp"
+                android:includeFontPadding="false"
                 android:fontFamily="@font/tajawal_medium"
                 android:textColor="@color/day_text_secondary" />
         </LinearLayout>
 
         <ImageView
             android:id="@+id/group_more"
-            android:layout_width="42dp"
-            android:layout_height="42dp"
-            android:padding="9dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:padding="10dp"
             android:src="@drawable/ic_more"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/edit" />

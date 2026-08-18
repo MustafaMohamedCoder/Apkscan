@@ -151,48 +151,50 @@ class GroupActivity : AppCompatActivity() {
             isSending = true
             btnSend.isEnabled = false
             btnSend.alpha = 0.55f
-            try {
-                if (textAttachment != null) {
-                    // صورة (+ نص اختياري) في بطاقة واحدة — نُنسخها أولًا إلى المجلد الدائم
-                    // الخارجي حتى لا تُفقد عند حذف التطبيق وإعادة التثبيت.
-                    val permanentPath = AppRepository.persistAppImage(textAttachment)
-                    if (permanentPath == null) {
-                        Toast.makeText(
-                            ctx,
-                            "تعذر حفظ الصورة بشكل دائم. فعّل إذن الوصول إلى الملفات ثم أعد المحاولة.",
-                            Toast.LENGTH_LONG
-                        ).show()
-                        return@setOnClickListener
+            // النسخ إلى Documents والكتابة إلى JSON عمليتان قد تكونان بطيئتين؛ تنفذان بعيدًا عن الواجهة.
+            Thread {
+                val error = try {
+                    if (textAttachment != null) {
+                        val permanentPath = AppRepository.persistAppImage(textAttachment)
+                            ?: throw IllegalStateException("تعذر حفظ الصورة بشكل دائم. فعّل إذن الوصول إلى الملفات ثم أعد المحاولة.")
+                        AppRepository.addItem(groupId, InvoiceItem(
+                            type = "image",
+                            imagePath = permanentPath,
+                            processedPath = null,
+                            text = text.ifBlank { null }
+                        ))
+                        val user = SessionStore.currentUser(ctx) ?: "?"
+                        AppRepository.logActivity(ActivityEntry(user, "أضاف $user صورة${if (text.isNotBlank()) " ونصًا" else ""} في $groupName"))
+                    } else {
+                        AppRepository.addItem(groupId, InvoiceItem(type = "text", text = text))
+                        val user = SessionStore.currentUser(ctx) ?: "?"
+                        AppRepository.logActivity(ActivityEntry(user, "أضاف $user نصًا يدويًا في $groupName"))
                     }
-                    val item = InvoiceItem(
-                        type = "image",
-                        imagePath = permanentPath,
-                        processedPath = null,
-                        text = text.ifBlank { null }
-                    )
-                    AppRepository.addItem(groupId, item)
-                    val user = SessionStore.currentUser(ctx) ?: "?"
-                    AppRepository.logActivity(ActivityEntry(user, "أضاف $user صورة${if (text.isNotBlank()) " ونصًا" else ""} في $groupName"))
-                    pendingAttach = null
-                    Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
-                } else {
-                    AppRepository.addItem(groupId, InvoiceItem(type = "text", text = text))
-                    val user = SessionStore.currentUser(ctx) ?: "?"
-                    AppRepository.logActivity(ActivityEntry(user, "أضاف $user نصًا يدويًا في $groupName"))
-                    Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
+                    null
+                } catch (e: Exception) {
+                    e.message ?: "تعذر حفظ الرسالة. أعد المحاولة."
                 }
-                etMessage.setText("")
-                draftHandler.removeCallbacks(saveDraftTask)
-                AppRepository.clearMessageDraft(groupId)
-                hideSoftKeyboard(etMessage)
-                refresh()
-            } catch (_: Exception) {
-                Toast.makeText(ctx, "تعذر حفظ الرسالة. أعد المحاولة.", Toast.LENGTH_LONG).show()
-            } finally {
-                isSending = false
-                btnSend.isEnabled = true
-                btnSend.alpha = 1f
-            }
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    isSending = false
+                    btnSend.isEnabled = true
+                    btnSend.alpha = 1f
+                    if (error == null) {
+                        textAttachment?.let { path ->
+                            if (pendingAttach == path) pendingAttach = null
+                            File(path).delete()
+                        }
+                        etMessage.setText("")
+                        draftHandler.removeCallbacks(saveDraftTask)
+                        AppRepository.clearMessageDraft(groupId)
+                        hideSoftKeyboard(etMessage)
+                        refresh()
+                        Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(ctx, error, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }.apply { name = "group-message-save"; start() }
         }
 
         // إرسال بالضغط على زر الإرسال في لوحة المفاتيح
@@ -260,14 +262,15 @@ class GroupActivity : AppCompatActivity() {
             val input = contentResolver.openInputStream(uri) ?: return null
             input.use { stream -> rawFile.outputStream().use { output -> stream.copyTo(output) } }
             // فك الصورة بحجم محدود في الخلفية قبل ضغطها، لتجنب ضغط الذاكرة مع صور الكاميرا الكبيرة.
-            val decodedBitmap = ImageProcessor.loadBitmap(rawFile.absolutePath, 1920)
+            val decodedBitmap = ImageProcessor.loadBitmap(rawFile.absolutePath, ImageProcessor.ATTACHMENT_MAX_DIM)
             bitmap = decodedBitmap
-            val compressedFile = File(cacheDir, "attach_${System.currentTimeMillis()}.jpg")
+            val compressedFile = ImageProcessor.saveTo(
+                decodedBitmap,
+                cacheDir,
+                "attach",
+                quality = ImageProcessor.ATTACHMENT_JPEG_QUALITY
+            )
             compressed = compressedFile
-            val compressedSuccessfully = compressedFile.outputStream().use {
-                decodedBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 86, it)
-            }
-            if (!compressedSuccessfully) return null
             complete = true
             compressedFile.absolutePath
         } catch (_: Exception) {
@@ -281,12 +284,20 @@ class GroupActivity : AppCompatActivity() {
 
     /** معاينة صريحة تعطي المستخدم فرصة للإلغاء أو كتابة وصف قبل الإرسال. */
     private fun showAttachmentPreview(path: String) {
+        val previewBitmap = try {
+            ImageProcessor.loadBitmap(path, 1200)
+        } catch (_: Exception) {
+            File(path).delete()
+            pendingAttach = null
+            Toast.makeText(this, "تعذر تجهيز معاينة الصورة", Toast.LENGTH_SHORT).show()
+            return
+        }
         val preview = ImageView(this).apply {
-            setImageBitmap(ImageProcessor.loadBitmap(path, 1200))
+            setImageBitmap(previewBitmap)
             adjustViewBounds = true
             setPadding(28, 16, 28, 0)
         }
-        MaterialAlertDialogBuilder(this)
+        val dialog = MaterialAlertDialogBuilder(this)
             .setTitle("معاينة الصورة")
             .setMessage("يمكنك إرسالها الآن أو إضافة نص معها في نفس الرسالة.")
             .setView(preview)
@@ -299,7 +310,12 @@ class GroupActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("إلغاء") { _, _ -> pendingAttach = null; File(path).delete() }
-            .show()
+            .create()
+        dialog.setOnDismissListener {
+            preview.setImageDrawable(null)
+            if (!previewBitmap.isRecycled) previewBitmap.recycle()
+        }
+        dialog.show()
     }
 
     private fun showSoftKeyboard(view: android.view.View) {

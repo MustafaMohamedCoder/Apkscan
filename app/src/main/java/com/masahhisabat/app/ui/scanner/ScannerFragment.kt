@@ -52,9 +52,16 @@ class ScannerFragment : Fragment() {
         ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null && isAdded) {
-            val copied = copyToInternal(uri)
-            if (copied != null) showPostScanOptions(copied)
-            else Toast.makeText(requireContext(), "تعذر قراءة الصورة", Toast.LENGTH_SHORT).show()
+            // نسخ ملف المعرض قد يكون كبيرًا؛ لا نسمح له بحجب واجهة الماسح.
+            val ctx = requireContext().applicationContext
+            Thread {
+                val copied = copyToInternal(ctx, uri)
+                activity?.runOnUiThread {
+                    if (!isAdded) return@runOnUiThread
+                    if (copied != null) showPostScanOptions(copied)
+                    else Toast.makeText(requireContext(), "تعذر قراءة الصورة", Toast.LENGTH_SHORT).show()
+                }
+            }.apply { name = "scanner-gallery-copy"; start() }
         }
     }
 
@@ -108,10 +115,10 @@ class ScannerFragment : Fragment() {
         cameraLauncher.launch(uri)
     }
 
-    private fun copyToInternal(uri: Uri): String? {
-        val file = File(requireContext().cacheDir, "gallery_${System.currentTimeMillis()}.jpg")
+    private fun copyToInternal(context: Context, uri: Uri): String? {
+        val file = File(context.cacheDir, "gallery_${System.currentTimeMillis()}.jpg")
         return try {
-            val input = requireContext().contentResolver.openInputStream(uri) ?: return null
+            val input = context.contentResolver.openInputStream(uri) ?: return null
             input.use {
                 val inputStream = it
                 file.outputStream().use { output -> inputStream.copyTo(output) }
@@ -164,43 +171,48 @@ class ScannerFragment : Fragment() {
 
     private fun saveToGallery(path: String) {
         val ctx = requireContext()
-        val bmp = BitmapFactory.decodeFile(path)
-        if (bmp == null) {
-            Toast.makeText(ctx, "تعذر قراءة الصورة", Toast.LENGTH_SHORT).show()
-            return
-        }
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val resolver = ctx.contentResolver
-                val values = android.content.ContentValues().apply {
-                    put(MediaStore.Images.Media.DISPLAY_NAME, "masah_${System.currentTimeMillis()}.jpg")
-                    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                    put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/MasahHisabat")
-                }
-                val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-                    ?: throw IllegalStateException("تعذر إنشاء ملف الصورة")
-                resolver.openOutputStream(uri)?.use { out ->
-                    if (!bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, out)) {
-                        throw IllegalStateException("تعذر ضغط الصورة")
+        Thread {
+            var bmp: android.graphics.Bitmap? = null
+            val error = try {
+                bmp = ImageProcessor.loadBitmap(path, 2048)
+                val image = requireNotNull(bmp) { "تعذر قراءة الصورة" }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val resolver = ctx.contentResolver
+                    val values = android.content.ContentValues().apply {
+                        put(MediaStore.Images.Media.DISPLAY_NAME, "masah_${System.currentTimeMillis()}.jpg")
+                        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                        put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/MasahHisabat")
                     }
-                } ?: throw IllegalStateException("تعذر فتح ملف الصورة")
-            } else {
-                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "MasahHisabat")
-                dir.mkdirs()
-                val file = File(dir, "masah_${System.currentTimeMillis()}.jpg")
-                file.outputStream().use {
-                    if (!bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, it)) {
-                        throw IllegalStateException("تعذر ضغط الصورة")
+                    val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                        ?: throw IllegalStateException("تعذر إنشاء ملف الصورة")
+                    resolver.openOutputStream(uri)?.use { out ->
+                        if (!image.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, out)) {
+                            throw IllegalStateException("تعذر ضغط الصورة")
+                        }
+                    } ?: throw IllegalStateException("تعذر فتح ملف الصورة")
+                } else {
+                    val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "MasahHisabat")
+                    dir.mkdirs()
+                    val file = File(dir, "masah_${System.currentTimeMillis()}.jpg")
+                    file.outputStream().use {
+                        if (!image.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it)) {
+                            throw IllegalStateException("تعذر ضغط الصورة")
+                        }
                     }
+                    ctx.sendBroadcast(Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE).apply { data = Uri.fromFile(file) })
                 }
-                ctx.sendBroadcast(Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE).apply { data = Uri.fromFile(file) })
+                null
+            } catch (e: Exception) {
+                e.message ?: "تعذر حفظ الصورة"
+            } finally {
+                bmp?.takeIf { !it.isRecycled }?.recycle()
             }
-            Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Toast.makeText(ctx, "فشل الحفظ: ${e.message}", Toast.LENGTH_SHORT).show()
-        } finally {
-            bmp.recycle()
-        }
+            activity?.runOnUiThread {
+                if (!isAdded) return@runOnUiThread
+                if (error == null) Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
+                else Toast.makeText(ctx, "فشل الحفظ: $error", Toast.LENGTH_SHORT).show()
+            }
+        }.apply { name = "scanner-gallery-save"; start() }
     }
 
     private fun shareImage(path: String) {

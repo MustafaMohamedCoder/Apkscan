@@ -21,6 +21,10 @@ enum class ProcessMode(val key: String, val label: String) {
  */
 object ImageProcessor {
 
+    /** إعداد متوازن لمرفقات المحادثات: حجم أقل مع وضوح كافٍ للمستندات والصور. */
+    const val ATTACHMENT_MAX_DIM = 1280
+    const val ATTACHMENT_JPEG_QUALITY = 78
+
     interface Callback {
         fun onDone(bitmap: Bitmap)
         fun onError()
@@ -169,12 +173,31 @@ object ImageProcessor {
         return Bitmap.createBitmap(src, l, t, r - l, b - t)
     }
 
-    /** الحفظ كملف JPEG */
-    fun saveTo(bitmap: Bitmap, dir: File, prefix: String): File {
+    /**
+     * الحفظ كملف JPEG. يظل مالك الـ Bitmap مسؤولاً عنه افتراضيًا؛ يمكن للمهام
+     * الخلفية التي انتهت منه تمامًا اختيار تحريره فورًا لتقليل ضغط الذاكرة.
+     */
+    fun saveTo(
+        bitmap: Bitmap,
+        dir: File,
+        prefix: String,
+        quality: Int = ATTACHMENT_JPEG_QUALITY,
+        recycleAfterSave: Boolean = false
+    ): File {
         dir.mkdirs()
         val file = File(dir, "${prefix}_${System.currentTimeMillis()}.jpg")
-        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
-        return file
+        try {
+            val saved = file.outputStream().use {
+                bitmap.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(1, 100), it)
+            }
+            if (!saved || file.length() <= 0L) {
+                file.delete()
+                throw IllegalStateException("تعذر حفظ الصورة")
+            }
+            return file
+        } finally {
+            if (recycleAfterSave && !bitmap.isRecycled) bitmap.recycle()
+        }
     }
 
     /** كشف الحواف التلقائي البسيط: عتبة أوتسو على التدرج الرمادي لإيجاد أكبر مستطيل داكن */
@@ -185,35 +208,38 @@ object ImageProcessor {
         val sw = w.coerceAtMost(320)
         val sh = (h * sw / w).coerceAtMost(320)
         val small = Bitmap.createScaledBitmap(src, sw, sh, false)
-        val pixels = IntArray(sw * sh)
-        small.getPixels(pixels, 0, sw, 0, 0, sw, sh)
-        val gray = FloatArray(sw * sh)
-        var sum = 0f
-        for (i in pixels.indices) {
-            val px = pixels[i]
-            val g = 0.299f * ((px shr 16) and 255) + 0.587f * (((px shr 8) and 255)) + 0.114f * (px and 255)
-            gray[i] = g
-            sum += g
+        try {
+            val pixels = IntArray(sw * sh)
+            small.getPixels(pixels, 0, sw, 0, 0, sw, sh)
+            val gray = FloatArray(sw * sh)
+            var sum = 0f
+            for (i in pixels.indices) {
+                val px = pixels[i]
+                val g = 0.299f * ((px shr 16) and 255) + 0.587f * (((px shr 8) and 255)) + 0.114f * (px and 255)
+                gray[i] = g
+                sum += g
+            }
+            val mean = sum / (sw * sh)
+            val threshold = mean.coerceIn(60f, 200f)
+            // حدود المستند: أول/آخر صف وعمود فيه نسبة عالية من "الورق"
+            fun isPaper(v: Float) = v > threshold
+            val paperRatioTh = 0.65f
+            var count = 0
+            for (x in 0 until sw) {
+                var paper = 0
+                for (y in 0 until sh) if (isPaper(gray[y * sw + x])) paper++
+                if (paper.toFloat() / sh > paperRatioTh) count++
+            }
+            val colPaper = count.toFloat() / sw
+            return if (colPaper > 0.85f) {
+                // المستند يغطي أغلب الصورة
+                RectF(0.04f, 0.04f, 0.96f, 0.96f)
+            } else {
+                RectF(0.02f, 0.02f, 0.98f, 0.98f)
+            }
+        } finally {
+            if (!small.isRecycled) small.recycle()
         }
-        val mean = sum / (sw * sh)
-        val threshold = mean.coerceIn(60f, 200f)
-        // حدود المستند: أول/آخر صف وعمود فيه نسبة عالية من "الورق"
-        fun isPaper(v: Float) = v > threshold
-        var top = 0f; var bottom = sh.toFloat()
-        var left = 0f; var right = sw.toFloat()
-        val paperRatioTh = 0.65f
-        var count = 0
-        for (x in 0 until sw) {
-            var paper = 0
-            for (y in 0 until sh) if (isPaper(gray[y * sw + x])) paper++
-            if (paper.toFloat() / sh > paperRatioTh) count++
-        }
-        val colPaper = count.toFloat() / sw
-        if (colPaper > 0.85f) {
-            // المستند يغطي أغلب الصورة
-            return RectF(0.04f, 0.04f, 0.96f, 0.96f)
-        }
-        return RectF(0.02f, 0.02f, 0.98f, 0.98f)
     }
 
     data class RectF(val left: Float, val top: Float, val right: Float, val bottom: Float)

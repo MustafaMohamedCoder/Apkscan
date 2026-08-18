@@ -80,7 +80,11 @@ class CropEditActivity : AppCompatActivity() {
         cropView.setCropRect(edges.left, edges.top, edges.right, edges.bottom)
 
         findViewById<MaterialButton>(R.id.btn_rotate).setOnClickListener {
-            val rotated = ImageProcessor.rotateBitmap(cropView.getCroppedBitmap(), -90)
+            val croppedForRotation = cropView.getCroppedBitmap()
+            val rotated = ImageProcessor.rotateBitmap(croppedForRotation, -90)
+            if (rotated !== croppedForRotation && !croppedForRotation.isRecycled) croppedForRotation.recycle()
+            if (!originalBmp.isRecycled) originalBmp.recycle()
+            processedBmp?.takeIf { !it.isRecycled }?.recycle()
             cropView.setBitmap(rotated)
             originalBmp = rotated
             processedBmp = null
@@ -113,6 +117,14 @@ class CropEditActivity : AppCompatActivity() {
         findViewById<ImageView>(R.id.btn_back).setOnClickListener { finish() }
     }
 
+    override fun onDestroy() {
+        if (::cropView.isInitialized) cropView.clearBitmap()
+        if (::originalBmp.isInitialized && !originalBmp.isRecycled) originalBmp.recycle()
+        processedBmp?.takeIf { it !== originalBmp && !it.isRecycled }?.recycle()
+        processedBmp = null
+        super.onDestroy()
+    }
+
     private fun applyTheme() {
         window.decorView.setBackgroundColor(ThemeHelper.bg(this))
         findViewById<View>(R.id.crop_root).setBackgroundColor(Color.BLACK)
@@ -128,6 +140,7 @@ class CropEditActivity : AppCompatActivity() {
             override fun onDone(bitmap: android.graphics.Bitmap) {
                 processing = false
                 loading.visibility = View.GONE
+                if (bitmap !== cropped && !cropped.isRecycled) cropped.recycle()
                 processedBmp = bitmap
                 AppRepository.setLastProcessMode(lastMode.key)
                 showSuccessAndContinue(bitmap)
@@ -256,6 +269,7 @@ class CropEditActivity : AppCompatActivity() {
         private var lastTouchY = 0f
 
         fun setBitmap(bmp: android.graphics.Bitmap) { bitmap = bmp; invalidate() }
+        fun clearBitmap() { bitmap = null; invalidate() }
         fun toggleGrid() { showGrid = !showGrid; invalidate() }
 
         fun setCropRect(l: Float, t: Float, r: Float, b: Float) {

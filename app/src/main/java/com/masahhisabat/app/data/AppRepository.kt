@@ -2,6 +2,7 @@ package com.masahhisabat.app.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.AtomicFile
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
@@ -258,12 +259,35 @@ object AppRepository {
         return try {
             // لا نعيد مسارًا داخليًا على أنه دائم: الصور الداخلية تُحذف عند إزالة التطبيق.
             if (!isUsingExternalStorage()) return null
-            val src = java.io.File(sourcePath)
-            if (!src.exists()) return null
+            val src = java.io.File(sourcePath).canonicalFile
+            if (!src.isFile || src.length() <= 0L) return null
             val destDir = File(dataDir(), "images")
             destDir.mkdirs()
-            val dest = File(destDir, "img_${System.currentTimeMillis()}_${src.name}")
-            src.inputStream().use { input -> dest.outputStream().use { output -> input.copyTo(output) } }
+            // الملف الموجود سلفًا في المجلد الدائم لا يحتاج إلى نسخ آخر عند إعادة الإرسال أو المزامنة.
+            if (src.parentFile?.canonicalFile == destDir.canonicalFile) return src.absolutePath
+
+            // اسم ثابت للمصدر نفسه يمنع النسخ المتكرر إذا استُدعيت الدالة أكثر من مرة للصورة المؤقتة ذاتها.
+            val safeName = src.name.replace(Regex("[^A-Za-z0-9._-]"), "_").takeLast(80)
+            val dest = File(destDir, "img_${src.length()}_${src.lastModified()}_$safeName")
+            if (dest.isFile && dest.length() == src.length()) return dest.absolutePath
+
+            val partial = File(destDir, "${dest.name}.part")
+            partial.delete()
+            src.inputStream().buffered(64 * 1024).use { input ->
+                partial.outputStream().buffered(64 * 1024).use { output -> input.copyTo(output, 64 * 1024) }
+            }
+            if (partial.length() != src.length()) {
+                partial.delete()
+                return null
+            }
+            if (dest.exists() && !dest.delete()) {
+                partial.delete()
+                return null
+            }
+            if (!partial.renameTo(dest)) {
+                partial.delete()
+                return null
+            }
             dest.absolutePath
         } catch (e: Exception) { null }
     }
@@ -299,7 +323,7 @@ object AppRepository {
                 if (remapped != all) {
                     val dir = File(dataDir(), "invoices/${g.id}")
                     dir.mkdirs()
-                    File(dir, "items.json").writeText(gson.toJson(remapped))
+                    writeTextAtomically(File(dir, "items.json"), gson.toJson(remapped))
                 }
             }
             changed
@@ -310,20 +334,22 @@ object AppRepository {
         val dir = File(dataDir(), "invoices/$groupId")
         dir.mkdirs()
         val list = items(groupId).toMutableList().also { it.add(0, item) }
-        File(dir, "items.json").writeText(gson.toJson(list))
+        writeTextAtomically(File(dir, "items.json"), gson.toJson(list))
     }
 
     fun updateItem(groupId: String, item: InvoiceItem) {
         val dir = File(dataDir(), "invoices/$groupId")
-        File(dir, "items.json").writeText(gson.toJson(items(groupId).map { if (it.id == item.id) item else it }))
+        val current = items(groupId)
+        writeTextAtomically(File(dir, "items.json"), gson.toJson(current.map { if (it.id == item.id) item else it }))
     }
 
     fun removeItem(groupId: String, itemId: String) {
-        val item = items(groupId).find { it.id == itemId }
+        val current = items(groupId)
+        val item = current.find { it.id == itemId }
         item?.imagePath?.let { File(it).delete() }
         item?.processedPath?.let { File(it).delete() }
         val dir = File(dataDir(), "invoices/$groupId")
-        File(dir, "items.json").writeText(gson.toJson(items(groupId).filter { it.id != itemId }))
+        writeTextAtomically(File(dir, "items.json"), gson.toJson(current.filter { it.id != itemId }))
     }
 
     fun removeItems(groupId: String, ids: List<String>) {
@@ -333,7 +359,7 @@ object AppRepository {
             it.processedPath?.let { p -> File(p).delete() }
         }
         val dir = File(dataDir(), "invoices/$groupId")
-        File(dir, "items.json").writeText(gson.toJson(all.filter { it.id !in ids }))
+        writeTextAtomically(File(dir, "items.json"), gson.toJson(all.filter { it.id !in ids }))
     }
 
     /**
@@ -347,7 +373,7 @@ object AppRepository {
         if (removed.isEmpty()) return emptyList()
         val dir = File(dataDir(), "invoices/$groupId")
         dir.mkdirs()
-        File(dir, "items.json").writeText(gson.toJson(all.filter { it.id !in ids }))
+        writeTextAtomically(File(dir, "items.json"), gson.toJson(all.filter { it.id !in ids }))
         return removed
     }
 
@@ -360,7 +386,7 @@ object AppRepository {
             .sortedByDescending { it.createdAt }
         val dir = File(dataDir(), "invoices/$groupId")
         dir.mkdirs()
-        File(dir, "items.json").writeText(gson.toJson(restored))
+        writeTextAtomically(File(dir, "items.json"), gson.toJson(restored))
     }
 
     /** تنظيف ملفات العناصر بعد انتهاء مهلة التراجع دون استعادة. */
@@ -457,7 +483,22 @@ object AppRepository {
 
     fun <T> saveList(fileName: String, list: List<T>) {
         dataDir().mkdirs()
-        File(dataDir(), fileName).writeText(gson.toJson(list))
+        writeTextAtomically(File(dataDir(), fileName), gson.toJson(list))
+    }
+
+    /** كتابة ذريّة تمنع ترك JSON فارغًا إذا امتلأت الذاكرة أو قُطع التطبيق أثناء الحفظ. */
+    private fun writeTextAtomically(file: File, content: String) {
+        file.parentFile?.mkdirs()
+        val atomicFile = AtomicFile(file)
+        var stream: java.io.FileOutputStream? = null
+        try {
+            stream = atomicFile.startWrite()
+            stream.write(content.toByteArray(Charsets.UTF_8))
+            atomicFile.finishWrite(stream)
+        } catch (e: Exception) {
+            stream?.let { atomicFile.failWrite(it) }
+            throw e
+        }
     }
 
     // ---------- دوال قراءة محددة النوع ----------

@@ -10,6 +10,8 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Base64
 import android.util.Log
@@ -52,18 +54,24 @@ object SyncManager {
     private const val TCP_PORT = 8765
     private const val UDP_PORT = 8766
     private const val UPDATE_PORT = 8767
-    private const val CONNECT_TIMEOUT_MS = 15_000
-    private const val READ_TIMEOUT_MS = 60_000
+    private const val CONNECT_TIMEOUT_MS = 10_000
+    private const val SYNC_READ_TIMEOUT_MS = 35_000
+    private const val UPDATE_READ_TIMEOUT_MS = 60_000
     private const val MAX_UPDATE_BYTES = 250L * 1024L * 1024L
     private const val UPDATE_NOTIFICATION_CHANNEL = "local_update_ready"
     private const val UPDATE_NOTIFICATION_ID = 9_303
     private const val SELF_TEST_TIMEOUT_MS = 600
     private const val AUTO_SYNC_DISCOVERY_TIMEOUT_MS = 1_500L
-    private const val AUTO_SYNC_INTERVAL_MS = 8_000L
+    private const val AUTO_SYNC_INTERVAL_MS = 30_000L
     private const val AUTO_USER_SYNC_MODE = "mustafa_users_only"
     private const val AUTO_DATA_SYNC_MODE = "post_login_groups_and_invoices"
-    private const val AUTO_DATA_SYNC_ATTEMPTS = 4
-    private const val AUTO_DATA_SYNC_RETRY_DELAY_MS = 3_000L
+    private const val AUTO_DATA_SYNC_ATTEMPTS = 2
+    private const val AUTO_DATA_SYNC_RETRY_DELAY_MS = 4_000L
+    private const val AUTO_DATA_SYNC_MIN_RESTART_MS = 30_000L
+    private const val AUTO_DATA_SYNC_WAKE_LOCK_MS = 90_000L
+    private const val SINGLE_TRANSFER_WAKE_LOCK_MS = 45_000L
+    private const val AUTO_UPDATE_CHECK_ATTEMPTS = 3
+    private const val AUTO_UPDATE_CHECK_RETRY_DELAY_MS = 10_000L
     private const val MAX_SYNC_IMAGE_BYTES = 12L * 1024L * 1024L
     private val gson = Gson()
 
@@ -74,6 +82,7 @@ object SyncManager {
     @Volatile private var autoSyncThread: Thread? = null
     @Volatile private var autoDataSyncRunning = false
     @Volatile private var autoDataSyncThread: Thread? = null
+    @Volatile private var lastAutoDataSyncStartedAt = 0L
     @Volatile private var updateCheckRunning = false
     @Volatile private var multicastLock: WifiManager.MulticastLock? = null
     val peers = CopyOnWriteArrayList<String>()
@@ -164,8 +173,8 @@ object SyncManager {
                 ensureServer(appContext)
                 val myVersion = BuildConfig.VERSION_CODE.toLong()
                 var updateFound = false
-                for (attempt in 0 until 12) {
-                    if (attempt > 0) Thread.sleep(8_000)
+                for (attempt in 0 until AUTO_UPDATE_CHECK_ATTEMPTS) {
+                    if (attempt > 0) Thread.sleep(AUTO_UPDATE_CHECK_RETRY_DELAY_MS)
                     val peer = discover(1_800)
                         .filter { !isLocalAddress(it.address) && it.versionCode > myVersion }
                         .maxByOrNull { it.versionCode }
@@ -191,7 +200,7 @@ object SyncManager {
         Thread {
             socket.use { client ->
                 try {
-                    client.soTimeout = READ_TIMEOUT_MS
+                    client.soTimeout = UPDATE_READ_TIMEOUT_MS
                     val request = readNetworkLine(client.getInputStream())
                     val requesterVersion = request?.removePrefix("GET_UPDATE ")?.trim()?.toLongOrNull()
                         ?: throw IOException("طلب تحديث محلي غير صالح")
@@ -226,7 +235,7 @@ object SyncManager {
         try {
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(peer.address, UPDATE_PORT), CONNECT_TIMEOUT_MS)
-                socket.soTimeout = READ_TIMEOUT_MS
+                socket.soTimeout = UPDATE_READ_TIMEOUT_MS
                 socket.getOutputStream().apply {
                     write("GET_UPDATE ${BuildConfig.VERSION_CODE}\n".toByteArray())
                     flush()
@@ -377,7 +386,7 @@ object SyncManager {
         Thread {
             socket.use { client ->
                 try {
-                    client.soTimeout = READ_TIMEOUT_MS
+                    client.soTimeout = SYNC_READ_TIMEOUT_MS
                     val reader = client.getInputStream().bufferedReader()
                     val payloadJson = reader.readLine()
                         ?: throw EOFException("انقطع الاتصال قبل اكتمال بيانات المزامنة")
@@ -448,7 +457,7 @@ object SyncManager {
             onProgress(10, "جارٍ الاتصال بالجهاز الآخر...")
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(host, TCP_PORT), CONNECT_TIMEOUT_MS)
-                socket.soTimeout = READ_TIMEOUT_MS
+                socket.soTimeout = SYNC_READ_TIMEOUT_MS
                 onProgress(25, "تم الاتصال. جارٍ تجهيز البيانات...")
                 val currentPayload = buildPayload(context)
                 payload = currentPayload
@@ -486,7 +495,7 @@ object SyncManager {
         try {
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(host, TCP_PORT), CONNECT_TIMEOUT_MS)
-                socket.soTimeout = READ_TIMEOUT_MS
+                socket.soTimeout = SYNC_READ_TIMEOUT_MS
                 val writer = socket.getOutputStream().bufferedWriter()
                 writer.write(gson.toJson(payload))
                 writer.newLine()
@@ -525,7 +534,7 @@ object SyncManager {
         try {
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(host, TCP_PORT), CONNECT_TIMEOUT_MS)
-                socket.soTimeout = READ_TIMEOUT_MS
+                socket.soTimeout = SYNC_READ_TIMEOUT_MS
                 outgoing = buildAutomaticDataPayload()
                 val writer = socket.getOutputStream().bufferedWriter()
                 writer.write(gson.toJson(outgoing))
@@ -588,7 +597,16 @@ object SyncManager {
                         .distinctBy { it.address }
                         .forEach { peer ->
                             if (autoSyncedUserFiles[peer.address] != fingerprint) {
-                                val result = syncMustafaUsersWithHost(peer.address, peer.name)
+                                val wakeLock = acquireTransientWakeLock(
+                                    appContext,
+                                    "user-transfer",
+                                    SINGLE_TRANSFER_WAKE_LOCK_MS
+                                )
+                                val result = try {
+                                    syncMustafaUsersWithHost(peer.address, peer.name)
+                                } finally {
+                                    releaseWakeLock(wakeLock)
+                                }
                                 if (result.ok) autoSyncedUserFiles[peer.address] = fingerprint
                             }
                         }
@@ -614,9 +632,17 @@ object SyncManager {
     fun startAutomaticDataSyncAfterLogin(context: Context) {
         val appContext = context.applicationContext
         ensureServer(appContext)
-        if (autoDataSyncRunning || !hasActiveSession(appContext)) return
+        val now = SystemClock.elapsedRealtime()
+        if (autoDataSyncRunning || !hasActiveSession(appContext) ||
+            now - lastAutoDataSyncStartedAt < AUTO_DATA_SYNC_MIN_RESTART_MS) return
         autoDataSyncRunning = true
+        lastAutoDataSyncStartedAt = now
         autoDataSyncThread = Thread {
+            val wakeLock = acquireTransientWakeLock(
+                appContext,
+                "post-login-data-sync",
+                AUTO_DATA_SYNC_WAKE_LOCK_MS
+            )
             try {
                 for (attempt in 0 until AUTO_DATA_SYNC_ATTEMPTS) {
                     if (!isServing || !hasActiveSession(appContext)) break
@@ -639,6 +665,7 @@ object SyncManager {
                 Log.e(TAG, "automatic data sync error", e)
                 AppRepository.logSync(SyncEntry("مزامنة البيانات التلقائية", syncErrorMessage(e), false))
             } finally {
+                releaseWakeLock(wakeLock)
                 autoDataSyncRunning = false
                 autoDataSyncThread = null
             }
@@ -665,11 +692,51 @@ object SyncManager {
             "${AppRepository.normalizeUsername(user.username)}:${user.passwordHash}:${user.role.name}:${user.enabled}"
         }
 
-    private fun dataFingerprint(): String = buildAutomaticDataPayload().items
-        .sortedWith(compareBy<SyncItemPayload> { it.groupId }.thenBy { it.item.id })
-        .joinToString("|") { payload ->
-            "${payload.groupId}:${payload.groupName}:${gson.toJson(payload.item)}"
+    /**
+     * بصمة للبيانات التلقائية دون بناء payload أو تحويل صور المجموعات إلى Base64.
+     * تقرأ ملفات JSON الخام فقط؛ وبذلك لا تتضاعف الذاكرة مع المرفقات أثناء كل اكتشاف.
+     */
+    private fun dataFingerprint(): String = MessageDigest.getInstance("SHA-256").let { digest ->
+        AppRepository.groups().sortedBy { it.id }.forEach { group ->
+            digest.update("group:${group.id}:${group.name}:${group.createdAt}\n".toByteArray(Charsets.UTF_8))
+            val itemsFile = File(AppRepository.dataDir(), "invoices/${group.id}/items.json")
+            if (!itemsFile.isFile) {
+                digest.update("missing\n".toByteArray(Charsets.UTF_8))
+            } else {
+                FileInputStream(itemsFile).use { input ->
+                    val buffer = ByteArray(32 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        digest.update(buffer, 0, read)
+                    }
+                }
+                digest.update('\n'.code.toByte())
+            }
         }
+        digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /** يمنع انقطاع Wi‑Fi خلال نقل محدود، ويُحرر مباشرة عند انتهاء المهمة أو فشلها. */
+    private fun acquireTransientWakeLock(context: Context, label: String, timeoutMs: Long): PowerManager.WakeLock? {
+        return try {
+            val manager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return null
+            manager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "masahhisabat:$label").apply {
+                setReferenceCounted(false)
+                acquire(timeoutMs)
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "تعذر الاحتفاظ المؤقت بالمزامنة", e)
+            null
+        }
+    }
+
+    private fun releaseWakeLock(wakeLock: PowerManager.WakeLock?) {
+        try {
+            if (wakeLock?.isHeld == true) wakeLock.release()
+        } catch (_: Throwable) {
+        }
+    }
 
     private fun isLocalAddress(address: String): Boolean = try {
         java.net.NetworkInterface.getNetworkInterfaces()?.toList()

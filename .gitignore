@@ -5,6 +5,10 @@ captures/
 *.iml
 .idea/
 local.properties
+keystore.properties
+*.jks
+*.keystore
+signing/
 .DS_Store
 *.apk
 *.ap_

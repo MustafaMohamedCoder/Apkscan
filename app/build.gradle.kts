@@ -1,7 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+val releasePropertiesFile = rootProject.file("keystore.properties")
+val releaseProperties = Properties().apply {
+    if (releasePropertiesFile.exists()) {
+        releasePropertiesFile.inputStream().use(::load)
+    }
+}
+val isReleaseSigningConfigured = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+    .all { !releaseProperties.getProperty(it).isNullOrBlank() }
 
 android {
     namespace = "com.masahhisabat.app"
@@ -15,9 +26,23 @@ android {
         versionName = "1.1"
     }
 
+    signingConfigs {
+        if (isReleaseSigningConfigured) {
+            create("release") {
+                storeFile = rootProject.file(requireNotNull(releaseProperties.getProperty("storeFile")))
+                storePassword = requireNotNull(releaseProperties.getProperty("storePassword"))
+                keyAlias = requireNotNull(releaseProperties.getProperty("keyAlias"))
+                keyPassword = requireNotNull(releaseProperties.getProperty("keyPassword"))
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (isReleaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
@@ -32,6 +57,16 @@ android {
     buildFeatures {
         viewBinding = true
         buildConfig = true
+    }
+}
+
+tasks.configureEach {
+    if (name == "assembleRelease" || name == "bundleRelease") {
+        doFirst {
+            check(isReleaseSigningConfigured) {
+                "تعذر بناء Release: أنشئ keystore.properties محليًا من القالب وأدخل بيانات مفتاح التوقيع."
+            }
+        }
     }
 }
 

@@ -213,6 +213,278 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- حالة البيانات: تجعل سلامة المزامنة والتخزين قابلة للفهم من النظرة الأولى -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/data_health_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/day_card_stroke">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+                <TextView
+                    android:id="@+id/data_health_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="حالة البيانات"
+                    android:textSize="16sp"
+                    android:fontFamily="@font/tajawal_bold" />
+                <TextView
+                    android:id="@+id/data_health_sync"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textSize="14sp"
+                    android:fontFamily="@font/tajawal_regular" />
+                <TextView
+                    android:id="@+id/data_health_storage"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textSize="13sp"
+                    android:fontFamily="@font/tajawal_regular" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- نشاط اليوم يركز على الإنجاز القريب دون ازدحام بالأرقام التاريخية -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/today_activity_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/day_card_stroke">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="18dp">
+                <TextView
+                    android:id="@+id/today_activity_count"
+                    android:layout_width="66dp"
+                    android:layout_height="66dp"
+                    android:gravity="center"
+                    android:text="0"
+                    android:textSize="26sp"
+                    android:fontFamily="@font/tajawal_bold"
+                    android:textColor="@color/accent"
+                    android:background="@drawable/circle_primary"
+                    android:backgroundTint="@color/day_surface_high" />
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="14dp"
+                    android:orientation="vertical">
+                    <TextView
+                        android:id="@+id/today_activity_title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="نشاط اليوم"
+                        android:textSize="16sp"
+                        android:fontFamily="@font/tajawal_bold" />
+                    <TextView
+                        android:id="@+id/today_activity_detail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textSize="14sp"
+                        android:fontFamily="@font/tajawal_regular" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- تنبيهات محلية موجزة، تظهر فقط عندما تحتاج البيانات إلى إجراء -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/alerts_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/day_card_stroke">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+                <TextView
+                    android:id="@+id/alerts_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="تنبيهات البيانات"
+                    android:textSize="16sp"
+                    android:fontFamily="@font/tajawal_bold" />
+                <LinearLayout
+                    android:id="@+id/alerts_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- متابعة آخر عمل: أقصر طريق للعودة إلى المجموعة التي كان المستخدم يعمل فيها -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/continue_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/day_card_stroke">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+                <TextView
+                    android:id="@+id/continue_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="تابع من حيث توقفت"
+                    android:textSize="16sp"
+                    android:fontFamily="@font/tajawal_bold" />
+                <TextView
+                    android:id="@+id/continue_detail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:textSize="14sp"
+                    android:fontFamily="@font/tajawal_regular" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_continue_work"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:text="متابعة"
+                        android:fontFamily="@font/tajawal_bold"
+                        android:backgroundTint="@color/primary" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_manage_favorites"
+                        android:layout_width="wrap_content"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="8dp"
+                        android:text="المفضلة"
+                        android:fontFamily="@font/tajawal_bold"
+                        android:textColor="@color/primary"
+                        app:strokeColor="@color/primary"
+                        app:strokeWidth="1dp" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- الإجراءات السريعة: المهام المتكررة بلا تنقل زائد بين الأقسام -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/quick_actions_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/day_card_stroke">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+                <TextView
+                    android:id="@+id/quick_actions_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="إجراءات سريعة"
+                    android:textSize="16sp"
+                    android:fontFamily="@font/tajawal_bold" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_quick_scan"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:text="مسح جديد"
+                        android:fontFamily="@font/tajawal_bold"
+                        android:backgroundTint="@color/accent" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_quick_group"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="المجموعات"
+                        android:fontFamily="@font/tajawal_bold"
+                        android:textColor="@color/primary"
+                        app:strokeColor="@color/primary"
+                        app:strokeWidth="1dp" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_quick_search"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="بحث"
+                        android:fontFamily="@font/tajawal_bold"
+                        android:textColor="@color/primary"
+                        app:strokeColor="@color/primary"
+                        app:strokeWidth="1dp" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- المفضلة تتيح الوصول إلى المجموعات الأكثر استخدامًا من الواجهة مباشرة -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/favorites_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/day_card_stroke">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+                <TextView
+                    android:id="@+id/favorites_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="المجموعات المفضلة"
+                    android:textSize="16sp"
+                    android:fontFamily="@font/tajawal_bold" />
+                <LinearLayout
+                    android:id="@+id/favorites_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="vertical" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- زر ابدأ مسحًا جديدًا -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_start_scan"

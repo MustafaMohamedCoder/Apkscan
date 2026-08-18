@@ -356,6 +356,8 @@ object AppRepository {
     fun setLastSavedSearch(groupId: String, query: String) = prefs.edit().putString("saved_search_$groupId", query).apply()
     fun lastOpenedGroupId(): String? = prefs.getString("last_opened_group", null)
     fun setLastOpenedGroupId(groupId: String) = prefs.edit().putString("last_opened_group", groupId).apply()
+    fun favoriteGroupIds(): Set<String> = prefs.getStringSet("favorite_group_ids", emptySet())?.toSet() ?: emptySet()
+    fun setFavoriteGroupIds(ids: Set<String>) = prefs.edit().putStringSet("favorite_group_ids", ids).apply()
 
     // ---------- دعم المزامنة ----------
     fun currentUserDeviceName(): String {

@@ -7,16 +7,19 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.Group
 import com.masahhisabat.app.ui.ThemeHelper
+import com.masahhisabat.app.ui.invoice.GroupActivity
 import com.masahhisabat.app.ui.invoice.InvoiceActivity
 
 class HomeFragment : Fragment() {
@@ -58,6 +61,50 @@ class HomeFragment : Fragment() {
             }
             android.widget.Toast.makeText(requireContext(), "اختر «المزامنة المحلية» لبدء المزامنة", android.widget.Toast.LENGTH_SHORT).show()
         }
+        view.findViewById<MaterialButton>(R.id.btn_quick_scan).setOnClickListener { openTab(R.id.nav_scanner) }
+        view.findViewById<MaterialButton>(R.id.btn_quick_group).setOnClickListener { openTab(R.id.nav_groups) }
+        view.findViewById<MaterialButton>(R.id.btn_quick_search).setOnClickListener { openTab(R.id.nav_search) }
+        view.findViewById<MaterialButton>(R.id.btn_continue_work).setOnClickListener { openLastGroup() }
+        view.findViewById<MaterialButton>(R.id.btn_manage_favorites).setOnClickListener { showFavoritePicker() }
+        view.findViewById<View>(R.id.data_health_card).setOnClickListener { openTab(R.id.nav_settings) }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (view != null) refresh()
+    }
+
+    private fun openTab(id: Int) {
+        (activity as? com.masahhisabat.app.ui.main.MainActivity)?.findViewById<View>(id)?.performClick()
+    }
+
+    private fun openLastGroup() {
+        val group = AppRepository.lastOpenedGroupId()?.let { id -> AppRepository.groups().find { it.id == id } }
+        if (group == null) {
+            openTab(R.id.nav_groups)
+            android.widget.Toast.makeText(requireContext(), "أنشئ أو اختر مجموعة أولًا", android.widget.Toast.LENGTH_SHORT).show()
+        } else openGroup(group)
+    }
+
+    private fun openGroup(group: Group) {
+        startActivity(Intent(requireContext(), GroupActivity::class.java).putExtra("group_id", group.id))
+    }
+
+    private fun showFavoritePicker() {
+        val groups = AppRepository.groups()
+        if (groups.isEmpty()) { openTab(R.id.nav_groups); return }
+        val current = AppRepository.favoriteGroupIds()
+        val labels = groups.map { it.name }.toTypedArray()
+        val checked = groups.map { it.id in current }.toBooleanArray()
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("اختيار المجموعات المفضلة")
+            .setMultiChoiceItems(labels, checked) { _, which, selected -> checked[which] = selected }
+            .setPositiveButton("حفظ") { _, _ ->
+                AppRepository.setFavoriteGroupIds(groups.filterIndexed { index, _ -> checked[index] }.map { it.id }.toSet())
+                refresh()
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
     }
 
     private fun applyTheme(view: View) {
@@ -68,7 +115,7 @@ class HomeFragment : Fragment() {
         val text = ThemeHelper.text(requireContext())
         val textSec = ThemeHelper.textSecondary(requireContext())
 
-        listOf(R.id.card_invoices, R.id.card_groups, R.id.dashboard_info_card).forEach { id ->
+        listOf(R.id.card_invoices, R.id.card_groups, R.id.dashboard_info_card, R.id.continue_card, R.id.quick_actions_card, R.id.favorites_card, R.id.data_health_card, R.id.today_activity_card, R.id.alerts_card).forEach { id ->
             val card = view.findViewById<MaterialCardView>(id)
             card.setCardBackgroundColor(surface)
             card.strokeColor = ThemeHelper.cardStroke(requireContext())
@@ -82,6 +129,16 @@ class HomeFragment : Fragment() {
         view.findViewById<TextView>(R.id.dashboard_title).setTextColor(text)
         view.findViewById<TextView>(R.id.dashboard_last_group).setTextColor(textSec)
         view.findViewById<TextView>(R.id.dashboard_sync_status).setTextColor(textSec)
+        listOf(R.id.continue_title, R.id.quick_actions_title, R.id.favorites_title).forEach { id ->
+            view.findViewById<TextView>(id).setTextColor(text)
+        }
+        view.findViewById<TextView>(R.id.continue_detail).setTextColor(textSec)
+        listOf(R.id.data_health_title, R.id.today_activity_title, R.id.alerts_title).forEach { id ->
+            view.findViewById<TextView>(id).setTextColor(text)
+        }
+        listOf(R.id.data_health_sync, R.id.data_health_storage, R.id.today_activity_detail).forEach { id ->
+            view.findViewById<TextView>(id).setTextColor(textSec)
+        }
         view.findViewById<TextView>(R.id.invoices_label).setTextColor(textSec)
         view.findViewById<TextView>(R.id.groups_label).setTextColor(textSec)
         listOf(R.id.invoices_count, R.id.groups_count).forEach { id ->
@@ -140,6 +197,15 @@ class HomeFragment : Fragment() {
             lastSync.success -> "آخر مزامنة: تمت بنجاح"
             else -> "آخر مزامنة: تحتاج إلى مراجعة"
         }
+        updateDataHealth(view, lastSync)
+        updateTodayActivity(view)
+        populateAlerts(view, lastSync)
+        val lastGroupObject = AppRepository.lastOpenedGroupId()?.let { id -> AppRepository.groups().find { it.id == id } }
+        view.findViewById<TextView>(R.id.continue_detail).text = if (lastGroupObject == null) {
+            "لم تُفتح مجموعة بعد — ابدأ من قائمة المجموعات"
+        } else "آخر عمل: ${lastGroupObject.name}"
+        view.findViewById<MaterialButton>(R.id.btn_continue_work).text = if (lastGroupObject == null) "فتح المجموعات" else "متابعة"
+        populateFavorites(view)
 
         val recent = view.findViewById<RecyclerView>(R.id.recent_list)
         recent.layoutManager = LinearLayoutManager(requireContext())
@@ -164,6 +230,93 @@ class HomeFragment : Fragment() {
                 view.findViewById<RecyclerView>(R.id.recent_list)?.visibility = View.GONE
             } catch (_: Exception) {}
         }
+    }
+
+    private fun populateFavorites(view: View) {
+        val container = view.findViewById<LinearLayout>(R.id.favorites_container)
+        container.removeAllViews()
+        val favorites = AppRepository.groups().filter { it.id in AppRepository.favoriteGroupIds() }
+        if (favorites.isEmpty()) {
+            container.addView(TextView(requireContext()).apply {
+                text = "لا توجد مجموعات مفضلة بعد. اخترها من زر «المفضلة»."
+                setTextColor(ThemeHelper.textSecondary(requireContext()))
+                textSize = 14f
+                setPadding(0, 8, 0, 4)
+            })
+        } else favorites.forEach { group ->
+            val button = MaterialButton(requireContext()).apply {
+                text = "★  ${group.name}"
+                isAllCaps = false
+                gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+                setTextColor(ThemeHelper.text(requireContext()))
+                backgroundTintList = android.content.res.ColorStateList.valueOf(ThemeHelper.surfaceHigh(requireContext()))
+                setOnClickListener { openGroup(group) }
+            }
+            container.addView(button, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 46).apply { bottomMargin = 6 })
+        }
+    }
+
+    private fun updateDataHealth(view: View, lastSync: com.masahhisabat.app.data.SyncEntry?) {
+        val now = System.currentTimeMillis()
+        view.findViewById<TextView>(R.id.data_health_sync).text = when {
+            lastSync == null -> "المزامنة: لم تُنفذ بعد"
+            !lastSync.success -> "المزامنة: تحتاج إلى مراجعة"
+            else -> "المزامنة: آخر نجاح منذ ${relativeTime(now - lastSync.at)}"
+        }
+        val usage = AppRepository.storageUsage()
+        view.findViewById<TextView>(R.id.data_health_storage).text =
+            "التخزين: ${formatBytes(usage.dataBytes)} للبيانات والصور · ${formatBytes(usage.backupBytes)} للنسخ الوقائية"
+    }
+
+    private fun updateTodayActivity(view: View) {
+        val calendar = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val count = AppRepository.activityLog().count { it.at >= calendar.timeInMillis }
+        view.findViewById<TextView>(R.id.today_activity_count).text = count.toString()
+        view.findViewById<TextView>(R.id.today_activity_detail).text = when (count) {
+            0 -> "لم تُسجّل عمليات اليوم بعد"
+            1 -> "تم تسجيل عملية واحدة اليوم"
+            else -> "تم تسجيل $count عمليات اليوم"
+        }
+    }
+
+    private fun populateAlerts(view: View, lastSync: com.masahhisabat.app.data.SyncEntry?) {
+        val container = view.findViewById<LinearLayout>(R.id.alerts_container)
+        container.removeAllViews()
+        val messages = mutableListOf<String>()
+        val now = System.currentTimeMillis()
+        when {
+            lastSync == null -> messages += "لم تُجرَ مزامنة بعد — احفظ نسخة احتياطية أو اربط جهازًا آخر عند الحاجة."
+            !lastSync.success -> messages += "آخر مزامنة لم تكتمل — افتح الإعدادات لمراجعة السجل وإعادة المحاولة."
+            now - lastSync.at > 7L * 24 * 60 * 60 * 1000 -> messages += "مر أكثر من 7 أيام على آخر مزامنة ناجحة."
+        }
+        val usage = AppRepository.storageUsage()
+        if (usage.dataBytes > 250L * 1024 * 1024) messages += "استهلاك الصور والبيانات كبير؛ راجع «إدارة التخزين» عند الحاجة."
+        if (messages.isEmpty()) messages += "كل شيء يبدو جيدًا. البيانات المحلية والمزامنة في حالة مستقرة."
+        messages.forEach { message ->
+            container.addView(TextView(requireContext()).apply {
+                text = "•  $message"
+                setTextColor(ThemeHelper.textSecondary(requireContext()))
+                textSize = 14f
+                setPadding(0, 5, 0, 5)
+                setOnClickListener { openTab(R.id.nav_settings) }
+            })
+        }
+    }
+
+    private fun relativeTime(milliseconds: Long): String = when {
+        milliseconds < 60_000L -> "لحظات"
+        milliseconds < 3_600_000L -> "${milliseconds / 60_000L} دقيقة"
+        milliseconds < 86_400_000L -> "${milliseconds / 3_600_000L} ساعة"
+        else -> "${milliseconds / 86_400_000L} يوم"
+    }
+
+    private fun formatBytes(bytes: Long): String = when {
+        bytes >= 1024L * 1024L -> "%.1f MB".format(java.util.Locale.US, bytes / (1024f * 1024f))
+        bytes >= 1024L -> "%.1f KB".format(java.util.Locale.US, bytes / 1024f)
+        else -> "$bytes B"
     }
 
     /** عدّاد تصاعدي ناعم من القيمة القديمة إلى الجديدة */

@@ -66,6 +66,10 @@
                     android:textSize="11sp"
                     android:textStyle="bold"
                     android:includeFontPadding="false"
+                    android:paddingStart="8dp"
+                    android:paddingTop="4dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="4dp"
                     android:textColor="@color/accent" />
             </LinearLayout>
 

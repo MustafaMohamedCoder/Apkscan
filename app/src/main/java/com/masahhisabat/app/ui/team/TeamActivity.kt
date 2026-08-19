@@ -51,9 +51,30 @@ class TeamActivity : AppCompatActivity() {
         val recycler = findViewById<RecyclerView>(R.id.members_list)
         recycler.layoutManager = LinearLayoutManager(this)
         val empty = findViewById<TextView>(R.id.empty_members)
-        val users = AppRepository.users()
+        val activeUsername = AppRepository.normalizeUsername(SessionStore.currentUser(this).orEmpty())
+        val users = AppRepository.users().sortedWith(
+            compareByDescending<User> { AppRepository.normalizeUsername(it.username) == activeUsername }
+                .thenBy { AppRepository.normalizeUsername(it.username) }
+        )
         empty.visibility = if (users.isEmpty()) View.VISIBLE else View.GONE
         recycler.adapter = MembersAdapter(users)
+        bindCurrentUser(activeUsername, users)
+    }
+
+    /** بطاقة الجلسة الحالية تصف المستخدم المحلي فقط؛ لا تدّعي وجود اتصال شبكي لبقية الحسابات. */
+    private fun bindCurrentUser(activeUsername: String, users: List<User>) {
+        val sessionRole = SessionStore.currentRole(this)
+        val current = users.firstOrNull {
+            AppRepository.normalizeUsername(it.username) == activeUsername
+        }
+        val displayName = current?.username ?: SessionStore.currentUser(this).orEmpty().ifBlank { "حساب غير محدد" }
+        val avatar = displayName.take(1).uppercase()
+        val role = current?.role ?: sessionRole
+
+        findViewById<TextView>(R.id.current_user_avatar).text = avatar
+        findViewById<TextView>(R.id.current_user_name).text = displayName
+        findViewById<TextView>(R.id.current_user_role).text = "${roleLabel(role)} — ${rolePermissions(role)}"
+        findViewById<TextView>(R.id.current_user_state).text = "متصل الآن على هذا الجهاز"
     }
 
     private fun showAddMemberDialog() {
@@ -109,10 +130,18 @@ class TeamActivity : AppCompatActivity() {
     }
 
     private fun applyTheme() {
-        window.decorView.setBackgroundColor(ThemeHelper.bg(this))
-        findViewById<View>(R.id.team_root).setBackgroundColor(ThemeHelper.bg(this))
+        window.decorView.setBackgroundResource(ThemeHelper.backgroundRes())
+        findViewById<View>(R.id.team_root).setBackgroundResource(ThemeHelper.backgroundRes())
         val text = ThemeHelper.text(this)
         findViewById<TextView>(R.id.tv_title).setTextColor(text)
+        findViewById<MaterialCardView>(R.id.current_user_card).apply {
+            setCardBackgroundColor(ThemeHelper.surfaceHigh(this@TeamActivity))
+            strokeColor = ThemeHelper.cardStroke(this@TeamActivity)
+        }
+        findViewById<TextView>(R.id.current_user_name).setTextColor(text)
+        findViewById<TextView>(R.id.current_user_role).setTextColor(ThemeHelper.textSecondary(this))
+        findViewById<TextView>(R.id.current_user_state).setTextColor(getColor(R.color.water_deep))
+        findViewById<TextView>(R.id.empty_members).setTextColor(ThemeHelper.textSecondary(this))
     }
 
     inner class MembersAdapter(private val users: List<User>) : RecyclerView.Adapter<MembersAdapter.VH>() {
@@ -124,9 +153,12 @@ class TeamActivity : AppCompatActivity() {
             val user = users[position]
             val ctx = holder.itemView.context
             val card = holder.itemView as MaterialCardView
-            card.setCardBackgroundColor(ThemeHelper.surface(ctx))
-            card.strokeColor = ThemeHelper.cardStroke(ctx)
-            card.strokeWidth = 1
+            val currentUsername = AppRepository.normalizeUsername(SessionStore.currentUser(ctx).orEmpty())
+            val isCurrent = currentUsername.isNotBlank() &&
+                AppRepository.normalizeUsername(user.username) == currentUsername
+            card.setCardBackgroundColor(if (isCurrent) ThemeHelper.surfaceHigh(ctx) else ThemeHelper.surface(ctx))
+            card.strokeColor = if (isCurrent) getColor(R.color.accent) else ThemeHelper.cardStroke(ctx)
+            card.strokeWidth = if (isCurrent) 2 else 1
             val text = ThemeHelper.text(ctx)
             val textSec = ThemeHelper.textSecondary(ctx)
 
@@ -139,9 +171,23 @@ class TeamActivity : AppCompatActivity() {
                 setTextColor(textSec)
             }
             holder.itemView.findViewById<TextView>(R.id.member_status).apply {
-                this.text = if (user.role == com.masahhisabat.app.data.Role.ADMIN) "مالك" else "نشط"
-                setTextColor(getColor(R.color.accent))
+                this.text = when {
+                    isCurrent -> "متصل الآن"
+                    !user.enabled -> "موقوف"
+                    user.role == Role.ADMIN -> "مالك"
+                    else -> "مفعّل"
+                }
+                setTextColor(
+                    when {
+                        isCurrent -> getColor(R.color.water_deep)
+                        !user.enabled -> getColor(R.color.error)
+                        else -> textSec
+                    }
+                )
+                setBackgroundResource(if (isCurrent) R.drawable.online_status_bg else R.drawable.member_status_bg)
             }
+
+            holder.itemView.contentDescription = "${user.username}، ${roleLabel(user.role)}، ${holder.itemView.findViewById<TextView>(R.id.member_status).text}"
 
             // صف كلمة المرور: عرض/إخفاء بأيقونة العين داخل التطبيق فقط، دون نسخ للحافظة.
             val passwordText = holder.itemView.findViewById<TextView>(R.id.member_password)
@@ -199,19 +245,20 @@ class TeamActivity : AppCompatActivity() {
 
         override fun getItemCount() = users.size
 
-        private fun roleLabel(role: Role) = when (role) {
-            Role.ADMIN -> "مالك"
-            Role.SUPERVISOR -> "مشرف"
-            Role.EDITOR -> "محرر"
-            Role.VIEWER -> "مشاهد"
-        }
+    }
 
-        private fun rolePermissions(role: Role) = when (role) {
-            Role.ADMIN -> "إدارة كاملة"
-            Role.SUPERVISOR -> "مزامنة وتحرير وحذف"
-            Role.EDITOR -> "إضافة وتعديل الرسائل"
-            Role.VIEWER -> "قراءة فقط"
-        }
+    private fun roleLabel(role: Role) = when (role) {
+        Role.ADMIN -> "مالك"
+        Role.SUPERVISOR -> "مشرف"
+        Role.EDITOR -> "محرر"
+        Role.VIEWER -> "مشاهد"
+    }
+
+    private fun rolePermissions(role: Role) = when (role) {
+        Role.ADMIN -> "إدارة كاملة"
+        Role.SUPERVISOR -> "مزامنة وتحرير وحذف"
+        Role.EDITOR -> "إضافة وتعديل الرسائل"
+        Role.VIEWER -> "قراءة فقط"
     }
 
     private fun showEditMemberDialog(user: User) {

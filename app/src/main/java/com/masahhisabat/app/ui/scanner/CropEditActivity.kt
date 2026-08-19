@@ -72,6 +72,8 @@ class CropEditActivity : AppCompatActivity() {
     private var edgeDetectionToken = 0
     private lateinit var loadingPanel: LinearLayout
     private lateinit var loadingLabel: TextView
+    private lateinit var editorStatus: TextView
+    private lateinit var filterModeLabel: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppRepository.initAppContext(this)
@@ -101,6 +103,9 @@ class CropEditActivity : AppCompatActivity() {
         cropView.setBitmap(originalBmp)
         loadingPanel = findViewById(R.id.loading_panel)
         loadingLabel = findViewById(R.id.loading_message)
+        editorStatus = findViewById(R.id.editor_status)
+        filterModeLabel = findViewById(R.id.filter_mode_label)
+        updateFilterModeLabel()
 
         findViewById<MaterialButton>(R.id.btn_rotate).setOnClickListener {
             val croppedForRotation = cropView.getCroppedBitmap()
@@ -173,13 +178,16 @@ class CropEditActivity : AppCompatActivity() {
         loadingLabel.setText(R.string.loading)
         loadingPanel.visibility = View.VISIBLE
 
-        val cropped = cropView.getCroppedBitmap()
+        editorStatus.text = "يجري تجهيز المستند للحفظ"
+        // نقتطع من الصورة الأصلية حتى لا يتكرر الفلتر عند تطبيقه للحفظ النهائي.
+        val cropped = cropView.getCroppedBitmap(originalBmp)
         // المعاينة لا تُحفظ مباشرة: يعاد تطبيق الفلتر على الجزء المقصوص بالحجم الكامل.
         ImageProcessor.process(lastMode, cropped, object : ImageProcessor.Callback {
             override fun onDone(bitmap: android.graphics.Bitmap) {
                 processing = false
                 loadingPanel.visibility = View.GONE
                 if (bitmap !== cropped && !cropped.isRecycled) cropped.recycle()
+                processedBmp?.takeIf { it !== originalBmp && !it.isRecycled }?.recycle()
                 processedBmp = bitmap
                 AppRepository.setLastProcessMode(lastMode.key)
                 showSuccessAndContinue(bitmap)
@@ -188,6 +196,7 @@ class CropEditActivity : AppCompatActivity() {
                 processing = false
                 loadingPanel.visibility = View.GONE
                 Toast.makeText(this@CropEditActivity, "فشلت المعالجة — جاري استخدام الأصلية", Toast.LENGTH_SHORT).show()
+                processedBmp?.takeIf { it !== originalBmp && !it.isRecycled }?.recycle()
                 processedBmp = cropped
                 showSuccessAndContinue(cropped)
             }
@@ -234,6 +243,8 @@ class CropEditActivity : AppCompatActivity() {
                 cropView.setBitmap(previewBmp ?: originalBmp)
                 lastMode = mode
                 previewMode = mode
+                updateFilterModeLabel()
+                editorStatus.text = "معاينة ${mode.label} — عدّل الإطار أو تابع"
                 Toast.makeText(this@CropEditActivity, getString(R.string.filter_preview_ready, mode.label), Toast.LENGTH_SHORT).show()
             }
 
@@ -260,12 +271,23 @@ class CropEditActivity : AppCompatActivity() {
         ).forEach { id -> findViewById<View>(id).isEnabled = !loading }
     }
 
+    private fun updateFilterModeLabel() {
+        if (::filterModeLabel.isInitialized) {
+            filterModeLabel.text = when (lastMode) {
+                ProcessMode.AUTO -> "التحسين التلقائي جاهز"
+                ProcessMode.ORIGINAL -> "الصورة الأصلية دون تحسين"
+                else -> "الفلتر المحدد: ${lastMode.label}"
+            }
+        }
+    }
+
     /** يشغّل الكشف خارج خيط الواجهة ويطبق الإطار فقط إذا بقيت الصورة نفسها نشطة. */
     private fun detectAndApplyEdges(showResult: Boolean) {
         if (edgeDetectionInProgress || !::originalBmp.isInitialized || originalBmp.isRecycled) return
         val bitmap = originalBmp
         val token = ++edgeDetectionToken
         edgeDetectionInProgress = true
+        if (::editorStatus.isInitialized) editorStatus.text = "يجري اكتشاف حواف المستند…"
         setEdgeDetectionUi(detecting = true)
 
         Thread {
@@ -294,11 +316,17 @@ class CropEditActivity : AppCompatActivity() {
                     originalBmp = straightened
                     cropView.setBitmap(straightened)
                     cropView.setCropRect(0.035f, 0.035f, 0.965f, 0.965f)
+                    editorStatus.text = "تم تصحيح منظور المستند تلقائيًا"
                     if (!oldOriginal.isRecycled) oldOriginal.recycle()
                     if (showResult) Toast.makeText(this, R.string.document_perspective_fixed, Toast.LENGTH_LONG).show()
                 } else if (detection != null) {
                     val bounds = detection.bounds
                     cropView.setCropRect(bounds.left, bounds.top, bounds.right, bounds.bottom)
+                    editorStatus.text = if (detection.isDocumentDetected) {
+                        "تم اقتراح حواف المستند — يمكنك ضبطها"
+                    } else {
+                        "اضبط إطار المستند يدويًا"
+                    }
                     if (showResult) {
                         Toast.makeText(
                             this,
@@ -312,6 +340,7 @@ class CropEditActivity : AppCompatActivity() {
                     }
                 } else {
                     cropView.setCropRect(0.035f, 0.035f, 0.965f, 0.965f)
+                    editorStatus.text = "لم تتضح الحواف — استخدم مقابض الإطار يدويًا"
                     if (showResult) Toast.makeText(this, R.string.edge_detection_failed, Toast.LENGTH_LONG).show()
                 }
             }
@@ -572,6 +601,11 @@ class CropEditActivity : AppCompatActivity() {
             color = Color.argb(100, 255, 255, 255)
             strokeWidth = 1.5f
         }
+        private val paintHandle = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+        private val paintHandleBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#0F766E")
+            style = Paint.Style.STROKE
+        }
         private var showGrid = false
         private var draggingHandle = -1 // 0..3: TL, TR, BL, BR, 4: area
         private var lastTouchX = 0f
@@ -595,8 +629,8 @@ class CropEditActivity : AppCompatActivity() {
             invalidate()
         }
 
-        fun getCroppedBitmap(): android.graphics.Bitmap {
-            val bmp = bitmap ?: return android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)
+        fun getCroppedBitmap(source: android.graphics.Bitmap? = bitmap): android.graphics.Bitmap {
+            val bmp = source ?: return android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)
             return ImageProcessor.cropBitmap(bmp, cropRect.left, cropRect.top, cropRect.right, cropRect.bottom)
         }
 
@@ -630,6 +664,14 @@ class CropEditActivity : AppCompatActivity() {
 
             // الإطار
             canvas.drawRect(left, top, right, bottom, paintRect)
+
+            // مقابض بارزة تسهّل ضبط إطار المستند على الهاتف والتابلت.
+            val handleRadius = 12f / scale
+            paintHandleBorder.strokeWidth = 3f / scale
+            arrayOf(left to top, right to top, left to bottom, right to bottom).forEach { (hx, hy) ->
+                canvas.drawCircle(hx, hy, handleRadius, paintHandle)
+                canvas.drawCircle(hx, hy, handleRadius, paintHandleBorder)
+            }
 
             // الشبكة
             if (showGrid) {

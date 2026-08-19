@@ -20,17 +20,17 @@
         android:paddingBottom="32dp">
 
         <FrameLayout
-            android:layout_width="76dp"
-            android:layout_height="76dp"
-            android:background="@drawable/group_icon_bg"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:background="@drawable/scanner_tile_bg"
             android:contentDescription="@string/nav_scanner">
 
             <ImageView
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
                 android:layout_gravity="center"
-                android:src="@drawable/ic_scanner_white"
-                android:contentDescription="@string/nav_scanner" />
+                android:contentDescription="@string/nav_scanner"
+                android:src="@drawable/ic_scanner_white" />
         </FrameLayout>
 
         <TextView
@@ -39,8 +39,8 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:fontFamily="@font/tajawal_bold"
-            android:text="@string/nav_scanner"
-            android:textSize="26sp" />
+            android:text="ماسح المستندات"
+            android:textSize="25sp" />
 
         <TextView
             android:id="@+id/scanner_summary"
@@ -48,7 +48,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="5dp"
             android:fontFamily="@font/tajawal_medium"
-            android:text="0 مستند ممسوح · اختر طريقة البدء"
+            android:text="مسح ذكي محلي · كشف حواف وتحسين فوري"
             android:textColor="@color/day_text_secondary"
             android:textSize="12sp" />
 
@@ -58,7 +58,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:text="اختر الكاميرا لالتقاط مستند جديد أو المعرض لاستخدام صورة محفوظة"
+            android:text="التقط المستند داخل إطار واضح، ثم راجع القص والفلاتر قبل الحفظ"
             android:textColor="@color/day_text_secondary"
             android:textSize="14sp" />
 
@@ -68,41 +68,40 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="28dp"
             android:fontFamily="@font/tajawal_bold"
-            android:text="ابدأ المسح"
+            android:text="مسح جديد"
             android:textSize="16sp" />
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_height="188dp"
+            android:layout_marginTop="12dp"
             android:orientation="horizontal">
 
             <FrameLayout
                 android:id="@+id/btn_camera"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_marginEnd="7dp"
                 android:layout_weight="1"
-                android:layout_marginEnd="6dp"
                 android:background="@drawable/scanner_tile_bg"
                 android:clickable="true"
                 android:elevation="2dp"
                 android:focusable="true"
-                android:foreground="?attr/selectableItemBackground"
-                android:minHeight="148dp">
+                android:foreground="?attr/selectableItemBackground">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:gravity="center"
                     android:orientation="vertical"
-                    android:padding="20dp">
+                    android:padding="18dp">
 
                     <ImageView
                         android:id="@+id/icon_camera"
-                        android:layout_width="44dp"
-                        android:layout_height="44dp"
-                        android:src="@drawable/ic_camera_white"
-                        android:contentDescription="الكاميرا" />
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
+                        android:contentDescription="الكاميرا"
+                        android:src="@drawable/ic_camera_white" />
 
                     <TextView
                         android:id="@+id/label_camera"
@@ -110,46 +109,47 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:fontFamily="@font/tajawal_bold"
-                        android:text="الكاميرا"
+                        android:gravity="center"
+                        android:text="كاميرا المستندات"
                         android:textColor="#FFFFFF"
-                        android:textSize="16sp" />
+                        android:textSize="15sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="3dp"
-                        android:text="التقاط مستند"
+                        android:gravity="center"
+                        android:text="إطار تلقائي · فلاش · كشف الحواف"
                         android:textColor="#DDF8F3"
-                        android:textSize="11sp" />
+                        android:textSize="10sp" />
                 </LinearLayout>
             </FrameLayout>
 
             <FrameLayout
                 android:id="@+id/btn_gallery"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_marginStart="7dp"
                 android:layout_weight="1"
-                android:layout_marginStart="6dp"
                 android:background="@drawable/scanner_tile_bg"
                 android:clickable="true"
                 android:elevation="2dp"
                 android:focusable="true"
-                android:foreground="?attr/selectableItemBackground"
-                android:minHeight="148dp">
+                android:foreground="?attr/selectableItemBackground">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:gravity="center"
                     android:orientation="vertical"
-                    android:padding="20dp">
+                    android:padding="18dp">
 
                     <ImageView
                         android:id="@+id/icon_gallery"
-                        android:layout_width="44dp"
-                        android:layout_height="44dp"
-                        android:src="@drawable/ic_gallery_white"
-                        android:contentDescription="المعرض" />
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
+                        android:contentDescription="المعرض"
+                        android:src="@drawable/ic_gallery_white" />
 
                     <TextView
                         android:id="@+id/label_gallery"
@@ -157,17 +157,18 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:fontFamily="@font/tajawal_bold"
-                        android:text="المعرض"
+                        android:text="من المعرض"
                         android:textColor="#FFFFFF"
-                        android:textSize="16sp" />
+                        android:textSize="15sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="3dp"
-                        android:text="اختيار صورة"
+                        android:gravity="center"
+                        android:text="تحويل صورة إلى مستند"
                         android:textColor="#DDF8F3"
-                        android:textSize="11sp" />
+                        android:textSize="10sp" />
                 </LinearLayout>
             </FrameLayout>
         </LinearLayout>
@@ -220,27 +221,27 @@
         </com.google.android.material.card.MaterialCardView>
 
         <LinearLayout
-        android:id="@+id/scanner_status"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:padding="12dp"
-        android:visibility="gone">
-
-        <ProgressBar
-            android:layout_width="22dp"
-            android:layout_height="22dp"
-            android:indeterminateTint="@color/primary" />
-
-        <TextView
-            android:id="@+id/scan_status_text"
+            android:id="@+id/scanner_status"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:fontFamily="@font/tajawal_regular"
-            android:textSize="14sp" />
+            android:layout_marginTop="24dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="12dp"
+            android:visibility="gone">
+
+            <ProgressBar
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:indeterminateTint="@color/primary" />
+
+            <TextView
+                android:id="@+id/scan_status_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:fontFamily="@font/tajawal_regular"
+                android:textSize="14sp" />
         </LinearLayout>
 
     </LinearLayout>

@@ -1,17 +1,11 @@
 package com.masahhisabat.app.ui.scanner
 
-import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.os.VibrationEffect
 import android.os.Vibrator
-import android.provider.MediaStore
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -21,41 +15,17 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
-import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
-import com.masahhisabat.app.data.currentInvoiceName
-import com.masahhisabat.app.image.ImageProcessor
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.invoice.GroupActivity
 import java.io.File
 
 class ScannerFragment : Fragment() {
 
-    private var lastCapturePath: String? = null
     private var isScannerBusy = false
-    private val cameraLauncher = registerForActivityResult(
-        ActivityResultContracts.TakePicture()
-    ) { success ->
-        setScannerBusy(false)
-        val capturePath = lastCapturePath
-        if (success && capturePath != null && isAdded) {
-            val captureFile = File(capturePath)
-            if (captureFile.exists() && captureFile.length() > 0L) {
-                showPostScanOptions(capturePath)
-            } else {
-                lastCapturePath = null
-                Toast.makeText(requireContext(), "تعذر حفظ صورة الكاميرا، أعد المحاولة", Toast.LENGTH_LONG).show()
-            }
-        } else if (!success) {
-            lastCapturePath = null
-        }
-    }
 
     private val galleryLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
@@ -76,20 +46,12 @@ class ScannerFragment : Fragment() {
         }
     }
 
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) openCamera() else
-            Toast.makeText(requireContext(), "تم رفض إذن الكاميرا", Toast.LENGTH_SHORT).show()
-    }
-
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return inflater.inflate(R.layout.fragment_scanner, container, false)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        lastCapturePath = savedInstanceState?.getString(STATE_CAPTURE_PATH) ?: lastCapturePath
         applyTheme(view)
         refreshRecentScans()
 
@@ -102,11 +64,6 @@ class ScannerFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         if (isAdded && view != null) refreshRecentScans()
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putString(STATE_CAPTURE_PATH, lastCapturePath)
     }
 
     private fun applyTheme(view: View) {
@@ -214,31 +171,13 @@ class ScannerFragment : Fragment() {
 
     private fun checkCameraAndOpen() {
         val ctx = requireContext()
-        val hasCamera = ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
+        val hasCamera = ctx.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY)
         if (!hasCamera) {
             Toast.makeText(ctx, "لا توجد كاميرا في هذا الجهاز — اختر من المعرض", Toast.LENGTH_SHORT).show()
             return
         }
-        when {
-            ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED ->
-                openCamera()
-            else -> requestPermissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    private fun openCamera() {
         if (isScannerBusy) return
-        setScannerBusy(true, "يجري فتح الكاميرا…")
-        try {
-            val file = File(requireContext().cacheDir, "scan_${System.currentTimeMillis()}.jpg")
-            lastCapturePath = file.absolutePath
-            val uri = FileProvider.getUriForFile(requireContext(), "${requireContext().packageName}.fileprovider", file)
-            cameraLauncher.launch(uri)
-        } catch (_: Exception) {
-            lastCapturePath = null
-            setScannerBusy(false)
-            Toast.makeText(requireContext(), "تعذر فتح الكاميرا، حاول مرة أخرى", Toast.LENGTH_LONG).show()
-        }
+        startActivity(Intent(ctx, DocumentCameraActivity::class.java))
     }
 
     private fun setScannerBusy(busy: Boolean, message: String = "") {
@@ -289,67 +228,4 @@ class ScannerFragment : Fragment() {
         startActivity(intent)
     }
 
-    private fun saveToGallery(path: String) {
-        val ctx = requireContext()
-        Thread {
-            var bmp: android.graphics.Bitmap? = null
-            val error = try {
-                bmp = ImageProcessor.loadBitmap(path, 2048)
-                val image = requireNotNull(bmp) { "تعذر قراءة الصورة" }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val resolver = ctx.contentResolver
-                    val values = android.content.ContentValues().apply {
-                        put(MediaStore.Images.Media.DISPLAY_NAME, "masah_${System.currentTimeMillis()}.jpg")
-                        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                        put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/MasahHisabat")
-                    }
-                    val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-                        ?: throw IllegalStateException("تعذر إنشاء ملف الصورة")
-                    resolver.openOutputStream(uri)?.use { out ->
-                        if (!image.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, out)) {
-                            throw IllegalStateException("تعذر ضغط الصورة")
-                        }
-                    } ?: throw IllegalStateException("تعذر فتح ملف الصورة")
-                } else {
-                    val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "MasahHisabat")
-                    dir.mkdirs()
-                    val file = File(dir, "masah_${System.currentTimeMillis()}.jpg")
-                    file.outputStream().use {
-                        if (!image.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it)) {
-                            throw IllegalStateException("تعذر ضغط الصورة")
-                        }
-                    }
-                    ctx.sendBroadcast(Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE).apply { data = Uri.fromFile(file) })
-                }
-                null
-            } catch (e: Exception) {
-                e.message ?: "تعذر حفظ الصورة"
-            } finally {
-                bmp?.takeIf { !it.isRecycled }?.recycle()
-            }
-            activity?.runOnUiThread {
-                if (!isAdded) return@runOnUiThread
-                if (error == null) Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
-                else Toast.makeText(ctx, "فشل الحفظ: $error", Toast.LENGTH_SHORT).show()
-            }
-        }.apply { name = "scanner-gallery-save"; start() }
-    }
-
-    private fun shareImage(path: String) {
-        try {
-            val uri = FileProvider.getUriForFile(requireContext(), "${requireContext().packageName}.fileprovider", File(path))
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "image/jpeg"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            startActivity(Intent.createChooser(intent, getString(R.string.share)))
-        } catch (e: Exception) {
-            Toast.makeText(requireContext(), "تعذرت المشاركة", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private companion object {
-        const val STATE_CAPTURE_PATH = "scanner_capture_path"
-    }
 }

@@ -9,25 +9,47 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="#08141F"
         android:gravity="center_vertical"
-        android:padding="16dp">
+        android:paddingStart="14dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="12dp">
 
         <ImageView
             android:id="@+id/btn_back"
             android:layout_width="44dp"
             android:layout_height="44dp"
+            android:background="@drawable/camera_control_bg"
             android:padding="10dp"
             android:src="@drawable/ic_close"
             android:contentDescription="@string/close" />
 
-        <TextView
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
             android:layout_weight="1"
-            android:text="@string/crop_title"
-            android:textColor="@color/white"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/tajawal_bold"
+                android:text="مراجعة المستند"
+                android:textColor="@color/white"
+                android:textSize="18sp" />
+
+            <TextView
+                android:id="@+id/editor_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:fontFamily="@font/tajawal_medium"
+                android:text="اقتراح حواف المستند"
+                android:textColor="#8EDFD4"
+                android:textSize="11sp" />
+        </LinearLayout>
     </LinearLayout>
 
     <FrameLayout
@@ -71,13 +93,19 @@
     <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#102028">
+        android:background="#0B1A26"
+        android:fillViewport="true"
+        android:scrollbars="none">
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:padding="10dp">
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="8dp">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_rotate"
@@ -85,7 +113,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="6dp"
-                android:text="@string/rotate"
+                android:text="تدوير"
                 android:textSize="13sp" />
 
             <com.google.android.material.button.MaterialButton
@@ -94,7 +122,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="6dp"
-                android:text="@string/grid_on"
+                android:text="شبكة"
                 android:textSize="13sp" />
 
             <com.google.android.material.button.MaterialButton
@@ -103,7 +131,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="6dp"
-                android:text="@string/crop_center"
+                android:text="توسيط"
                 android:textSize="13sp" />
 
             <com.google.android.material.button.MaterialButton
@@ -112,7 +140,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="6dp"
-                android:text="@string/crop_auto"
+                android:text="حواف تلقائية"
                 android:textSize="13sp" />
 
             <com.google.android.material.button.MaterialButton
@@ -121,7 +149,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="6dp"
-                android:text="@string/document_filters"
+                android:text="فلتر"
                 android:textSize="13sp" />
 
             <com.google.android.material.button.MaterialButton
@@ -132,14 +160,37 @@
                 android:layout_marginEnd="6dp"
                 android:text="مقارنة"
                 android:textSize="13sp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_done"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/save"
-                android:textSize="13sp"
-                android:backgroundTint="@color/primary" />
         </LinearLayout>
     </HorizontalScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#08141F"
+        android:orientation="vertical"
+        android:paddingStart="16dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="14dp">
+
+        <TextView
+            android:id="@+id/filter_mode_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/tajawal_medium"
+            android:gravity="center"
+            android:text="التحسين التلقائي جاهز"
+            android:textColor="#B7D9D5"
+            android:textSize="12sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_done"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="9dp"
+            android:backgroundTint="@color/primary"
+            android:fontFamily="@font/tajawal_bold"
+            android:text="متابعة إلى خيارات الحفظ"
+            android:textSize="15sp" />
+    </LinearLayout>
 </LinearLayout>

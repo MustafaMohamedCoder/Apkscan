@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#020617"
+    android:keepScreenOn="true">
+
+    <androidx.camera.view.PreviewView
+        android:id="@+id/camera_preview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:implementationMode="compatible"
+        app:scaleType="fillCenter" />
+
+    <view
+        class="com.masahhisabat.app.ui.scanner.DocumentCameraActivity$DocumentFrameOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:background="#8A020617"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="14dp">
+
+        <ImageView
+            android:id="@+id/btn_close_camera"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:background="@drawable/camera_control_bg"
+            android:contentDescription="إغلاق"
+            android:padding="10dp"
+            android:src="@drawable/ic_close" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/tajawal_bold"
+                android:text="مسح مستند"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:fontFamily="@font/tajawal_medium"
+                android:text="كشف الحواف محليًا"
+                android:textColor="#B7D9D5"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/btn_flash"
+            android:layout_width="wrap_content"
+            android:layout_height="42dp"
+            android:background="@drawable/camera_control_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="@font/tajawal_bold"
+            android:gravity="center"
+            android:paddingStart="13dp"
+            android:paddingEnd="13dp"
+            android:text="فلاش"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/camera_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal|bottom"
+        android:layout_marginBottom="166dp"
+        android:background="@drawable/camera_status_bg"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="14dp"
+        android:paddingTop="9dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="9dp">
+
+        <View
+            android:layout_width="7dp"
+            android:layout_height="7dp"
+            android:background="@drawable/camera_status_dot" />
+
+        <TextView
+            android:id="@+id/camera_status_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:fontFamily="@font/tajawal_medium"
+            android:text="يتم تجهيز الكاميرا…"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="144dp"
+        android:layout_gravity="bottom"
+        android:background="#D9020B16"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingStart="22dp"
+        android:paddingEnd="22dp">
+
+        <LinearLayout
+            android:id="@+id/btn_camera_gallery"
+            android:layout_width="76dp"
+            android:layout_height="wrap_content"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="6dp">
+
+            <FrameLayout
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/camera_control_bg">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="المعرض"
+                    android:src="@drawable/ic_gallery_white" />
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="7dp"
+                android:fontFamily="@font/tajawal_medium"
+                android:text="المعرض"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/btn_capture_document"
+            android:layout_width="82dp"
+            android:layout_height="82dp"
+            android:layout_marginStart="24dp"
+            android:layout_marginEnd="24dp"
+            android:background="@drawable/camera_capture_outer"
+            android:clickable="true"
+            android:focusable="true"
+            android:padding="7dp">
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/camera_capture_inner" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="76dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="6dp">
+
+            <TextView
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/camera_control_bg"
+                android:fontFamily="@font/tajawal_bold"
+                android:gravity="center"
+                android:text="AUTO"
+                android:textColor="#5EEAD4"
+                android:textSize="10sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="7dp"
+                android:fontFamily="@font/tajawal_medium"
+                android:text="تلقائي"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/capture_progress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/camera_status_bg"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="22dp"
+        android:visibility="gone">
+
+        <ProgressBar
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:indeterminateTint="#2DD4BF" />
+    </LinearLayout>
+
+</FrameLayout>

@@ -25,7 +25,9 @@ object DocumentEdgeDetector {
     private const val MAX_PROCESS_DIMENSION = 960
     private const val MAX_STRAIGHTEN_DIMENSION = 2200
     private const val FALLBACK_INSET = 0.035f
-    private const val AUTO_CORRECT_CONFIDENCE = 0.86f
+    private const val AUTO_CORRECT_CONFIDENCE = 0.82f
+    private const val RETRY_CONFIDENCE = 0.78f
+    private const val MIN_DOCUMENT_AREA_RATIO = 0.06f
 
     @Volatile private var initialized = false
     @Volatile private var openCvAvailable = false
@@ -64,38 +66,66 @@ object DocumentEdgeDetector {
         val enhanced = Mat()
         val blurred = Mat()
         val edges = Mat()
+        val adaptive = Mat()
         val kernel = Mat.ones(Size(3.0, 3.0), CvType.CV_8U)
-        val hierarchy = Mat()
-        val contours = ArrayList<MatOfPoint>()
         val clahe = Imgproc.createCLAHE(3.0, Size(8.0, 8.0))
         return try {
             Utils.bitmapToMat(working, input)
             Imgproc.cvtColor(input, grayscale, Imgproc.COLOR_RGBA2GRAY)
             clahe.apply(grayscale, enhanced)
             Imgproc.GaussianBlur(enhanced, blurred, Size(5.0, 5.0), 0.0)
+
+            // المسار الأساسي سريع ومناسب للصور ذات الحدود الواضحة.
             val mean = Core.mean(blurred).`val`[0]
             val lower = (mean * 0.66).coerceIn(22.0, 145.0)
             val upper = (mean * 1.33).coerceIn(lower + 24.0, 245.0)
             Imgproc.Canny(blurred, edges, lower, upper)
             Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, kernel, Point(-1.0, -1.0), 2)
+            var candidate = findBestCandidate(edges, width, height)
 
-            Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
-            val candidate = contours
-                .asSequence()
-                .filter { Imgproc.contourArea(it) >= width * height * 0.06 }
-                .sortedByDescending { Imgproc.contourArea(it) }
-                .take(24)
-                .mapNotNull { scoreQuadrilateral(it, width, height) }
-                .maxByOrNull { it.confidence }
-
+            // إعادة المحاولة فقط عند الثقة المنخفضة؛ هذا يحسن الصور البيضاء أو الظليلة
+            // دون دفع كل عملية مسح إلى تكلفة مسارين كاملين.
+            if (candidate == null || candidate.confidence < RETRY_CONFIDENCE) {
+                Imgproc.adaptiveThreshold(
+                    blurred,
+                    adaptive,
+                    255.0,
+                    Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,
+                    Imgproc.THRESH_BINARY_INV,
+                    31,
+                    12.0
+                )
+                Imgproc.morphologyEx(adaptive, adaptive, Imgproc.MORPH_CLOSE, kernel, Point(-1.0, -1.0), 2)
+                val alternative = findBestCandidate(adaptive, width, height)
+                if (alternative != null && (candidate == null || alternative.confidence > candidate.confidence)) {
+                    candidate = alternative
+                }
+            }
             candidate?.result ?: fallback()
         } catch (_: Throwable) {
             fallback()
         } finally {
-            contours.forEach { it.release() }
             clahe.collectGarbage()
-            input.release(); grayscale.release(); enhanced.release(); blurred.release(); edges.release(); kernel.release(); hierarchy.release()
+            input.release(); grayscale.release(); enhanced.release(); blurred.release(); edges.release(); adaptive.release(); kernel.release()
             if (working !== source && !working.isRecycled) working.recycle()
+        }
+    }
+
+    private fun findBestCandidate(mask: Mat, width: Int, height: Int): Candidate? {
+        val hierarchy = Mat()
+        val contours = ArrayList<MatOfPoint>()
+        return try {
+            Imgproc.findContours(mask, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
+            contours
+                .asSequence()
+                .filter { Imgproc.contourArea(it) >= width * height * MIN_DOCUMENT_AREA_RATIO }
+                .sortedByDescending { Imgproc.contourArea(it) }
+                .take(32)
+                .mapNotNull { scoreQuadrilateral(it, width, height) }
+                .maxByOrNull { it.confidence }
+        } finally {
+            contours.forEach { it.release() }
+            hierarchy.release()
         }
     }
 
@@ -145,7 +175,7 @@ object DocumentEdgeDetector {
             val ordered = orderCorners(points) ?: return null
             val area = abs(Imgproc.contourArea(polygon))
             val areaRatio = area / (width.toDouble() * height.toDouble())
-            if (areaRatio !in 0.12..0.98) return null
+            if (areaRatio !in 0.10..0.98) return null
 
             val areaScore = ((areaRatio - 0.12) / 0.70).toFloat().coerceIn(0f, 1f)
             val angleScore = cornerAngleScore(ordered)
@@ -171,10 +201,14 @@ object DocumentEdgeDetector {
 
     private fun orderCorners(points: Array<Point>): List<Point>? {
         if (points.size != 4) return null
-        val byY = points.sortedBy { it.y }
-        val top = byY.take(2).sortedBy { it.x }
-        val bottom = byY.takeLast(2).sortedBy { it.x }
-        return listOf(top[0], top[1], bottom[1], bottom[0])
+        // ترتيب ثابت: أعلى يسار، أعلى يمين، أسفل يمين، أسفل يسار.
+        // يعتمد على مجموع/فارق الإحداثيات ليعمل مع الصور المائلة أيضًا.
+        val topLeft = points.minByOrNull { it.x + it.y } ?: return null
+        val bottomRight = points.maxByOrNull { it.x + it.y } ?: return null
+        val topRight = points.minByOrNull { it.y - it.x } ?: return null
+        val bottomLeft = points.maxByOrNull { it.y - it.x } ?: return null
+        val ordered = listOf(topLeft, topRight, bottomRight, bottomLeft)
+        return if (ordered.toSet().size == 4) ordered else null
     }
 
     private fun cornerAngleScore(points: List<Point>): Float {

@@ -165,7 +165,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:layout_margin="12dp"
-            android:background="@drawable/empty_state_bg"
+            android:background="@drawable/empty_state_panel"
             android:clickable="true"
             android:focusable="true"
             android:fontFamily="@font/tajawal_medium"
@@ -175,6 +175,7 @@
             android:minHeight="132dp"
             android:padding="28dp"
             android:text="لا توجد مجموعات بعد. اضغط هنا لإنشاء مجموعتك الأولى."
+            android:textAlignment="center"
             android:textColor="@color/day_text_secondary"
             android:textSize="15sp" />
     </FrameLayout>

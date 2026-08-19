@@ -206,7 +206,7 @@ class GroupActivity : AppCompatActivity() {
         }
 
         // إرسال بالضغط على زر الإرسال في لوحة المفاتيح
-        etMessage.setOnEditorActionListener { v, actionId, _ ->
+        etMessage.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND) {
                 btnSend.performClick()
                 true
@@ -523,8 +523,6 @@ class GroupActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
             val item = items[position]
             val ctx = holder.itemView.context
-            val text = ThemeHelper.text(ctx)
-            val textSec = ThemeHelper.textSecondary(ctx)
 
             val bubble = holder.itemView.findViewById<View>(R.id.msg_bubble)
             val img = holder.itemView.findViewById<ImageView>(R.id.item_image)
@@ -576,9 +574,6 @@ class GroupActivity : AppCompatActivity() {
             tvTimeDate.setTextColor(ThemeHelper.bubbleTime(ctx))
             tvSender.setTextColor(ThemeHelper.bubbleText(ctx))
             ivSeen?.setColorFilter(ThemeHelper.bubbleSeen(ctx))
-
-            val primaryText = ThemeHelper.text(ctx)
-            val secondaryText = ThemeHelper.textSecondary(ctx)
 
             // أيقونتا الإجراءات بيضاوان داخل دوائر كبيرة لتظلّا واضحتين خارج الفقاعة.
             pencil.setColorFilter(Color.WHITE)

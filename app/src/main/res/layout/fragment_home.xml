@@ -257,7 +257,7 @@
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_quick_group"
                         android:layout_width="0dp"
-                        android:layout_height="46dp"
+                        android:layout_height="48dp"
                         android:layout_marginStart="7dp"
                         android:layout_weight="1"
                         android:drawableStart="@drawable/ic_groups_filled"
@@ -273,7 +273,7 @@
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_quick_search"
                         android:layout_width="0dp"
-                        android:layout_height="46dp"
+                        android:layout_height="48dp"
                         android:layout_marginStart="7dp"
                         android:layout_weight="1"
                         android:drawableStart="@drawable/ic_search"
@@ -457,7 +457,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
-                        android:background="@drawable/input_bg"
+                        android:background="@drawable/empty_state_panel"
                         android:gravity="center"
                         android:padding="20dp"
                         android:text="@string/no_operations"

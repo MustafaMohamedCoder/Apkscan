@@ -79,15 +79,16 @@
 
             <FrameLayout
                 android:id="@+id/btn_camera"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginEnd="7dp"
-                android:layout_weight="1"
-                android:background="@drawable/scanner_tile_bg"
-                android:clickable="true"
-                android:elevation="2dp"
-                android:focusable="true"
-                android:foreground="?attr/selectableItemBackground">
+               android:layout_width="0dp"
+               android:layout_height="match_parent"
+               android:layout_marginEnd="7dp"
+               android:layout_weight="1"
+               android:background="@drawable/scanner_tile_bg"
+               android:clickable="true"
+                android:contentDescription="فتح كاميرا المستندات"
+               android:elevation="2dp"
+               android:focusable="true"
+               android:foreground="?attr/selectableItemBackground">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -97,11 +98,12 @@
                     android:padding="18dp">
 
                     <ImageView
-                        android:id="@+id/icon_camera"
-                        android:layout_width="50dp"
-                        android:layout_height="50dp"
-                        android:contentDescription="الكاميرا"
-                        android:src="@drawable/ic_camera_white" />
+                       android:id="@+id/icon_camera"
+                       android:layout_width="50dp"
+                       android:layout_height="50dp"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                       android:src="@drawable/ic_camera_white" />
 
                     <TextView
                         android:id="@+id/label_camera"
@@ -127,15 +129,16 @@
 
             <FrameLayout
                 android:id="@+id/btn_gallery"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="7dp"
-                android:layout_weight="1"
-                android:background="@drawable/scanner_tile_bg"
-                android:clickable="true"
-                android:elevation="2dp"
-                android:focusable="true"
-                android:foreground="?attr/selectableItemBackground">
+               android:layout_width="0dp"
+               android:layout_height="match_parent"
+               android:layout_marginStart="7dp"
+               android:layout_weight="1"
+               android:background="@drawable/scanner_tile_bg"
+               android:clickable="true"
+                android:contentDescription="اختيار مستند من المعرض"
+               android:elevation="2dp"
+               android:focusable="true"
+               android:foreground="?attr/selectableItemBackground">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -145,11 +148,12 @@
                     android:padding="18dp">
 
                     <ImageView
-                        android:id="@+id/icon_gallery"
-                        android:layout_width="50dp"
-                        android:layout_height="50dp"
-                        android:contentDescription="المعرض"
-                        android:src="@drawable/ic_gallery_white" />
+                       android:id="@+id/icon_gallery"
+                       android:layout_width="50dp"
+                       android:layout_height="50dp"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                       android:src="@drawable/ic_gallery_white" />
 
                     <TextView
                         android:id="@+id/label_gallery"
@@ -210,11 +214,13 @@
                     android:id="@+id/recent_scans_empty"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:fontFamily="@font/tajawal_medium"
-                    android:gravity="center"
-                    android:padding="12dp"
-                    android:text="ستظهر المستندات هنا بعد أول عملية مسح."
+                   android:layout_marginTop="4dp"
+                   android:fontFamily="@font/tajawal_medium"
+                   android:gravity="center"
+                    android:background="@drawable/empty_state_panel"
+                    android:lineSpacingExtra="3dp"
+                   android:padding="12dp"
+                   android:text="ستظهر المستندات هنا بعد أول عملية مسح."
                     android:textColor="@color/day_text_secondary"
                     android:textSize="13sp" />
             </LinearLayout>
@@ -222,11 +228,13 @@
 
         <LinearLayout
             android:id="@+id/scanner_status"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
+           android:layout_width="wrap_content"
+           android:layout_height="wrap_content"
+           android:layout_marginTop="24dp"
+            android:accessibilityLiveRegion="polite"
+            android:background="@drawable/status_info_panel"
+           android:gravity="center_vertical"
+           android:orientation="horizontal"
             android:padding="12dp"
             android:visibility="gone">
 

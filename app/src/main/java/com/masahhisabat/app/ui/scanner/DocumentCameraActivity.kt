@@ -9,6 +9,8 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
+import android.util.Size
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.TextView
@@ -19,12 +21,16 @@ import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import com.masahhisabat.app.R
 import java.io.File
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * كاميرا مستندات محلية: معاينة CameraX، إطار توجيه واضح، تحكم بالفلاش والالتقاط،
@@ -38,9 +44,16 @@ class DocumentCameraActivity : AppCompatActivity() {
     private lateinit var progress: View
     private lateinit var flashButton: TextView
     private var imageCapture: ImageCapture? = null
+    private var imageAnalysis: ImageAnalysis? = null
     private var camera: Camera? = null
     private var torchEnabled = false
     private var captureInProgress = false
+    private val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "document-preview-analyzer").apply { isDaemon = true }
+    }
+    private var analyzedFrameCount = 0
+    private var lastAnalysisAt = 0L
+    private var lastLightState = -1
 
     private val galleryLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) copyGalleryImageAndEdit(uri)
@@ -91,8 +104,23 @@ class DocumentCameraActivity : AppCompatActivity() {
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                     .setJpegQuality(92)
                     .build()
+                imageAnalysis = ImageAnalysis.Builder()
+                    // دقة منخفضة للمحلل فقط؛ لا تؤثر في دقة صورة المستند النهائية.
+                    .setTargetResolution(Size(960, 540))
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
+                    .build()
+                    .also { analysis ->
+                        analysis.setAnalyzer(analysisExecutor) { image -> analyzeGuideBrightness(image) }
+                    }
                 provider.unbindAll()
-                camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageCapture)
+                camera = provider.bindToLifecycle(
+                    this,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    preview,
+                    imageCapture,
+                    imageAnalysis
+                )
                 val available = camera?.cameraInfo?.hasFlashUnit() == true
                 flashButton.isEnabled = available
                 flashButton.alpha = if (available) 1f else 0.45f
@@ -102,6 +130,65 @@ class DocumentCameraActivity : AppCompatActivity() {
                 finish()
             }
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    /**
+     * تحليل خفيف لقناة الإضاءة داخل إطار المستند فقط. لا يحوّل الإطار إلى Bitmap
+     * ولا يشغّل كشف الزوايا الكامل؛ فالخوارزمية الثقيلة تعمل بعد الالتقاط على الصورة الأصلية.
+     */
+    private fun analyzeGuideBrightness(image: ImageProxy) {
+        try {
+            analyzedFrameCount++
+            val now = SystemClock.elapsedRealtime()
+            if (analyzedFrameCount % ANALYSIS_EVERY_N_FRAMES != 0 || now - lastAnalysisAt < MIN_ANALYSIS_INTERVAL_MS) {
+                return
+            }
+            lastAnalysisAt = now
+
+            val lumaPlane = image.planes.firstOrNull() ?: return
+            val width = image.width
+            val height = image.height
+            if (width <= 0 || height <= 0) return
+
+            // نحلل منطقة الإطار المرئي فقط وبعينة متباعدة لتقليل الحمل على الأجهزة الضعيفة.
+            val left = (width * 0.12f).toInt()
+            val right = (width * 0.88f).toInt()
+            val top = (height * 0.14f).toInt()
+            val bottom = (height * 0.86f).toInt()
+            val buffer = lumaPlane.buffer
+            var total = 0L
+            var count = 0
+            var y = top
+            while (y < bottom) {
+                var x = left
+                while (x < right) {
+                    val index = y * lumaPlane.rowStride + x * lumaPlane.pixelStride
+                    if (index in 0 until buffer.capacity()) {
+                        total += buffer.get(index).toInt() and 0xFF
+                        count++
+                    }
+                    x += LUMA_SAMPLE_STEP
+                }
+                y += LUMA_SAMPLE_STEP
+            }
+
+            if (count == 0) return
+            val lightState = if ((total / count) < LOW_LIGHT_LUMA_THRESHOLD) 1 else 0
+            if (lightState == lastLightState) return
+            lastLightState = lightState
+
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed && !captureInProgress) {
+                    statusText.text = if (lightState == 1) {
+                        "إضاءة منخفضة — فعّل الفلاش أو قرّب المستند"
+                    } else {
+                        "وجّه المستند داخل الإطار ثم التقط الصورة"
+                    }
+                }
+            }
+        } finally {
+            image.close()
+        }
     }
 
     private fun toggleTorch() {
@@ -173,6 +260,19 @@ class DocumentCameraActivity : AppCompatActivity() {
         captureButton.isEnabled = !capturing
         captureButton.alpha = if (capturing) 0.55f else 1f
         statusText.text = message
+    }
+
+    override fun onDestroy() {
+        imageAnalysis?.clearAnalyzer()
+        analysisExecutor.shutdownNow()
+        super.onDestroy()
+    }
+
+    private companion object {
+        const val ANALYSIS_EVERY_N_FRAMES = 3
+        const val MIN_ANALYSIS_INTERVAL_MS = 125L
+        const val LUMA_SAMPLE_STEP = 16
+        const val LOW_LIGHT_LUMA_THRESHOLD = 62L
     }
 
     /** طبقة رسم خفيفة توضح مساحة المستند وتُبقي مناطق الكاميرا المحيطة منخفضة التباين. */

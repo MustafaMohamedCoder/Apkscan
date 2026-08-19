@@ -12,6 +12,7 @@ import java.io.File
 enum class ProcessMode(val key: String, val label: String) {
     ORIGINAL("original", "الأصلية"),
     AUTO("auto", "تحسين تلقائي"),
+    MAGIC_COLOR("magic_color", "Magic Color"),
     LOW_LIGHT("low_light", "إضاءة ضعيفة"),
     DOCUMENT("document", "تباين المستند"),
     HIGH_CONTRAST("high", "تباين عالي"),
@@ -39,6 +40,7 @@ object ImageProcessor {
                 val result = when (mode) {
                     ProcessMode.ORIGINAL -> src.copy(Bitmap.Config.ARGB_8888, false)
                     ProcessMode.AUTO -> enhanceAutomatically(src)
+                    ProcessMode.MAGIC_COLOR -> magicColor(src)
                     ProcessMode.LOW_LIGHT -> correctLowLight(src)
                     ProcessMode.DOCUMENT -> documentContrast(src)
                     ProcessMode.HIGH_CONTRAST -> highContrast(src)
@@ -54,6 +56,7 @@ object ImageProcessor {
     fun processSync(mode: ProcessMode, src: Bitmap): Bitmap = when (mode) {
         ProcessMode.ORIGINAL -> src.copy(Bitmap.Config.ARGB_8888, false)
         ProcessMode.AUTO -> enhanceAutomatically(src)
+        ProcessMode.MAGIC_COLOR -> magicColor(src)
         ProcessMode.LOW_LIGHT -> correctLowLight(src)
         ProcessMode.DOCUMENT -> documentContrast(src)
         ProcessMode.HIGH_CONTRAST -> highContrast(src)
@@ -90,7 +93,72 @@ object ImageProcessor {
         var sum = 0L
         for (pixel in pixels) sum += luminance(pixel).toLong()
         val mean = sum.toFloat() / pixels.size.coerceAtLeast(1)
-        return if (mean < 132f) correctLowLight(src) else documentContrast(src, strength = 0.42f)
+        return if (mean < 132f) correctLowLight(src) else magicColor(src)
+    }
+
+    /**
+     * وضع Magic Color: تسوية موضعية لخلفية الورق ثم توازن بسيط للصبغة اللونية.
+     * لا يستبدل الصورة الأصلية؛ بل ينتج نسخة معاينة/حفظ مستقلة بعد تصحيح المنظور.
+     */
+    private fun magicColor(src: Bitmap): Bitmap {
+        val flattened = adaptiveDocumentEnhance(
+            src = src,
+            targetLuminance = 182f,
+            illuminationStrength = 0.66f,
+            contrast = 1.16f,
+            gamma = 0.90f
+        )
+        return neutralizePaperTint(flattened)
+    }
+
+    /** يقلل اصفرار الورق أو ازرقاق الظلال اعتمادًا على مناطق الخلفية الساطعة منخفضة التشبع. */
+    private fun neutralizePaperTint(src: Bitmap): Bitmap {
+        val bmp = src.copy(Bitmap.Config.ARGB_8888, true)
+        val w = bmp.width
+        val h = bmp.height
+        val pixels = IntArray(w * h)
+        bmp.getPixels(pixels, 0, w, 0, 0, w, h)
+
+        var sumR = 0L
+        var sumG = 0L
+        var sumB = 0L
+        var count = 0
+        // أخذ عينة كل بكسلين يقلل وقت التنفيذ مع المحافظة على استقرار التوازن.
+        for (i in pixels.indices step 2) {
+            val px = pixels[i]
+            val r = (px shr 16) and 255
+            val g = (px shr 8) and 255
+            val b = px and 255
+            val maxChannel = maxOf(r, g, b)
+            val minChannel = minOf(r, g, b)
+            val lum = luminance(px)
+            if (lum > 145f && maxChannel - minChannel < 66) {
+                sumR += r.toLong()
+                sumG += g.toLong()
+                sumB += b.toLong()
+                count++
+            }
+        }
+
+        if (count < 24) return bmp
+        val avgR = sumR.toFloat() / count
+        val avgG = sumG.toFloat() / count
+        val avgB = sumB.toFloat() / count
+        val neutral = (avgR + avgG + avgB) / 3f
+        // نطاق محافظ حتى لا تتغير ألوان الأختام أو الصور داخل المستند بقوة.
+        val scaleR = (neutral / avgR.coerceAtLeast(1f)).coerceIn(0.86f, 1.14f)
+        val scaleG = (neutral / avgG.coerceAtLeast(1f)).coerceIn(0.86f, 1.14f)
+        val scaleB = (neutral / avgB.coerceAtLeast(1f)).coerceIn(0.86f, 1.14f)
+
+        for (i in pixels.indices) {
+            val px = pixels[i]
+            val r = (((px shr 16) and 255) * scaleR).toInt().coerceIn(0, 255)
+            val g = (((px shr 8) and 255) * scaleG).toInt().coerceIn(0, 255)
+            val b = ((px and 255) * scaleB).toInt().coerceIn(0, 255)
+            pixels[i] = (0xFF000000.toInt()) or (r shl 16) or (g shl 8) or b
+        }
+        bmp.setPixels(pixels, 0, w, 0, 0, w, h)
+        return bmp
     }
 
     /**
@@ -204,19 +272,42 @@ object ImageProcessor {
         return bmp
     }
 
-    /** تحويل إلى أبيض وأسود */
+    /**
+     * مستند أبيض وأسود بعتبة تكيفية محلية؛ يتعامل مع الظلال والخلفية الورقية أفضل
+     * من تحويل التدرج الرمادي الثابت، ويُنفذ بعد الالتقاط فقط.
+     */
     private fun toBlackAndWhite(src: Bitmap): Bitmap {
         val bmp = src.copy(Bitmap.Config.ARGB_8888, true)
         val w = bmp.width
         val h = bmp.height
         val pixels = IntArray(w * h)
         bmp.getPixels(pixels, 0, w, 0, 0, w, h)
-        for (i in pixels.indices) {
-            val px = pixels[i]
-            val lum = (0.299f * ((px shr 16) and 255) +
-                0.587f * (((px shr 8) and 255)) +
-                0.114f * (px and 255)).toInt()
-            pixels[i] = (0xFF000000.toInt()) or (lum shl 16) or (lum shl 8) or lum
+
+        val columns = (w / 112).coerceIn(4, 24)
+        val rows = (h / 112).coerceIn(4, 24)
+        val sums = LongArray(columns * rows)
+        val counts = IntArray(columns * rows)
+        for (y in 0 until h) {
+            val tileY = (y * rows / h).coerceAtMost(rows - 1)
+            val rowOffset = y * w
+            for (x in 0 until w) {
+                val tileX = (x * columns / w).coerceAtMost(columns - 1)
+                val tile = tileY * columns + tileX
+                sums[tile] += luminance(pixels[rowOffset + x]).toLong()
+                counts[tile]++
+            }
+        }
+        for (y in 0 until h) {
+            val tileY = (y * rows / h).coerceAtMost(rows - 1)
+            val rowOffset = y * w
+            for (x in 0 until w) {
+                val tileX = (x * columns / w).coerceAtMost(columns - 1)
+                val tile = tileY * columns + tileX
+                val threshold = (sums[tile].toFloat() / counts[tile].coerceAtLeast(1) - 15f)
+                    .coerceIn(72f, 214f)
+                val value = if (luminance(pixels[rowOffset + x]) >= threshold) 255 else 0
+                pixels[rowOffset + x] = (0xFF000000.toInt()) or (value shl 16) or (value shl 8) or value
+            }
         }
         bmp.setPixels(pixels, 0, w, 0, 0, w, h)
         return bmp

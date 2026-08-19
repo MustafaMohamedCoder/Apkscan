@@ -209,6 +209,7 @@ class CropEditActivity : AppCompatActivity() {
         val modes = arrayOf(
             ProcessMode.ORIGINAL,
             ProcessMode.AUTO,
+            ProcessMode.MAGIC_COLOR,
             ProcessMode.LOW_LIGHT,
             ProcessMode.DOCUMENT,
             ProcessMode.HIGH_CONTRAST,
@@ -276,6 +277,8 @@ class CropEditActivity : AppCompatActivity() {
             filterModeLabel.text = when (lastMode) {
                 ProcessMode.AUTO -> "التحسين التلقائي جاهز"
                 ProcessMode.ORIGINAL -> "الصورة الأصلية دون تحسين"
+                ProcessMode.MAGIC_COLOR -> "Magic Color — ألوان الورق والنصوص محسّنة"
+                ProcessMode.BW -> "مستند أبيض وأسود عالي الوضوح"
                 else -> "الفلتر المحدد: ${lastMode.label}"
             }
         }
@@ -551,10 +554,10 @@ class CropEditActivity : AppCompatActivity() {
     private fun showComparison() {
         val ctx = this
         val processed = previewBmp ?: processedBmp
-        val items = listOf("الأصلية", "المحسنة")
+        val items = listOf("الأصل بعد تصحيح المنظور", "نتيجة ${lastMode.label}")
         val bitmaps = listOf(originalBmp, processed)
         MaterialAlertDialogBuilder(ctx)
-            .setTitle("مقارنة تفاعلية")
+            .setTitle("قارن الأصل بالنتيجة")
             .setItems(items.toTypedArray()) { _, which ->
                 if (bitmaps[which] == null) {
                     Toast.makeText(ctx, "لا توجد نسخة محسنة بعد", Toast.LENGTH_SHORT).show()

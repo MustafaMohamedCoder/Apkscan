@@ -1,5 +1,6 @@
 package com.masahhisabat.app.ui.home
 
+import android.content.ClipData
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Canvas
@@ -11,11 +12,14 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.DashboardAnalytics
+import com.masahhisabat.app.data.LocalReportExporter
 import com.masahhisabat.app.ui.ThemeHelper
 import java.util.Locale
 
@@ -131,9 +135,9 @@ class AnalyticsActivity : AppCompatActivity() {
                 setPadding(0, dp(5), 0, 0)
             })
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        header.addView(actionButton("مشاركة", true).apply {
-            contentDescription = "مشاركة تقرير ${selectedPeriod.label}"
-            setOnClickListener { shareReport(report) }
+        header.addView(actionButton("تصدير", true).apply {
+            contentDescription = "تصدير تقرير ${selectedPeriod.label}"
+            setOnClickListener { showExportOptions(report) }
         }, LinearLayout.LayoutParams(dp(96), dp(44)))
         root.addView(header)
 
@@ -248,6 +252,41 @@ class AnalyticsActivity : AppCompatActivity() {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, DashboardAnalytics.shareText(report))
         }, "مشاركة تقرير ${report.period.label}"))
+    }
+
+    private fun showExportOptions(report: DashboardAnalytics.PeriodReport) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("تصدير التقرير")
+            .setItems(arrayOf("مشاركة كنص", "تصدير كصورة", "تصدير PDF")) { _, selected ->
+                when (selected) {
+                    0 -> shareReport(report)
+                    1 -> exportReportImage(report)
+                    2 -> exportReportPdf(report)
+                }
+            }
+            .show()
+    }
+
+    private fun exportReportImage(report: DashboardAnalytics.PeriodReport) {
+        runCatching { LocalReportExporter.exportReportImage(this, report) }
+            .onSuccess { uri -> shareExport(uri, "image/jpeg", "صورة تقرير ${report.period.label}") }
+            .onFailure { Toast.makeText(this, "تعذر تصدير صورة التقرير", Toast.LENGTH_LONG).show() }
+    }
+
+    private fun exportReportPdf(report: DashboardAnalytics.PeriodReport) {
+        runCatching { LocalReportExporter.exportReportPdf(this, report) }
+            .onSuccess { uri -> shareExport(uri, "application/pdf", "PDF تقرير ${report.period.label}") }
+            .onFailure { Toast.makeText(this, "تعذر تصدير ملف PDF", Toast.LENGTH_LONG).show() }
+    }
+
+    private fun shareExport(uri: android.net.Uri, mimeType: String, title: String) {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = mimeType
+            putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newRawUri(title, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(intent, title))
     }
 
     /** رسم أعمدة محلي خفيف لا يعتمد على مكتبات أو خدمات خارجية. */

@@ -39,7 +39,9 @@ class ImageViewerActivity : AppCompatActivity() {
     private var selectedPath: String? = null
     private var currentIndex = 0
     private val extractedTextByPath = mutableMapOf<String, String>()
+    private val extractionErrorsByPath = mutableMapOf<String, String>()
     private var isExtracting = false
+    private var extractingPath: String? = null
 
     private lateinit var searchPanel: View
     private lateinit var searchInput: EditText
@@ -157,22 +159,34 @@ class ImageViewerActivity : AppCompatActivity() {
         if (isExtracting) return
 
         isExtracting = true
+        extractingPath = path
+        extractionErrorsByPath.remove(path)
         searchButton.isEnabled = false
         searchStatus.text = "يتم استخراج النص محلياً من الصورة…"
         searchResults.text = ""
         Thread {
-            val extracted = runCatching {
+            var extractionError: String? = null
+            val extracted = try {
                 val bitmap = ImageProcessor.loadBitmap(path, 1800)
                 try {
                     OcrHelper.recognize(this@ImageViewerActivity, bitmap)
                 } finally {
                     if (!bitmap.isRecycled) bitmap.recycle()
                 }
-            }.getOrDefault("")
+            } catch (error: Exception) {
+                extractionError = error.message?.takeIf { it.isNotBlank() }
+                ""
+            }
             runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
                 isExtracting = false
+                extractingPath = null
                 searchButton.isEnabled = true
-                extractedTextByPath[path] = extracted
+                if (extractionError == null) {
+                    extractedTextByPath[path] = extracted
+                } else {
+                    extractionErrorsByPath[path] = extractionError.orEmpty()
+                }
                 updateSearchResult()
             }
         }.apply {
@@ -185,13 +199,25 @@ class ImageViewerActivity : AppCompatActivity() {
         if (!::searchPanel.isInitialized || searchPanel.visibility != View.VISIBLE) return
         val path = currentImagePath() ?: return
         val extracted = extractedTextByPath[path]
+        val extractionError = extractionErrorsByPath[path]
         val query = searchInput.text?.toString()?.trim().orEmpty()
-        searchButton.text = if (extracted == null) "استخراج النص والبحث" else "تحديث النتائج"
+        val extractingCurrentImage = isExtracting && extractingPath == path
+        searchButton.isEnabled = !isExtracting
+        searchButton.text = when {
+            isExtracting -> "جارٍ الاستخراج…"
+            extracted == null && extractionError != null -> "إعادة محاولة الاستخراج"
+            extracted == null -> "استخراج النص والبحث"
+            else -> "تحديث النتائج"
+        }
 
         when {
-            isExtracting -> {
+            extractingCurrentImage -> {
                 searchStatus.text = "يتم استخراج النص محلياً من الصورة…"
                 searchResults.text = ""
+            }
+            extractionError != null -> {
+                searchStatus.text = "تعذر استخراج النص من هذه الصورة."
+                searchResults.text = "تأكد من أن ملف الصورة ما زال متاحاً، ثم أعد المحاولة."
             }
             extracted == null -> {
                 searchStatus.text = "ابحث في الصورة ${currentIndex + 1} من ${images.size}: اكتب كلمة ثم اضغط استخراج النص والبحث."

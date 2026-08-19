@@ -33,6 +33,8 @@ jobs:
 
       - name: تهيئة GitHub Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: استبعاد بيانات Git من الحزمة
         run: rm -rf site/.git

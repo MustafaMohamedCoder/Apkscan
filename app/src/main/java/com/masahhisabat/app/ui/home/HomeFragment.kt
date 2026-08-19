@@ -17,8 +17,10 @@ import com.google.android.material.card.MaterialCardView
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.Group
+import com.masahhisabat.app.data.InvoiceItem
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.invoice.GroupActivity
+import java.util.Calendar
 
 /**
  * الصفحة الرئيسية المختصرة: إجراء مسح واضح، اختصارات أساسية، وآخر مجموعة فقط.
@@ -51,6 +53,7 @@ class HomeFragment : Fragment() {
         view.findViewById<TextView>(R.id.groups_label).setOnClickListener(openGroups)
 
         view.findViewById<MaterialButton>(R.id.btn_continue_work).setOnClickListener { openLastGroup() }
+        view.findViewById<MaterialButton>(R.id.btn_today_tasks).setOnClickListener { openNextTodayTask() }
         view.findViewById<MaterialButton>(R.id.btn_quick_sync).setOnClickListener {
             openTab(R.id.nav_settings)
             android.widget.Toast.makeText(requireContext(), "اختر «المزامنة المحلية» لبدء المزامنة", android.widget.Toast.LENGTH_SHORT).show()
@@ -82,6 +85,16 @@ class HomeFragment : Fragment() {
         startActivity(Intent(requireContext(), GroupActivity::class.java).putExtra("group_id", group.id))
     }
 
+    private fun openNextTodayTask() {
+        val group = scheduledTasks().firstOrNull()?.first
+        if (group == null) {
+            openTab(R.id.nav_groups)
+            android.widget.Toast.makeText(requireContext(), "أضف تاريخ استحقاق إلى فاتورة لظهورها هنا", android.widget.Toast.LENGTH_SHORT).show()
+        } else {
+            openGroup(group)
+        }
+    }
+
     private fun configureRecentToggle(view: View) {
         val panel = view.findViewById<View>(R.id.recent_panel)
         val toggle = view.findViewById<ImageView>(R.id.recent_toggle)
@@ -103,7 +116,7 @@ class HomeFragment : Fragment() {
         view.setBackgroundResource(ThemeHelper.backgroundRes())
         view.findViewById<View>(R.id.home_root).setBackgroundResource(ThemeHelper.backgroundRes())
 
-        listOf(R.id.card_groups, R.id.card_invoices, R.id.quick_actions_card, R.id.continue_card, R.id.sync_card, R.id.recent_card).forEach { id ->
+        listOf(R.id.card_groups, R.id.card_invoices, R.id.quick_actions_card, R.id.continue_card, R.id.today_tasks_card, R.id.sync_card, R.id.recent_card).forEach { id ->
             view.findViewById<MaterialCardView>(id).apply {
                 setCardBackgroundColor(ThemeHelper.surface(context))
                 strokeColor = ThemeHelper.cardStroke(context)
@@ -122,10 +135,10 @@ class HomeFragment : Fragment() {
         view.findViewById<TextView>(R.id.subtitle).setTextColor(heroSecondary)
         view.findViewById<ImageView>(R.id.welcome_badge).setColorFilter(heroTitle)
 
-        listOf(R.id.home_overview_title, R.id.quick_actions_title, R.id.continue_title, R.id.sync_title, R.id.recent_title).forEach { id ->
+        listOf(R.id.home_overview_title, R.id.quick_actions_title, R.id.continue_title, R.id.today_tasks_title, R.id.sync_title, R.id.recent_title).forEach { id ->
             view.findViewById<TextView>(id).setTextColor(text)
         }
-        listOf(R.id.groups_label, R.id.invoices_label, R.id.continue_detail, R.id.sync_status, R.id.recent_empty).forEach { id ->
+        listOf(R.id.groups_label, R.id.invoices_label, R.id.continue_detail, R.id.today_tasks_summary, R.id.sync_status, R.id.recent_empty).forEach { id ->
             view.findViewById<TextView>(id).setTextColor(textSecondary)
         }
         view.findViewById<TextView>(R.id.groups_count).setTextColor(ThemeHelper.accent(context))
@@ -153,6 +166,22 @@ class HomeFragment : Fragment() {
             }
             root.findViewById<MaterialButton>(R.id.btn_continue_work).text = if (lastGroup == null) "المجموعات" else "فتح"
 
+            val tasks = scheduledTasks()
+            val startToday = startOfToday()
+            val endToday = startToday + 24L * 60L * 60L * 1000L
+            val overdue = tasks.count { (_, item) -> (item.reminderAt ?: Long.MAX_VALUE) < startToday }
+            val today = tasks.count { (_, item) ->
+                val reminderAt = item.reminderAt ?: Long.MAX_VALUE
+                reminderAt in startToday until endToday
+            }
+            root.findViewById<TextView>(R.id.today_tasks_summary).text = when {
+                overdue > 0 && today > 0 -> "$overdue متأخرة و$today مستحقة اليوم"
+                overdue > 0 -> "$overdue فواتير تحتاج متابعة"
+                today > 0 -> "$today فواتير مستحقة اليوم"
+                else -> "لا توجد فواتير مستحقة اليوم"
+            }
+            root.findViewById<MaterialButton>(R.id.btn_today_tasks).text = if (tasks.isEmpty()) "إضافة" else "عرض"
+
             val lastSync = AppRepository.syncLog().lastOrNull()
             root.findViewById<TextView>(R.id.sync_status).text = when {
                 lastSync == null -> "لا توجد مزامنة مسجلة"
@@ -176,6 +205,27 @@ class HomeFragment : Fragment() {
         recentList.visibility = if (entries.isEmpty()) View.GONE else View.VISIBLE
         if (entries.isNotEmpty()) recentList.adapter = RecentAdapter(entries)
     }
+
+    /** يعرض لوحة البداية الاستحقاقات المفتوحة من المجموعات غير المؤرشفة فقط. */
+    private fun scheduledTasks(): List<Pair<Group, InvoiceItem>> {
+        return AppRepository.groups()
+            .asSequence()
+            .filter { it.archivedAt == null }
+            .flatMap { group ->
+                AppRepository.items(group.id).asSequence()
+                    .filter { item -> item.reminderAt != null && item.status != "paid" }
+                    .map { item -> group to item }
+            }
+            .sortedBy { (_, item) -> item.reminderAt }
+            .toList()
+    }
+
+    private fun startOfToday(): Long = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 
     class RecentAdapter(private val items: List<com.masahhisabat.app.data.ActivityEntry>) :
         RecyclerView.Adapter<RecentAdapter.ViewHolder>() {

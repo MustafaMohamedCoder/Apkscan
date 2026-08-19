@@ -255,6 +255,22 @@
                     android:orientation="horizontal">
 
                     <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_quick_inbox"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="7dp"
+                        android:layout_weight="1"
+                        android:drawableStart="@drawable/ic_invoice"
+                        android:drawablePadding="5dp"
+                        android:fontFamily="@font/tajawal_bold"
+                        android:text="الوارد"
+                        android:textColor="@color/primary"
+                        android:textSize="11sp"
+                        app:cornerRadius="14dp"
+                        app:strokeColor="@color/primary"
+                        app:strokeWidth="1dp" />
+
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_quick_group"
                         android:layout_width="0dp"
                         android:layout_height="48dp"
@@ -286,6 +302,59 @@
                         app:strokeColor="@color/primary"
                         app:strokeWidth="1dp" />
                 </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/inbox_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            app:cardCornerRadius="18dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="15dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/inbox_title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/tajawal_bold"
+                        android:text="صندوق الوارد"
+                        android:textSize="15sp" />
+
+                    <TextView
+                        android:id="@+id/inbox_summary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="3dp"
+                        android:fontFamily="@font/tajawal_regular"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_open_inbox"
+                    android:layout_width="wrap_content"
+                    android:layout_height="42dp"
+                    android:fontFamily="@font/tajawal_bold"
+                    android:text="عرض"
+                    android:textSize="13sp"
+                    app:cornerRadius="13dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

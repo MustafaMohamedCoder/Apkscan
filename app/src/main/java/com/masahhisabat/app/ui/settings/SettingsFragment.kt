@@ -23,6 +23,7 @@ import com.google.android.material.materialswitch.MaterialSwitch
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.ActivityEntry
+import com.masahhisabat.app.data.InvoiceReminderScheduler
 import com.masahhisabat.app.data.SyncManager
 import com.masahhisabat.app.data.SyncDeviceStatus
 import com.masahhisabat.app.data.TrashCleanupScheduler
@@ -84,6 +85,7 @@ class SettingsFragment : Fragment() {
             }
         }
         setupAutoTrashPurge(view)
+        setupInvoiceReminders(view)
         setupItem(view, R.id.item_help, R.id.tv_help_title, "مركز المساعدة") { showHelpDialog() }
         setupItem(view, R.id.item_export, R.id.tv_export_title, getString(R.string.export_data)) { showExportOptions() }
         setupItem(view, R.id.item_storage, R.id.tv_storage_title, "إدارة التخزين") { showStorageDialog() }
@@ -145,6 +147,22 @@ class SettingsFragment : Fragment() {
                 "تم إيقاف الحذف التلقائي؛ ستبقى عناصر السلة حتى تحذفها يدويًا"
             }
             Toast.makeText(context, text, Toast.LENGTH_LONG).show()
+        }
+        row.setOnClickListener { toggle.performClick() }
+    }
+
+    /** يتحكم في تذكيرات الفواتير المحلية، من دون أي اتصال بالإنترنت. */
+    private fun setupInvoiceReminders(view: View) {
+        val row = view.findViewById<LinearLayout>(R.id.item_invoice_reminders) ?: return
+        val context = requireContext()
+        val toggle = row.findViewById<MaterialSwitch>(R.id.switch_invoice_reminders)
+        toggle.setOnCheckedChangeListener(null)
+        toggle.isChecked = AppRepository.areInvoiceRemindersEnabled()
+        toggle.setOnCheckedChangeListener { _, enabled ->
+            AppRepository.setInvoiceRemindersEnabled(enabled)
+            InvoiceReminderScheduler.update(context)
+            val text = if (enabled) "تم تفعيل تنبيهات الفواتير المحلية" else "تم إيقاف تنبيهات الفواتير المحلية"
+            Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
         }
         row.setOnClickListener { toggle.performClick() }
     }

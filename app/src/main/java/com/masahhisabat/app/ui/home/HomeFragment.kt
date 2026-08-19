@@ -18,8 +18,10 @@ import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.Group
 import com.masahhisabat.app.data.InvoiceItem
+import com.masahhisabat.app.data.InvoiceWorkflow
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.invoice.GroupActivity
+import com.masahhisabat.app.ui.invoice.InboxActivity
 import java.util.Calendar
 
 /**
@@ -46,6 +48,10 @@ class HomeFragment : Fragment() {
         view.findViewById<MaterialButton>(R.id.btn_start_scan).setOnClickListener { openTab(R.id.nav_scanner) }
         view.findViewById<MaterialButton>(R.id.btn_quick_group).setOnClickListener { openTab(R.id.nav_groups) }
         view.findViewById<MaterialButton>(R.id.btn_quick_search).setOnClickListener { openTab(R.id.nav_search) }
+        val openInbox = View.OnClickListener { openInbox() }
+        view.findViewById<MaterialButton>(R.id.btn_quick_inbox).setOnClickListener(openInbox)
+        view.findViewById<View>(R.id.inbox_card).setOnClickListener(openInbox)
+        view.findViewById<MaterialButton>(R.id.btn_open_inbox).setOnClickListener(openInbox)
 
         val openGroups = View.OnClickListener { openTab(R.id.nav_groups) }
         view.findViewById<View>(R.id.card_groups).setOnClickListener(openGroups)
@@ -85,6 +91,10 @@ class HomeFragment : Fragment() {
         startActivity(Intent(requireContext(), GroupActivity::class.java).putExtra("group_id", group.id))
     }
 
+    private fun openInbox() {
+        startActivity(Intent(requireContext(), InboxActivity::class.java))
+    }
+
     private fun openNextTodayTask() {
         val group = scheduledTasks().firstOrNull()?.first
         if (group == null) {
@@ -116,7 +126,7 @@ class HomeFragment : Fragment() {
         view.setBackgroundResource(ThemeHelper.backgroundRes())
         view.findViewById<View>(R.id.home_root).setBackgroundResource(ThemeHelper.backgroundRes())
 
-        listOf(R.id.card_groups, R.id.card_invoices, R.id.quick_actions_card, R.id.continue_card, R.id.today_tasks_card, R.id.sync_card, R.id.recent_card).forEach { id ->
+        listOf(R.id.card_groups, R.id.card_invoices, R.id.quick_actions_card, R.id.inbox_card, R.id.continue_card, R.id.today_tasks_card, R.id.sync_card, R.id.recent_card).forEach { id ->
             view.findViewById<MaterialCardView>(id).apply {
                 setCardBackgroundColor(ThemeHelper.surface(context))
                 strokeColor = ThemeHelper.cardStroke(context)
@@ -135,10 +145,10 @@ class HomeFragment : Fragment() {
         view.findViewById<TextView>(R.id.subtitle).setTextColor(heroSecondary)
         view.findViewById<ImageView>(R.id.welcome_badge).setColorFilter(heroTitle)
 
-        listOf(R.id.home_overview_title, R.id.quick_actions_title, R.id.continue_title, R.id.today_tasks_title, R.id.sync_title, R.id.recent_title).forEach { id ->
+        listOf(R.id.home_overview_title, R.id.quick_actions_title, R.id.inbox_title, R.id.continue_title, R.id.today_tasks_title, R.id.sync_title, R.id.recent_title).forEach { id ->
             view.findViewById<TextView>(id).setTextColor(text)
         }
-        listOf(R.id.groups_label, R.id.invoices_label, R.id.continue_detail, R.id.today_tasks_summary, R.id.sync_status, R.id.recent_empty).forEach { id ->
+        listOf(R.id.groups_label, R.id.invoices_label, R.id.inbox_summary, R.id.continue_detail, R.id.today_tasks_summary, R.id.sync_status, R.id.recent_empty).forEach { id ->
             view.findViewById<TextView>(id).setTextColor(textSecondary)
         }
         view.findViewById<TextView>(R.id.groups_count).setTextColor(ThemeHelper.accent(context))
@@ -158,6 +168,16 @@ class HomeFragment : Fragment() {
         try {
             root.findViewById<TextView>(R.id.invoices_count).text = AppRepository.totalInvoiceCount().toString()
             root.findViewById<TextView>(R.id.groups_count).text = AppRepository.groups().size.toString()
+            val workflow = AppRepository.invoiceWorkItems(includePaid = false)
+            val newCount = workflow.count { (_, item) -> item.status == InvoiceWorkflow.NEW }
+            val reviewCount = workflow.count { (_, item) -> item.status == InvoiceWorkflow.IN_REVIEW }
+            root.findViewById<TextView>(R.id.inbox_summary).text = when {
+                newCount > 0 && reviewCount > 0 -> "$newCount جديدة و$reviewCount قيد المراجعة"
+                newCount > 0 -> "$newCount فواتير جديدة تحتاج فرزًا"
+                reviewCount > 0 -> "$reviewCount فواتير تحتاج متابعة"
+                workflow.isNotEmpty() -> "لا توجد فواتير معلّقة للمراجعة"
+                else -> "سيظهر هنا كل مستند جديد بعد مسحه"
+            }
 
             val lastGroup = AppRepository.lastOpenedGroupId()?.let { id -> AppRepository.groups().find { it.id == id } }
             root.findViewById<TextView>(R.id.continue_detail).text = when (lastGroup) {

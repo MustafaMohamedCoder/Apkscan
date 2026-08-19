@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:navigationIcon="@drawable/ic_arrow_back"
+        android:title="صندوق الوارد"
+        android:titleTextAppearance="@style/TextAppearance.Material3.TitleLarge" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="18dp">
+
+        <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:fontFamily="@font/tajawal_bold" android:text="متابعة الفواتير" android:textSize="21sp" />
+        <TextView android:id="@+id/summary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:fontFamily="@font/tajawal_regular" android:textSize="13sp" />
+
+        <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:scrollbars="none">
+            <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal">
+                <com.google.android.material.button.MaterialButton android:id="@+id/filter_new" android:layout_width="wrap_content" android:layout_height="42dp" android:fontFamily="@font/tajawal_bold" android:text="جديدة" android:textSize="13sp" app:cornerRadius="14dp" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/filter_review" android:layout_width="wrap_content" android:layout_height="42dp" android:layout_marginStart="8dp" android:fontFamily="@font/tajawal_bold" android:text="قيد المراجعة" android:textSize="13sp" app:cornerRadius="14dp" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/filter_completed" android:layout_width="wrap_content" android:layout_height="42dp" android:layout_marginStart="8dp" android:fontFamily="@font/tajawal_bold" android:text="مكتملة" android:textSize="13sp" app:cornerRadius="14dp" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/filter_paid" android:layout_width="wrap_content" android:layout_height="42dp" android:layout_marginStart="8dp" android:fontFamily="@font/tajawal_bold" android:text="مدفوعة" android:textSize="13sp" app:cornerRadius="14dp" />
+            </LinearLayout>
+        </HorizontalScrollView>
+    </LinearLayout>
+
+    <TextView android:id="@+id/empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_margin="20dp" android:background="@drawable/empty_state_panel" android:fontFamily="@font/tajawal_regular" android:gravity="center" android:padding="24dp" android:text="لا توجد فواتير بهذه الحالة الآن" android:textSize="14sp" android:visibility="gone" />
+    <androidx.recyclerview.widget.RecyclerView android:id="@+id/list" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:clipToPadding="false" android:paddingStart="18dp" android:paddingEnd="18dp" android:paddingBottom="24dp" />
+</LinearLayout>

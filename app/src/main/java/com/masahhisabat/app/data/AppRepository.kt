@@ -396,15 +396,48 @@ object AppRepository {
         writeTextAtomically(File(dir, "items.json"), gson.toJson(current.map { if (it.id == item.id) item else it }))
     }
 
+    /** عناصر دورة المتابعة الموحدة، مرتبة بالأحدث ومن المجموعات غير المؤرشفة فقط. */
+    fun invoiceWorkItems(includePaid: Boolean = true): List<Pair<Group, InvoiceItem>> {
+        return groups()
+            .asSequence()
+            .filter { it.archivedAt == null }
+            .flatMap { group ->
+                items(group.id).asSequence()
+                    .filter { item -> includePaid || item.status != "paid" }
+                    .map { item -> group to item }
+            }
+            .sortedByDescending { (_, item) -> item.createdAt }
+            .toList()
+    }
+
+    /** يحدّث حالة المتابعة فقط، ويلغي الاستحقاق عند إغلاق الفاتورة كمدفوعة. */
+    fun updateInvoiceStatus(groupId: String, itemId: String, status: String): InvoiceItem? {
+        val allowed = setOf("new", "in_review", "completed", "paid")
+        val normalized = status.takeIf { it in allowed } ?: "new"
+        var changed: InvoiceItem? = null
+        val updated = items(groupId).map { item ->
+            if (item.id != itemId) item else item.copy(
+                status = normalized,
+                reminderAt = if (normalized == "paid") null else item.reminderAt,
+                reminderNotifiedAt = if (normalized == "paid") null else item.reminderNotifiedAt
+            ).also { changed = it }
+        }
+        if (changed != null) {
+            val dir = File(dataDir(), "invoices/$groupId")
+            dir.mkdirs()
+            writeTextAtomically(File(dir, "items.json"), gson.toJson(updated))
+        }
+        return changed
+    }
+
     /** عناصر تذكير محلية مستحقة ولم يُعرض تنبيهها على هذا الجهاز بعد. */
     fun dueInvoiceReminders(now: Long = System.currentTimeMillis()): List<Pair<Group, InvoiceItem>> {
         if (!areInvoiceRemindersEnabled()) return emptyList()
-        return groups().flatMap { group ->
+        return groups().asSequence().filter { it.archivedAt == null }.flatMap { group ->
             items(group.id).asSequence()
-                .filter { item -> item.reminderAt != null && item.reminderAt <= now && item.reminderNotifiedAt == null }
+                .filter { item -> item.status != "paid" && item.reminderAt != null && item.reminderAt <= now && item.reminderNotifiedAt == null }
                 .map { item -> group to item }
-                .toList()
-        }
+        }.toList()
     }
 
     /** يسجّل عرض التنبيه كي لا يتكرر في تشغيل العامل اللاحق. */

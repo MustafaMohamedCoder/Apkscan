@@ -264,6 +264,57 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/item_invoice_reminders"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="80dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/card_surface_settings"
+            android:gravity="center_vertical"
+            android:paddingStart="18dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="12dp">
+
+            <ImageView
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_history"
+                android:contentDescription="تنبيهات الفواتير" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="16dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="تنبيهات الفواتير"
+                    android:textSize="16sp"
+                    android:includeFontPadding="false"
+                    android:fontFamily="@font/tajawal_bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="تذكير محلي عند استحقاق فاتورة أو طلب"
+                    android:textSize="13sp"
+                    android:includeFontPadding="false"
+                    android:fontFamily="@font/tajawal_regular" />
+            </LinearLayout>
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switch_invoice_reminders"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="تفعيل تنبيهات الفواتير" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/item_help"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

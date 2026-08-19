@@ -72,6 +72,9 @@
         <activity android:name=".ui.invoice.GroupActivity"
             android:exported="false" />
 
+        <activity android:name=".ui.invoice.InboxActivity"
+            android:exported="false" />
+
         <activity android:name=".ui.invoice.ImageViewerActivity"
             android:exported="false"
             android:theme="@style/Theme.AppCompat.NoActionBar" />

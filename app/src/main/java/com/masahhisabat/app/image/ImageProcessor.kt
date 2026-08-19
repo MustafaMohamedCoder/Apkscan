@@ -9,14 +9,21 @@ import android.os.Looper
 import java.io.File
 
 /** أوضاع المعالجة */
-enum class ProcessMode(val key: String, val label: String) {
-    ORIGINAL("original", "الأصلية"),
-    AUTO("auto", "تحسين تلقائي"),
-    MAGIC_COLOR("magic_color", "Magic Color"),
-    LOW_LIGHT("low_light", "إضاءة ضعيفة"),
-    DOCUMENT("document", "تباين المستند"),
-    HIGH_CONTRAST("high", "تباين عالي"),
-    BW("bw", "أبيض وأسود");
+enum class ProcessMode(val key: String, val label: String, val description: String) {
+    ORIGINAL("original", "الأصلية", "الصورة بعد القص دون أي فلتر"),
+    AUTO("auto", "تحسين تلقائي", "يختار التحسين المناسب للإضاءة تلقائيًا"),
+    MAGIC_COLOR("magic_color", "Magic Color", "ألوان الورق والنصوص أوضح بصورة متوازنة"),
+    NATURAL("natural", "ألوان طبيعية", "تصحيح خفيف يحافظ على ألوان المستند الأصلية"),
+    WARM_PAPER("warm_paper", "ورق دافئ", "تقليل برودة الظلال ومنح الورق دفئًا لطيفًا"),
+    SOFT_GRAY("soft_gray", "رمادي ناعم", "درجات رمادية مريحة للقراءة والطباعة"),
+    BLUE_INK("blue_ink", "حبر أزرق", "إبراز الكتابة والأختام الزرقاء مع خلفية أنظف"),
+    DARK_INK("dark_ink", "حبر داكن", "تعميق الكتابة الداكنة مع المحافظة على حدود الحروف"),
+    LOW_LIGHT("low_light", "إضاءة ضعيفة", "رفع الإضاءة الموضعية وتقليل الظلال"),
+    DOCUMENT("document", "تباين المستند", "خلفية ورقية أفتح ونص أوضح"),
+    HIGH_CONTRAST("high", "تباين عالي", "إظهار قوي للعناوين والنصوص الباهتة"),
+    BW("bw", "أبيض وأسود", "تحويل متوازن للمستندات اليومية"),
+    CLEAN_BW("clean_bw", "أبيض وأسود نظيف", "خلفية بيضاء أنقى للطباعة والمشاركة"),
+    INK_BW("ink_bw", "حبر شديد الوضوح", "تحويل قوي للخطوط الرفيعة والكتابة اليدوية");
 }
 
 /**
@@ -41,10 +48,17 @@ object ImageProcessor {
                     ProcessMode.ORIGINAL -> src.copy(Bitmap.Config.ARGB_8888, false)
                     ProcessMode.AUTO -> enhanceAutomatically(src)
                     ProcessMode.MAGIC_COLOR -> magicColor(src)
+                    ProcessMode.NATURAL -> naturalColor(src)
+                    ProcessMode.WARM_PAPER -> warmPaper(src)
+                    ProcessMode.SOFT_GRAY -> softGray(src)
+                    ProcessMode.BLUE_INK -> blueInk(src)
+                    ProcessMode.DARK_INK -> darkInk(src)
                     ProcessMode.LOW_LIGHT -> correctLowLight(src)
                     ProcessMode.DOCUMENT -> documentContrast(src)
                     ProcessMode.HIGH_CONTRAST -> highContrast(src)
                     ProcessMode.BW -> toBlackAndWhite(src)
+                    ProcessMode.CLEAN_BW -> toBlackAndWhite(src, thresholdOffset = -8f)
+                    ProcessMode.INK_BW -> toBlackAndWhite(src, thresholdOffset = -28f)
                 }
                 Handler(Looper.getMainLooper()).post { callback.onDone(result) }
             } catch (e: Throwable) {
@@ -57,10 +71,17 @@ object ImageProcessor {
         ProcessMode.ORIGINAL -> src.copy(Bitmap.Config.ARGB_8888, false)
         ProcessMode.AUTO -> enhanceAutomatically(src)
         ProcessMode.MAGIC_COLOR -> magicColor(src)
+        ProcessMode.NATURAL -> naturalColor(src)
+        ProcessMode.WARM_PAPER -> warmPaper(src)
+        ProcessMode.SOFT_GRAY -> softGray(src)
+        ProcessMode.BLUE_INK -> blueInk(src)
+        ProcessMode.DARK_INK -> darkInk(src)
         ProcessMode.LOW_LIGHT -> correctLowLight(src)
         ProcessMode.DOCUMENT -> documentContrast(src)
         ProcessMode.HIGH_CONTRAST -> highContrast(src)
         ProcessMode.BW -> toBlackAndWhite(src)
+        ProcessMode.CLEAN_BW -> toBlackAndWhite(src, thresholdOffset = -8f)
+        ProcessMode.INK_BW -> toBlackAndWhite(src, thresholdOffset = -28f)
     }
 
     fun loadBitmap(path: String, maxDim: Int = 2048): Bitmap {
@@ -109,6 +130,81 @@ object ImageProcessor {
             gamma = 0.90f
         )
         return neutralizePaperTint(flattened)
+    }
+
+    /** تصحيح لطيف للمستندات الملونة عندما تكون دقة الألوان أهم من التباين القوي. */
+    private fun naturalColor(src: Bitmap): Bitmap = adaptiveDocumentEnhance(
+        src = src,
+        targetLuminance = 171f,
+        illuminationStrength = 0.26f,
+        contrast = 1.07f,
+        gamma = 0.98f
+    )
+
+    /** نسخة دافئة للورق المصور تحت إضاءة باردة، من دون تغيير حاد لألوان الأختام. */
+    private fun warmPaper(src: Bitmap): Bitmap = applyColorTone(
+        source = naturalColor(src),
+        redScale = 1.07f,
+        greenScale = 1.02f,
+        blueScale = 0.93f
+    )
+
+    /** تحويل رمادي محافظ يحتفظ بتفاصيل النص ويقلل تشتيت ألوان الخلفية. */
+    private fun softGray(src: Bitmap): Bitmap {
+        val prepared = naturalColor(src)
+        val pixels = IntArray(prepared.width * prepared.height)
+        prepared.getPixels(pixels, 0, prepared.width, 0, 0, prepared.width, prepared.height)
+        for (index in pixels.indices) {
+            val value = (luminance(pixels[index]) * 0.92f + 13f).toInt().coerceIn(0, 255)
+            pixels[index] = (0xFF000000.toInt()) or (value shl 16) or (value shl 8) or value
+        }
+        prepared.setPixels(pixels, 0, prepared.width, 0, 0, prepared.width, prepared.height)
+        return prepared
+    }
+
+    /** يعزز تباين الحبر الأزرق ويحافظ على لون العلامات أو التوقيعات الزرقاء. */
+    private fun blueInk(src: Bitmap): Bitmap {
+        val prepared = magicColor(src)
+        val pixels = IntArray(prepared.width * prepared.height)
+        prepared.getPixels(pixels, 0, prepared.width, 0, 0, prepared.width, prepared.height)
+        for (index in pixels.indices) {
+            val pixel = pixels[index]
+            val r = (pixel shr 16) and 255
+            val g = (pixel shr 8) and 255
+            val b = pixel and 255
+            val blueBias = (b - ((r + g) / 2)).coerceAtLeast(0)
+            val outR = (r - blueBias * 0.18f).toInt().coerceIn(0, 255)
+            val outG = (g - blueBias * 0.10f).toInt().coerceIn(0, 255)
+            val outB = (b + blueBias * 0.30f + 4f).toInt().coerceIn(0, 255)
+            pixels[index] = (0xFF000000.toInt()) or (outR shl 16) or (outG shl 8) or outB
+        }
+        prepared.setPixels(pixels, 0, prepared.width, 0, 0, prepared.width, prepared.height)
+        return prepared
+    }
+
+    /** فلتر للحبر الداكن: يرفع وضوح الحروف مع إبقاء الخلفية غير حادة المظهر. */
+    private fun darkInk(src: Bitmap): Bitmap = adaptiveDocumentEnhance(
+        src = src,
+        targetLuminance = 181f,
+        illuminationStrength = 0.70f,
+        contrast = 1.52f,
+        gamma = 0.96f
+    )
+
+    private fun applyColorTone(source: Bitmap, redScale: Float, greenScale: Float, blueScale: Float): Bitmap {
+        val bmp = source.copy(Bitmap.Config.ARGB_8888, true)
+        if (!source.isRecycled) source.recycle()
+        val pixels = IntArray(bmp.width * bmp.height)
+        bmp.getPixels(pixels, 0, bmp.width, 0, 0, bmp.width, bmp.height)
+        for (index in pixels.indices) {
+            val pixel = pixels[index]
+            val r = (((pixel shr 16) and 255) * redScale).toInt().coerceIn(0, 255)
+            val g = (((pixel shr 8) and 255) * greenScale).toInt().coerceIn(0, 255)
+            val b = ((pixel and 255) * blueScale).toInt().coerceIn(0, 255)
+            pixels[index] = (0xFF000000.toInt()) or (r shl 16) or (g shl 8) or b
+        }
+        bmp.setPixels(pixels, 0, bmp.width, 0, 0, bmp.width, bmp.height)
+        return bmp
     }
 
     /** يقلل اصفرار الورق أو ازرقاق الظلال اعتمادًا على مناطق الخلفية الساطعة منخفضة التشبع. */
@@ -276,7 +372,7 @@ object ImageProcessor {
      * مستند أبيض وأسود بعتبة تكيفية محلية؛ يتعامل مع الظلال والخلفية الورقية أفضل
      * من تحويل التدرج الرمادي الثابت، ويُنفذ بعد الالتقاط فقط.
      */
-    private fun toBlackAndWhite(src: Bitmap): Bitmap {
+    private fun toBlackAndWhite(src: Bitmap, thresholdOffset: Float = -15f): Bitmap {
         val bmp = src.copy(Bitmap.Config.ARGB_8888, true)
         val w = bmp.width
         val h = bmp.height
@@ -303,7 +399,7 @@ object ImageProcessor {
             for (x in 0 until w) {
                 val tileX = (x * columns / w).coerceAtMost(columns - 1)
                 val tile = tileY * columns + tileX
-                val threshold = (sums[tile].toFloat() / counts[tile].coerceAtLeast(1) - 15f)
+                val threshold = (sums[tile].toFloat() / counts[tile].coerceAtLeast(1) + thresholdOffset)
                     .coerceIn(72f, 214f)
                 val value = if (luminance(pixels[rowOffset + x]) >= threshold) 255 else 0
                 pixels[rowOffset + x] = (0xFF000000.toInt()) or (value shl 16) or (value shl 8) or value

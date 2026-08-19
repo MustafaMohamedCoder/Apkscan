@@ -210,15 +210,25 @@ class CropEditActivity : AppCompatActivity() {
             ProcessMode.ORIGINAL,
             ProcessMode.AUTO,
             ProcessMode.MAGIC_COLOR,
+            ProcessMode.NATURAL,
+            ProcessMode.WARM_PAPER,
+            ProcessMode.SOFT_GRAY,
+            ProcessMode.BLUE_INK,
+            ProcessMode.DARK_INK,
             ProcessMode.LOW_LIGHT,
             ProcessMode.DOCUMENT,
             ProcessMode.HIGH_CONTRAST,
-            ProcessMode.BW
+            ProcessMode.BW,
+            ProcessMode.CLEAN_BW,
+            ProcessMode.INK_BW
         )
         val checked = modes.indexOf(lastMode).coerceAtLeast(0)
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.choose_document_filter)
-            .setSingleChoiceItems(modes.map { it.label }.toTypedArray(), checked) { dialog, which ->
+            .setSingleChoiceItems(
+                modes.map { "${it.label}\n${it.description}" }.toTypedArray(),
+                checked
+            ) { dialog, which ->
                 dialog.dismiss()
                 applyFilterPreview(modes[which])
             }
@@ -279,7 +289,9 @@ class CropEditActivity : AppCompatActivity() {
                 ProcessMode.ORIGINAL -> "الصورة الأصلية دون تحسين"
                 ProcessMode.MAGIC_COLOR -> "Magic Color — ألوان الورق والنصوص محسّنة"
                 ProcessMode.BW -> "مستند أبيض وأسود عالي الوضوح"
-                else -> "الفلتر المحدد: ${lastMode.label}"
+                ProcessMode.CLEAN_BW -> "أبيض وأسود نظيف — جاهز للطباعة والمشاركة"
+                ProcessMode.INK_BW -> "حبر شديد الوضوح — مناسب للخطوط والكتابة اليدوية"
+                else -> "${lastMode.label} — ${lastMode.description}"
             }
         }
     }

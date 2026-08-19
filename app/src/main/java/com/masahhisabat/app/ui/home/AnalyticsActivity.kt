@@ -1,6 +1,10 @@
 package com.masahhisabat.app.ui.home
 
 import android.content.Intent
+import android.content.res.ColorStateList
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -10,11 +14,18 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
+import com.masahhisabat.app.R
 import com.masahhisabat.app.data.DashboardAnalytics
 import com.masahhisabat.app.ui.ThemeHelper
+import java.util.Locale
 
-/** عرض تفصيلي للبيانات المحلية يشرح الأرقام بدل الاكتفاء ببطاقات الملخص. */
+/**
+ * لوحة التقارير المحلية: تعرض مؤشرات نشاط وقيم فواتير مسجلة فقط.
+ * لا تُخلط العملات ولا تُرسل البيانات خارج الجهاز.
+ */
 class AnalyticsActivity : AppCompatActivity() {
+    private var selectedPeriod = DashboardAnalytics.ReportPeriod.LAST_7_DAYS
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         render()
@@ -22,65 +33,265 @@ class AnalyticsActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // تعكس الشاشة أي عنصر جديد أُضيف إذا عاد المستخدم إليها دون إنهاء النشاط.
+        // تعكس الشاشة أي عنصر أو قيمة مالية أضيفت محلياً عند العودة إليها.
         if (window.decorView.findViewWithTag<View>("analytics_root") != null) render()
     }
 
     private fun render() {
-        val report = DashboardAnalytics.dailyReport()
+        val report = DashboardAnalytics.periodReport(selectedPeriod)
         val density = resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
-        val content = LinearLayout(this).apply {
-            tag = "analytics_root"
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(20), dp(18), dp(36))
-            setBackgroundColor(ThemeHelper.bg(this@AnalyticsActivity))
+        val textColor = ThemeHelper.text(this)
+        val secondary = ThemeHelper.textSecondary(this)
+
+        fun bodyText(value: String, size: Float, bold: Boolean = false, color: Int = textColor): TextView = TextView(this).apply {
+            text = value
+            textSize = size
+            setTextColor(color)
+            typeface = resources.getFont(if (bold) R.font.tajawal_bold else R.font.tajawal_regular)
+            includeFontPadding = false
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
         }
-        fun text(value: String, size: Float, bold: Boolean = false, color: Int = ThemeHelper.text(this)): TextView = TextView(this).apply {
-            this.text = value; textSize = size; setTextColor(color)
-            typeface = resources.getFont(if (bold) com.masahhisabat.app.R.font.tajawal_bold else com.masahhisabat.app.R.font.tajawal_regular)
-        }
-        fun card(title: String, body: String): MaterialCardView = MaterialCardView(this).apply {
-            radius = dp(20).toFloat(); cardElevation = dp(2).toFloat(); strokeWidth = 1
-            strokeColor = ThemeHelper.cardStroke(this@AnalyticsActivity)
-            setCardBackgroundColor(ThemeHelper.surface(this@AnalyticsActivity))
+
+        fun glassCard(title: String, body: String, accent: Boolean = false): MaterialCardView = MaterialCardView(this).apply {
+            radius = dp(24).toFloat()
+            cardElevation = 0f
+            strokeWidth = dp(if (accent) 2 else 1)
+            strokeColor = if (accent) getColor(R.color.accent) else ThemeHelper.cardStroke(this@AnalyticsActivity)
+            setCardBackgroundColor(if (accent) ThemeHelper.surfaceHigh(this@AnalyticsActivity) else ThemeHelper.surface(this@AnalyticsActivity))
             addView(LinearLayout(this@AnalyticsActivity).apply {
-                orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(15), dp(18), dp(15))
-                addView(text(title, 16f, true))
-                addView(text(body, 14f, false, ThemeHelper.textSecondary(this@AnalyticsActivity)).apply { setPadding(0, dp(6), 0, 0) })
+                orientation = LinearLayout.VERTICAL
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                setPadding(dp(16), dp(15), dp(16), dp(15))
+                addView(bodyText(title, 14f, true, if (accent) getColor(R.color.water_deep) else textColor))
+                addView(bodyText(body, 18f, true).apply { setPadding(0, dp(8), 0, 0) })
             })
         }
-        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; orientation = LinearLayout.HORIZONTAL }
-        header.addView(text("التقارير والإحصاءات", 24f, true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        header.addView(MaterialButton(this).apply {
-            text = "مشاركة"
+
+        fun panel(title: String, content: View): MaterialCardView = MaterialCardView(this).apply {
+            radius = dp(24).toFloat()
+            cardElevation = 0f
+            strokeWidth = dp(1)
+            strokeColor = ThemeHelper.cardStroke(this@AnalyticsActivity)
+            setCardBackgroundColor(ThemeHelper.surfaceHigh(this@AnalyticsActivity))
+            addView(LinearLayout(this@AnalyticsActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                setPadding(dp(18), dp(16), dp(18), dp(16))
+                addView(bodyText(title, 17f, true))
+                addView(content, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    topMargin = dp(12)
+                })
+            })
+        }
+
+        fun actionButton(label: String, selected: Boolean = false): MaterialButton = MaterialButton(this).apply {
+            text = label
+            textSize = 13f
+            minHeight = dp(44)
+            insetTop = 0
+            insetBottom = 0
+            isAllCaps = false
+            cornerRadius = dp(18)
+            if (selected) {
+                backgroundTintList = ColorStateList.valueOf(getColor(R.color.primary))
+                setTextColor(getColor(R.color.white))
+                strokeWidth = 0
+            } else {
+                backgroundTintList = ColorStateList.valueOf(ThemeHelper.surfaceHigh(this@AnalyticsActivity))
+                setTextColor(textColor)
+                strokeColor = ColorStateList.valueOf(ThemeHelper.cardStroke(this@AnalyticsActivity))
+                strokeWidth = dp(1)
+            }
+        }
+
+        fun addSection(target: LinearLayout, child: View, top: Int = 14) {
+            target.addView(child, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dp(top)
+            })
+        }
+
+        val root = LinearLayout(this).apply {
+            tag = "analytics_root"
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(18), dp(22), dp(18), dp(38))
+            setBackgroundResource(ThemeHelper.backgroundRes())
+        }
+
+        val header = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        header.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            addView(bodyText("التقارير المالية", 25f, true))
+            addView(bodyText("قراءة محلية للنشاط والقيم المسجلة", 13f, false, secondary).apply {
+                setPadding(0, dp(5), 0, 0)
+            })
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        header.addView(actionButton("مشاركة", true).apply {
+            contentDescription = "مشاركة تقرير ${selectedPeriod.label}"
             setOnClickListener { shareReport(report) }
-        })
-        content.addView(header)
-        content.addView(text("ملخص محلي مباشر لبيانات اليوم وآخر 7 أيام", 14f, false, ThemeHelper.textSecondary(this)).apply { setPadding(0, dp(4), 0, dp(16)) })
-        content.addView(card("ملخص اليوم", "${report.todayItems} عنصرًا جديدًا · ${report.todayImages} صور · ${report.todayTexts} نصوص\n${report.activeGroups} مجموعات نشطة · ${report.todayActions} عمليات مسجلة"))
-        content.addView(card("القيم المسجلة", if (report.totalAmount > 0) "${DashboardAnalytics.formatAmount(report.totalAmount)} ${report.currency.orEmpty()}" else "لا توجد قيم مالية مسجلة ضمن عناصر اليوم").apply { setMargins(dp(12)) })
-        content.addView(card("أكثر مصادر النشاط", buildString {
-            append(report.topGroupName?.let { "المجموعة: $it (${report.topGroupItems} عناصر)" } ?: "لا توجد مجموعة نشطة اليوم")
-            append('\n')
-            append(report.topSender?.let { "المستخدم: $it (${report.topSenderItems} عناصر)" } ?: "لا توجد بيانات عن مستخدم نشط اليوم")
-        }).apply { setMargins(dp(12)) })
-        content.addView(card("الاتجاه الأسبوعي", "إجمالي آخر 7 أيام: ${report.weeklyTotal} عنصرًا\nالمتوسط: ${"%.1f".format(java.util.Locale.US, report.weeklyAverage)} عنصرًا يوميًا\n${report.trend.joinToString(" · ") { "${it.label}: ${it.count}" }}").apply { setMargins(dp(12)) })
-        content.addView(MaterialButton(this).apply {
-            text = "رجوع إلى لوحة التحكم"
+        }, LinearLayout.LayoutParams(dp(96), dp(44)))
+        root.addView(header)
+
+        val filterPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(10), dp(9), dp(10), dp(9))
+            setBackgroundResource(R.drawable.glass_panel_bg)
+        }
+        DashboardAnalytics.ReportPeriod.entries.forEachIndexed { index, period ->
+            filterPanel.addView(actionButton(period.label, period == selectedPeriod).apply {
+                contentDescription = "عرض تقارير ${period.label}"
+                setOnClickListener {
+                    selectedPeriod = period
+                    render()
+                }
+            }, LinearLayout.LayoutParams(0, dp(44), 1f).apply {
+                if (index > 0) marginStart = dp(7)
+            })
+        }
+        addSection(root, filterPanel, 20)
+
+        if (!report.hasData) {
+            val empty = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                setPadding(dp(24), dp(28), dp(24), dp(28))
+                setBackgroundResource(R.drawable.empty_state_panel)
+                addView(bodyText("لا توجد بيانات ضمن ${report.period.label}", 18f, true))
+                addView(bodyText("أضف مسحاً أو رسالة أو فاتورة، وستظهر مؤشرات هذه الفترة محلياً هنا.", 14f, false, secondary).apply {
+                    gravity = Gravity.CENTER
+                    setPadding(0, dp(8), 0, 0)
+                })
+            }
+            empty.contentDescription = "لا توجد بيانات للتقارير ضمن ${report.period.label}"
+            addSection(root, empty, 16)
+        } else {
+            val metrics = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            fun metricRow(left: MaterialCardView, right: MaterialCardView) {
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutDirection = View.LAYOUT_DIRECTION_RTL
+                }
+                row.addView(right, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(6) })
+                row.addView(left, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(6) })
+                metrics.addView(row)
+            }
+            metricRow(
+                glassCard("العناصر المسجلة", "${report.itemCount}", true),
+                glassCard("المجموعات النشطة", "${report.activeGroups}")
+            )
+            metricRow(
+                glassCard("متوسط النشاط", "${"%.1f".format(Locale.US, report.dailyAverage)} / يوم"),
+                glassCard("محتوى مصوّر", "${report.imagePercent}% صور")
+            ).also { metrics.getChildAt(1).setPadding(0, dp(12), 0, 0) }
+            addSection(root, metrics, 16)
+
+            val financialLines = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                if (report.amountsByCurrency.isEmpty()) {
+                    addView(bodyText("لم تُسجّل قيم مالية في عناصر هذه الفترة.", 14f, false, secondary))
+                } else {
+                    addView(bodyText("تفصل القيم بحسب العملة ولا تُجمع معاً.", 13f, false, secondary))
+                    report.amountsByCurrency.forEach { bucket ->
+                        addView(bodyText(
+                            "${DashboardAnalytics.formatAmount(bucket.amount)}  ${bucket.currency ?: "عملة غير محددة"}",
+                            20f,
+                            true,
+                            getColor(R.color.water_deep)
+                        ).apply { setPadding(0, dp(10), 0, 0) })
+                    }
+                }
+            }
+            addSection(root, panel("القيم المالية المسجلة", financialLines))
+
+            val chartPanel = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                addView(bodyText("عدد العناصر المسجلة لكل يوم", 13f, false, secondary))
+                addView(TrendChartView(this@AnalyticsActivity, report.trend, ThemeHelper.isNight(this@AnalyticsActivity)).apply {
+                    contentDescription = "مخطط النشاط: ${report.trend.joinToString("، ") { "${it.label} ${it.count}" }}"
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(176)).apply { topMargin = dp(10) })
+            }
+            addSection(root, panel("اتجاه النشاط", chartPanel))
+
+            val sourceText = buildString {
+                append(report.topGroupName?.let { "المجموعة الأكثر نشاطاً: $it (${report.topGroupItems} عناصر)" } ?: "لا توجد مجموعة نشطة ضمن الفترة")
+                append('\n')
+                append(report.topSender?.let { "المستخدم الأكثر إضافة: $it (${report.topSenderItems} عناصر)" } ?: "لا توجد بيانات مستخدمين ضمن الفترة")
+                append('\n')
+                append("العمليات المسجلة: ${report.actionCount}")
+            }
+            addSection(root, panel("مصادر النشاط", bodyText(sourceText, 14f, false, secondary)))
+        }
+
+        addSection(root, actionButton("رجوع إلى لوحة التحكم").apply {
             setOnClickListener { finish() }
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { topMargin = dp(16) })
-        setContentView(ScrollView(this).apply { addView(content) })
+        }, 18)
+        setContentView(ScrollView(this).apply {
+            isFillViewport = true
+            setBackgroundResource(ThemeHelper.backgroundRes())
+            addView(root)
+        })
     }
 
-    private fun MaterialCardView.setMargins(top: Int) {
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = top }
-    }
-
-    private fun shareReport(report: DashboardAnalytics.DailyReport) {
+    private fun shareReport(report: DashboardAnalytics.PeriodReport) {
         startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, DashboardAnalytics.shareText(report))
-        }, "مشاركة التقرير اليومي"))
+        }, "مشاركة تقرير ${report.period.label}"))
+    }
+
+    /** رسم أعمدة محلي خفيف لا يعتمد على مكتبات أو خدمات خارجية. */
+    private class TrendChartView(
+        context: android.content.Context,
+        private val values: List<DashboardAnalytics.DayBucket>,
+        private val isNight: Boolean
+    ) : View(context) {
+        private val density = context.resources.displayMetrics.density
+        private fun dp(value: Float) = value * density
+        private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF15C6C8.toInt() }
+        private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = if (isNight) 0x424DD8E8 else 0x48A1DFE6 }
+        private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = if (isNight) 0xFFBFE3EB.toInt() else 0xFF466579.toInt()
+            textAlign = Paint.Align.CENTER
+            textSize = dp(11f)
+        }
+        private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = if (isNight) 0xFFF3FCFF.toInt() else 0xFF092338.toInt()
+            textAlign = Paint.Align.CENTER
+            textSize = dp(11f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            if (values.isEmpty()) return
+            val side = dp(4f)
+            val bottom = height - dp(25f)
+            val top = dp(20f)
+            val availableHeight = (bottom - top).coerceAtLeast(dp(1f))
+            val gap = dp(8f)
+            val barWidth = ((width - side * 2 - gap * (values.size - 1)) / values.size).coerceAtLeast(dp(8f))
+            val max = values.maxOfOrNull { it.count }?.coerceAtLeast(1) ?: 1
+            values.forEachIndexed { index, bucket ->
+                val left = side + index * (barWidth + gap)
+                val ratio = bucket.count.toFloat() / max
+                val barTop = bottom - availableHeight * ratio
+                canvas.drawRoundRect(RectF(left, top, left + barWidth, bottom), dp(9f), dp(9f), backgroundPaint)
+                canvas.drawRoundRect(RectF(left, barTop, left + barWidth, bottom), dp(9f), dp(9f), barPaint)
+                val center = left + barWidth / 2
+                canvas.drawText(bucket.count.toString(), center, (barTop - dp(7f)).coerceAtLeast(dp(12f)), valuePaint)
+                canvas.drawText(bucket.label, center, height - dp(6f), labelPaint)
+            }
+        }
     }
 }

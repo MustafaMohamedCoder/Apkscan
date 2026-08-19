@@ -115,12 +115,15 @@
     <string name="change_password">تغيير كلمة المرور</string>
     <string name="user_activity_log">سجل نشاط المستخدمين</string>
     <string name="export_data">تصدير جميع البيانات</string>
+    <string name="export_groups_documents">تصدير المجموعات والمستندات</string>
     <string name="import_backup">استيراد نسخة احتياطية</string>
+    <string name="import_groups_documents">استيراد المجموعات والمستندات</string>
     <string name="logout">تسجيل الخروج</string>
     <string name="backup_exported">تم تصدير النسخة الاحتياطية بنجاح</string>
     <string name="backup_imported">تم استيراد النسخة الاحتياطية بنجاح</string>
     <string name="import_warning">سيتم استبدال البيانات الحالية بالبيانات المستوردة. هل تريد المتابعة؟</string>
     <string name="invalid_backup">ملف النسخة الاحتياطية غير صالح</string>
+    <string name="content_backup_imported">تم دمج %1$d مجموعة و%2$d مستند، واستُعيدت %3$d مرفقات. أُنشئت نسخة وقائية قبل الاستيراد.</string>
     <string name="new_password">كلمة المرور الجديدة</string>
     <string name="current_password">كلمة المرور الحالية</string>
     <string name="confirm_password">تأكيد كلمة المرور</string>

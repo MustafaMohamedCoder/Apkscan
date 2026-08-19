@@ -766,6 +766,88 @@ object AppRepository {
         return zipFile
     }
 
+    data class ContentBackupResult(
+        val groupsImported: Int,
+        val itemsImported: Int,
+        val attachmentsImported: Int,
+        val safetyBackup: File
+    )
+
+    private data class ContentBackupAsset(
+        val groupId: String,
+        val itemId: String,
+        val kind: String,
+        val archivePath: String
+    )
+
+    private data class ContentBackupManifest(
+        val format: String = "masahhisabat-content",
+        val version: Int = 1,
+        val exportedAt: Long = System.currentTimeMillis(),
+        val groups: Int = 0,
+        val items: Int = 0,
+        val assets: List<ContentBackupAsset> = emptyList()
+    )
+
+    /**
+     * يصدر المجموعات والمستندات فقط في حزمة مستقلة قابلة للمشاركة.
+     * تُحفظ الصور داخل الحزمة بمسارات نسبية حتى لا تتسرب مسارات الجهاز أو تعتمد الاستعادة عليها.
+     */
+    fun exportContentData(outDir: File): File {
+        outDir.mkdirs()
+        val zipFile = File(outDir, "masah_groups_${System.currentTimeMillis()}.zip")
+        val assetEntries = mutableListOf<ContentBackupAsset>()
+        val groupsSnapshot = groups()
+        val itemSnapshots = groupsSnapshot.associate { group -> group.id to items(group.id) }
+
+        java.util.zip.ZipOutputStream(zipFile.outputStream()).use { zos ->
+            fun putText(path: String, content: String) {
+                zos.putNextEntry(java.util.zip.ZipEntry(path))
+                zos.write(content.toByteArray(Charsets.UTF_8))
+                zos.closeEntry()
+            }
+            fun putFile(path: String, source: File) {
+                zos.putNextEntry(java.util.zip.ZipEntry(path))
+                source.inputStream().use { it.copyTo(zos) }
+                zos.closeEntry()
+            }
+
+            putText("groups.json", gson.toJson(groupsSnapshot))
+            groupsSnapshot.forEach { group ->
+                val exportedItems = itemSnapshots[group.id].orEmpty().map { item ->
+                    fun archiveAttachment(path: String?, kind: String): String? {
+                        if (path.isNullOrBlank()) return null
+                        val source = File(path)
+                        if (!source.isFile || source.length() <= 0L) return null
+                        val extension = source.extension.takeIf { it.isNotBlank() }?.let { ".$it" } ?: ".bin"
+                        val archivePath = "assets/${group.id}/${item.id}/$kind$extension"
+                        if (assetEntries.none { it.archivePath == archivePath }) {
+                            assetEntries += ContentBackupAsset(group.id, item.id, kind, archivePath)
+                            putFile(archivePath, source)
+                        }
+                        return archivePath
+                    }
+                    item.copy(
+                        imagePath = archiveAttachment(item.imagePath, "image"),
+                        processedPath = archiveAttachment(item.processedPath, "processed")
+                    )
+                }
+                putText("invoices/${group.id}/items.json", gson.toJson(exportedItems))
+            }
+            putText(
+                "content_manifest.json",
+                gson.toJson(
+                    ContentBackupManifest(
+                        groups = groupsSnapshot.size,
+                        items = itemSnapshots.values.sumOf { it.size },
+                        assets = assetEntries.toList()
+                    )
+                )
+            )
+        }
+        return zipFile
+    }
+
     /** نسخة وقائية تلقائية خارج مجلد البيانات قبل إدخال بيانات قادمة من جهاز آخر. */
     fun createSafetyBackup(): File {
         val backupDir = File(dataDir().parentFile, "MasahHisabat_backups")
@@ -819,23 +901,158 @@ object AppRepository {
     }
 
     fun importBackup(zipFile: File) {
-        // 1) تحقق من صحة الملف: يجب أن يحتوي groups.json و users.json
+        // النسخة الكاملة القديمة تستبدل البيانات بعد التحقق؛ تُستخدم فقط من خيار النسخة الكاملة.
         val valid = java.util.zip.ZipFile(zipFile).use { zf ->
             val names = zf.entries().toList().map { it.name }.toSet()
             names.contains("groups.json") && names.contains("users.json")
         }
         if (!valid) throw IllegalArgumentException("invalid")
-        // 2) فك الضغط إلى مجلد مؤقت ثم الاستبدال
         val tempDir = File(dataDir().parentFile, "import_tmp").also { it.deleteRecursively(); it.mkdirs() }
-        java.util.zip.ZipFile(zipFile).use { zf ->
-            zf.entries().toList().forEach { entry ->
-                val out = File(tempDir, entry.name)
-                out.parentFile.mkdirs()
-                zf.getInputStream(entry).use { it.copyTo(out.outputStream()) }
+        try {
+            java.util.zip.ZipFile(zipFile).use { zf ->
+                zf.entries().toList().forEach { entry ->
+                    val out = safeZipOutput(tempDir, entry.name)
+                    if (entry.isDirectory) out.mkdirs()
+                    else {
+                        out.parentFile?.mkdirs()
+                        zf.getInputStream(entry).use { input -> out.outputStream().use { input.copyTo(it) } }
+                    }
+                }
             }
+            createSafetyBackup()
+            dataDir().deleteRecursively()
+            tempDir.copyRecursively(dataDir(), overwrite = true)
+        } finally {
+            tempDir.deleteRecursively()
         }
-        dataDir().deleteRecursively()
-        tempDir.copyRecursively(dataDir(), overwrite = true)
-        tempDir.deleteRecursively()
+    }
+
+    /**
+     * يستورد حزمة المجموعات والمستندات بالدمج حسب المعرّف، ولا يحذف أي بيانات محلية.
+     * تُنسخ المرفقات إلى مجلد الصور المحلي وتُعاد كتابة مساراتها قبل حفظ العناصر.
+     */
+    fun importContentBackup(zipFile: File): ContentBackupResult {
+        val tempDir = File(dataDir().parentFile, "content_import_tmp").also { it.deleteRecursively(); it.mkdirs() }
+        try {
+            java.util.zip.ZipFile(zipFile).use { zf ->
+                val entries = zf.entries().toList()
+                val names = entries.map { it.name }.toSet()
+                if (!names.contains("groups.json") || !names.contains("content_manifest.json")) {
+                    throw IllegalArgumentException("invalid_content_backup")
+                }
+                if (entries.any { !isSafeZipEntry(it.name) }) throw IllegalArgumentException("invalid_content_backup")
+                var extractedBytes = 0L
+                entries.forEach { entry ->
+                    if (entry.isDirectory) return@forEach
+                    val out = safeZipOutput(tempDir, entry.name)
+                    out.parentFile?.mkdirs()
+                    zf.getInputStream(entry).use { input ->
+                        out.outputStream().use { output ->
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                val read = input.read(buffer)
+                                if (read <= 0) break
+                                extractedBytes += read
+                                if (extractedBytes > 512L * 1024L * 1024L) {
+                                    throw IllegalArgumentException("content_backup_too_large")
+                                }
+                                output.write(buffer, 0, read)
+                            }
+                        }
+                    }
+                }
+            }
+
+            val manifest = gson.fromJson(File(tempDir, "content_manifest.json").readText(), ContentBackupManifest::class.java)
+            if (manifest.format != "masahhisabat-content" || manifest.version != 1) {
+                throw IllegalArgumentException("unsupported_content_backup")
+            }
+            val manifestAssets = manifest.assets.orEmpty()
+            if (manifestAssets.any {
+                    !isSafeZipEntry(it.archivePath) ||
+                        !it.archivePath.startsWith("assets/") ||
+                        !isSafePathPart(it.groupId) ||
+                        !isSafePathPart(it.itemId) ||
+                        !isSafePathPart(it.kind)
+                }) {
+                throw IllegalArgumentException("invalid_content_backup")
+            }
+            val incomingGroups: List<Group> = gson.fromJson(
+                File(tempDir, "groups.json").readText(),
+                object : TypeToken<List<Group>>() {}.type
+            ) ?: emptyList()
+            if (incomingGroups.any { !isSafePathPart(it.id) || it.name.isBlank() }) {
+                throw IllegalArgumentException("invalid_content_backup")
+            }
+            val incomingById = incomingGroups.associateBy { it.id }
+            val existingGroups = groups().associateBy { it.id }.toMutableMap()
+            val safetyBackup = createSafetyBackup()
+            incomingGroups.forEach { group -> existingGroups[group.id] = group }
+            saveList("groups.json", existingGroups.values.sortedByDescending { it.createdAt })
+
+            val assetsByKey = manifestAssets.associateBy { "${it.groupId}/${it.itemId}/${it.kind}" }
+            var importedItems = 0
+            var importedAttachments = 0
+            incomingGroups.forEach { group ->
+                val itemFile = File(tempDir, "invoices/${group.id}/items.json")
+                if (!itemFile.isFile) return@forEach
+                val incomingItems: List<InvoiceItem> = gson.fromJson(
+                    itemFile.readText(),
+                    object : TypeToken<List<InvoiceItem>>() {}.type
+                ) ?: emptyList()
+                val remapped = incomingItems.map { item ->
+                    fun restoreAttachment(kind: String, path: String?): String? {
+                        if (path.isNullOrBlank()) return null
+                        val asset = assetsByKey["${group.id}/${item.id}/$kind"] ?: return null
+                        val source = File(tempDir, asset.archivePath)
+                        if (!source.isFile) return null
+                        val restored = persistImportedAttachment(source, group.id, item.id, kind)
+                        if (restored != null) importedAttachments++
+                        return restored
+                    }
+                    item.copy(
+                        imagePath = restoreAttachment("image", item.imagePath),
+                        processedPath = restoreAttachment("processed", item.processedPath)
+                    )
+                }
+                val merged = linkedMapOf<String, InvoiceItem>()
+                items(group.id).forEach { merged[it.id] = it }
+                remapped.forEach { merged[it.id] = it }
+                writeTextAtomically(
+                    File(dataDir(), "invoices/${group.id}/items.json"),
+                    gson.toJson(merged.values.sortedByDescending { it.createdAt })
+                )
+                importedItems += remapped.size
+            }
+            return ContentBackupResult(incomingById.size, importedItems, importedAttachments, safetyBackup)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    private fun isSafePathPart(value: String): Boolean =
+        value.isNotBlank() && value != "." && value != ".." &&
+            value.none { it == '/' || it == '\\' }
+
+    private fun isSafeZipEntry(name: String): Boolean =
+        name.isNotBlank() && !name.startsWith("/") &&
+            name.split('/').all { isSafePathPart(it) }
+
+    private fun safeZipOutput(root: File, entryName: String): File {
+        if (!isSafeZipEntry(entryName)) throw IllegalArgumentException("invalid_content_backup")
+        val rootPath = root.canonicalFile.toPath()
+        val output = File(root, entryName).canonicalFile
+        if (!output.toPath().startsWith(rootPath)) throw IllegalArgumentException("invalid_content_backup")
+        return output
+    }
+
+    private fun persistImportedAttachment(source: File, groupId: String, itemId: String, kind: String): String? {
+        return try {
+            val dir = File(dataDir(), "images").also { it.mkdirs() }
+            val ext = source.extension.takeIf { it.isNotBlank() }?.let { ".$it" } ?: ".bin"
+            val destination = File(dir, "import_${groupId}_${itemId}_$kind$ext".replace(Regex("[^A-Za-z0-9._-]"), "_"))
+            source.inputStream().use { input -> destination.outputStream().use { input.copyTo(it) } }
+            destination.absolutePath
+        } catch (_: Exception) { null }
     }
 }

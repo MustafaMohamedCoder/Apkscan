@@ -39,6 +39,7 @@ class SettingsFragment : Fragment() {
 
     companion object {
         private const val IMPORT_REQUEST = 101
+        private const val CONTENT_IMPORT_REQUEST = 102
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -76,7 +77,7 @@ class SettingsFragment : Fragment() {
         setupItem(view, R.id.item_help, R.id.tv_help_title, "مركز المساعدة") { showHelpDialog() }
         setupItem(view, R.id.item_export, R.id.tv_export_title, getString(R.string.export_data)) { showExportOptions() }
         setupItem(view, R.id.item_storage, R.id.tv_storage_title, "إدارة التخزين") { showStorageDialog() }
-        setupItem(view, R.id.item_import, R.id.tv_import_title, getString(R.string.import_backup)) { importBackup() }
+        setupItem(view, R.id.item_import, R.id.tv_import_title, getString(R.string.import_backup)) { showImportOptions() }
         setupItem(view, R.id.item_sync, R.id.tv_sync_title, getString(R.string.local_sync)) {
             val role = SessionStore.currentRole(requireContext())
             if (AppRepository.canSync(role)) showSyncDialog()
@@ -248,8 +249,35 @@ class SettingsFragment : Fragment() {
 
     private fun showExportOptions() {
         MaterialAlertDialogBuilder(requireContext()).setTitle("تصدير البيانات")
-            .setItems(arrayOf("نسخة احتياطية كاملة (ZIP)", "تقرير بيانات (CSV / Excel)")) { _, which ->
-                if (which == 0) exportData() else exportCsvReport()
+            .setItems(arrayOf(
+                "نسخة احتياطية كاملة (ZIP)",
+                getString(R.string.export_groups_documents),
+                "تقرير بيانات (CSV / Excel)"
+            )) { _, which ->
+                when (which) {
+                    0 -> exportData()
+                    1 -> exportGroupsAndDocuments()
+                    else -> exportCsvReport()
+                }
+            }.setNegativeButton(R.string.cancel, null).show()
+    }
+
+    private fun showImportOptions() {
+        MaterialAlertDialogBuilder(requireContext()).setTitle("استيراد البيانات")
+            .setItems(arrayOf(
+                getString(R.string.import_backup),
+                getString(R.string.import_groups_documents)
+            )) { _, which ->
+                if (which == 0) {
+                    openImportPicker(IMPORT_REQUEST)
+                } else {
+                    MaterialAlertDialogBuilder(requireContext())
+                        .setTitle(getString(R.string.import_groups_documents))
+                        .setMessage("سيتم دمج المجموعات والمستندات مع البيانات الحالية دون حذفها، مع إنشاء نسخة وقائية تلقائية قبل الاستيراد.")
+                        .setPositiveButton("اختيار ملف") { _, _ -> openImportPicker(CONTENT_IMPORT_REQUEST) }
+                        .setNegativeButton(R.string.cancel, null)
+                        .show()
+                }
             }.setNegativeButton(R.string.cancel, null).show()
     }
 
@@ -287,28 +315,48 @@ class SettingsFragment : Fragment() {
         val ctx = requireContext()
         try {
             val zipFile = AppRepository.exportData(ctx.cacheDir.parentFile ?: ctx.cacheDir)
-            // نسخ الملف إلى المجلد المشترك Downloads
-            val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            if (!downloads.exists()) downloads.mkdirs()
-            val dest = java.io.File(downloads, "masah_backup_${System.currentTimeMillis() / 1000}.zip")
-            zipFile.copyTo(dest, overwrite = true)
+            val dest = copyToDownloads(zipFile, "masah_backup_${System.currentTimeMillis() / 1000}.zip")
             val user = SessionStore.currentUser(ctx) ?: "?"
-            AppRepository.logActivity(ActivityEntry(user, "صدّر $user نسخة احتياطية"))
+            AppRepository.logActivity(ActivityEntry(user, "صدّر $user نسخة احتياطية كاملة"))
             Toast.makeText(ctx, "تم التصدير: ${dest.absolutePath}", Toast.LENGTH_LONG).show()
-            (ctx.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
-                ?.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE))
+            vibrateShort(ctx)
         } catch (e: Exception) {
             Toast.makeText(ctx, "فشل التصدير: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
-    private fun importBackup() {
+    private fun exportGroupsAndDocuments() {
+        val ctx = requireContext()
+        try {
+            val zipFile = AppRepository.exportContentData(ctx.cacheDir)
+            val dest = copyToDownloads(zipFile, "masah_groups_${System.currentTimeMillis() / 1000}.zip")
+            val user = SessionStore.currentUser(ctx) ?: "?"
+            AppRepository.logActivity(ActivityEntry(user, "صدّر $user المجموعات والمستندات"))
+            Toast.makeText(ctx, "تم تصدير المجموعات والمستندات: ${dest.absolutePath}", Toast.LENGTH_LONG).show()
+            vibrateShort(ctx)
+        } catch (e: Exception) {
+            Toast.makeText(ctx, "فشل تصدير المجموعات والمستندات: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun copyToDownloads(source: java.io.File, fileName: String): java.io.File {
+        val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        if (!downloads.exists()) downloads.mkdirs()
+        return java.io.File(downloads, fileName).also { source.copyTo(it, overwrite = true) }
+    }
+
+    private fun vibrateShort(ctx: Context) {
+        (ctx.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
+            ?.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE))
+    }
+
+    private fun openImportPicker(requestCode: Int) {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             type = "application/zip"
             addCategory(Intent.CATEGORY_OPENABLE)
         }
         try {
-            startActivityForResult(intent, IMPORT_REQUEST)
+            startActivityForResult(intent, requestCode)
         } catch (e: Exception) {
             Toast.makeText(requireContext(), "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
         }
@@ -542,22 +590,43 @@ class SettingsFragment : Fragment() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == IMPORT_REQUEST && resultCode == Activity.RESULT_OK) {
-            val uri: Uri? = data?.data
-            if (uri == null) return
-            requireActivity().contentResolver.openInputStream(uri)?.use { stream ->
-                val tmp = java.io.File(requireContext().cacheDir, "import_${System.currentTimeMillis() / 1000}.zip")
+        if (resultCode != Activity.RESULT_OK) return
+        if (requestCode != IMPORT_REQUEST && requestCode != CONTENT_IMPORT_REQUEST) return
+        val uri: Uri = data?.data ?: return
+        requireActivity().contentResolver.openInputStream(uri)?.use { stream ->
+            val tmp = java.io.File(requireContext().cacheDir, "import_${System.currentTimeMillis() / 1000}.zip")
+            try {
                 tmp.outputStream().use { out -> stream.copyTo(out) }
-                val result = try { AppRepository.importBackup(tmp); true } catch (e: Exception) { false }
-                tmp.delete()
-                if (result) {
+                if (requestCode == CONTENT_IMPORT_REQUEST) {
+                    val result = AppRepository.importContentBackup(tmp)
                     val user = SessionStore.currentUser(requireContext()) ?: "?"
-                    AppRepository.logActivity(ActivityEntry(user, "استورد $user نسخة احتياطية"))
+                    AppRepository.logActivity(ActivityEntry(user, "استورد $user المجموعات والمستندات"))
+                    MaterialAlertDialogBuilder(requireContext())
+                        .setTitle("اكتمل استيراد المجموعات والمستندات")
+                        .setMessage(getString(
+                            R.string.content_backup_imported,
+                            result.groupsImported,
+                            result.itemsImported,
+                            result.attachmentsImported
+                        ))
+                        .setPositiveButton(R.string.ok) { _, _ -> activity?.recreate() }
+                        .show()
+                } else {
+                    AppRepository.importBackup(tmp)
+                    val user = SessionStore.currentUser(requireContext()) ?: "?"
+                    AppRepository.logActivity(ActivityEntry(user, "استورد $user نسخة احتياطية كاملة"))
                     Toast.makeText(requireContext(), "تم الاستيراد بنجاح", Toast.LENGTH_LONG).show()
                     activity?.recreate()
-                } else {
-                    Toast.makeText(requireContext(), "فشل الاستيراد — الملف تالف", Toast.LENGTH_LONG).show()
                 }
+            } catch (e: Exception) {
+                val message = if (requestCode == CONTENT_IMPORT_REQUEST) {
+                    "فشل استيراد المجموعات والمستندات — الملف غير صالح أو غير مدعوم"
+                } else {
+                    "فشل الاستيراد — الملف تالف"
+                }
+                Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+            } finally {
+                tmp.delete()
             }
         }
     }

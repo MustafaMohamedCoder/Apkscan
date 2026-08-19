@@ -43,7 +43,8 @@ class GroupsFragment : Fragment() {
 
     private data class GroupSnapshot(
         val documentCount: Int,
-        val lastActivity: Long
+        val lastActivity: Long,
+        val lastPreview: String
     )
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -248,9 +249,11 @@ class GroupsFragment : Fragment() {
             allGroups = AppRepository.groups()
             val snapshots = allGroups.associate { group ->
                 val items = AppRepository.items(group.id)
+                val latest = items.maxByOrNull { it.createdAt }
                 group.id to GroupSnapshot(
                     documentCount = items.size,
-                    lastActivity = items.maxOfOrNull { it.createdAt } ?: group.createdAt
+                    lastActivity = latest?.createdAt ?: group.createdAt,
+                    lastPreview = messagePreview(latest)
                 )
             }
             val totalDocuments = snapshots.values.sumOf { it.documentCount }
@@ -313,6 +316,30 @@ class GroupsFragment : Fragment() {
             "pinned" -> group.id in pinned
             "recent_30d" -> group.createdAt >= System.currentTimeMillis() - 30L * 24L * 60L * 60L * 1000L
             else -> true
+        }
+    }
+
+    private fun messagePreview(item: com.masahhisabat.app.data.InvoiceItem?): String {
+        if (item == null) return "لا توجد رسائل بعد"
+        val text = item.text?.trim().orEmpty()
+        return when {
+            item.type == "image" && text.isNotBlank() -> "📷 $text"
+            item.type == "image" -> "📷 صورة"
+            text.isNotBlank() -> text.replace('\n', ' ').take(60)
+            else -> "رسالة جديدة"
+        }
+    }
+
+    private fun activityTime(time: Long): String {
+        val now = java.util.Calendar.getInstance()
+        val then = java.util.Calendar.getInstance().apply { timeInMillis = time }
+        return when {
+            now.get(java.util.Calendar.YEAR) == then.get(java.util.Calendar.YEAR) &&
+                now.get(java.util.Calendar.DAY_OF_YEAR) == then.get(java.util.Calendar.DAY_OF_YEAR) ->
+                java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(time))
+            now.get(java.util.Calendar.YEAR) == then.get(java.util.Calendar.YEAR) &&
+                now.get(java.util.Calendar.DAY_OF_YEAR) - then.get(java.util.Calendar.DAY_OF_YEAR) == 1 -> "أمس"
+            else -> java.text.SimpleDateFormat("dd/MM", java.util.Locale.getDefault()).format(java.util.Date(time))
         }
     }
 
@@ -400,6 +427,7 @@ class GroupsFragment : Fragment() {
         inner class VH(view: View) : RecyclerView.ViewHolder(view) {
             val card: MaterialCardView = view.findViewById(R.id.group_card)
             val name: TextView = view.findViewById(R.id.group_name)
+            val preview: TextView = view.findViewById(R.id.group_preview)
             val date: TextView = view.findViewById(R.id.group_date)
             val icon: ImageView = view.findViewById(R.id.group_icon)
             val pin: ImageView = view.findViewById(R.id.group_pin)
@@ -437,12 +465,16 @@ class GroupsFragment : Fragment() {
             holder.name.text = g.name
             holder.name.setTextColor(text)
             holder.name.typeface = ctx.resources.getFont(R.font.tajawal_bold)
-            val fmt = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
-            holder.date.text = fmt.format(java.util.Date(g.createdAt))
+            val items = AppRepository.items(g.id)
+            val latest = items.maxByOrNull { it.createdAt }
+            holder.preview.text = messagePreview(latest)
+            holder.preview.setTextColor(textSec)
+            holder.preview.typeface = ctx.resources.getFont(R.font.tajawal_regular)
+            holder.date.text = activityTime(latest?.createdAt ?: g.createdAt)
             holder.date.setTextColor(textSec)
             holder.date.typeface = ctx.resources.getFont(R.font.tajawal_medium)
-            val documents = AppRepository.items(g.id).size
-            holder.itemCount.text = "$documents مستند"
+            val documents = items.size
+            holder.itemCount.text = documents.toString()
             holder.itemCount.setTextColor(ThemeHelper.chipTextColor(ctx))
             holder.itemCount.background?.setTint(ThemeHelper.chipBgColor(ctx))
             holder.icon.setColorFilter(android.graphics.Color.WHITE)

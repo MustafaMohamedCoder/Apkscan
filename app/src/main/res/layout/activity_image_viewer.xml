@@ -23,6 +23,101 @@
         android:src="@drawable/ic_close"
         app:tint="#FFFFFF" />
 
+    <ImageButton
+        android:id="@+id/btn_viewer_search"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="16dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="البحث داخل الصورة"
+        android:padding="10dp"
+        android:src="@drawable/ic_search"
+        app:tint="#FFFFFF" />
+
+    <LinearLayout
+        android:id="@+id/image_search_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="64dp"
+        android:background="@drawable/viewer_search_panel_bg"
+        android:elevation="8dp"
+        android:orientation="vertical"
+        android:padding="14dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/image_search_input"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_weight="1"
+                android:background="@drawable/viewer_search_input_bg"
+                android:hint="ابحث عن كلمة داخل الصورة"
+                android:imeOptions="actionSearch"
+                android:inputType="text"
+                android:paddingStart="13dp"
+                android:paddingEnd="13dp"
+                android:singleLine="true"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#C9E6F2" />
+
+            <ImageButton
+                android:id="@+id/btn_close_image_search"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="إغلاق البحث"
+                android:padding="10dp"
+                android:src="@drawable/ic_close"
+                app:tint="#FFFFFF" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_extract_and_search"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="10dp"
+            android:text="استخراج النص والبحث"
+            android:textColor="@color/white"
+            android:textSize="13sp"
+            app:backgroundTint="@color/primary"
+            app:cornerRadius="18dp" />
+
+        <TextView
+            android:id="@+id/image_search_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:textColor="#D8F0F6"
+            android:textSize="12sp" />
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:fillViewport="false"
+            android:maxHeight="150dp">
+
+            <TextView
+                android:id="@+id/image_search_results"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#FFFFFF"
+                android:textIsSelectable="true"
+                android:textSize="14sp" />
+        </ScrollView>
+    </LinearLayout>
+
     <TextView
         android:id="@+id/viewer_counter"
         android:layout_width="wrap_content"

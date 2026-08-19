@@ -3,19 +3,26 @@ package com.masahhisabat.app.ui.invoice
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.TextWatcher
+import android.text.style.BackgroundColorSpan
+import android.text.style.ForegroundColorSpan
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
+import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.viewpager2.widget.ViewPager2
+import com.google.android.material.button.MaterialButton
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
+import com.masahhisabat.app.data.OcrHelper
 import com.masahhisabat.app.image.ImageProcessor
 import com.masahhisabat.app.ui.ThemeHelper
-import android.graphics.drawable.GradientDrawable
 import android.widget.Toast
 import java.io.File
 
@@ -30,6 +37,15 @@ class ImageViewerActivity : AppCompatActivity() {
     private var images: List<String> = emptyList()
     private var startIndex: Int = 0
     private var selectedPath: String? = null
+    private var currentIndex = 0
+    private val extractedTextByPath = mutableMapOf<String, String>()
+    private var isExtracting = false
+
+    private lateinit var searchPanel: View
+    private lateinit var searchInput: EditText
+    private lateinit var searchStatus: TextView
+    private lateinit var searchResults: TextView
+    private lateinit var searchButton: MaterialButton
 
     override fun onCreate(savedInstanceState: Bundle?) {
         com.masahhisabat.app.data.AppRepository.initAppContext(this)
@@ -76,13 +92,17 @@ class ImageViewerActivity : AppCompatActivity() {
 
         pager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
+                currentIndex = position
                 updateCounter(position, images.size)
+                if (searchPanel.visibility == View.VISIBLE) updateSearchResult()
             }
         })
 
+        currentIndex = startPos
         updateCounter(startPos, images.size)
 
         findViewById<ImageButton>(R.id.btn_viewer_close).setOnClickListener { finish() }
+        bindImageSearch()
     }
 
     private fun updateCounter(index: Int, total: Int) {
@@ -93,6 +113,129 @@ class ImageViewerActivity : AppCompatActivity() {
                 .getDrawable(this.context, ThemeHelper.counterBgRes(this.context))?.mutate()
             background = bg
         }
+    }
+
+    /**
+     * بحث محلي في الصورة المفتوحة فقط. يبقى النص المستخرج في ذاكرة العارض
+     * خلال الجلسة ولا يُرفع أو يُحفظ في خدمة خارجية.
+     */
+    private fun bindImageSearch() {
+        searchPanel = findViewById(R.id.image_search_panel)
+        searchInput = findViewById(R.id.image_search_input)
+        searchStatus = findViewById(R.id.image_search_status)
+        searchResults = findViewById(R.id.image_search_results)
+        searchButton = findViewById(R.id.btn_extract_and_search)
+
+        findViewById<ImageButton>(R.id.btn_viewer_search).setOnClickListener {
+            searchPanel.visibility = View.VISIBLE
+            updateSearchResult()
+        }
+        findViewById<ImageButton>(R.id.btn_close_image_search).setOnClickListener {
+            searchInput.clearFocus()
+            searchPanel.visibility = View.GONE
+        }
+        searchButton.setOnClickListener { extractAndSearchCurrentImage() }
+        searchInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = updateSearchResult()
+            override fun afterTextChanged(s: android.text.Editable?) = Unit
+        })
+        searchInput.setOnEditorActionListener { _, _, _ ->
+            extractAndSearchCurrentImage()
+            true
+        }
+    }
+
+    private fun currentImagePath(): String? = images.getOrNull(currentIndex)
+
+    private fun extractAndSearchCurrentImage() {
+        val path = currentImagePath() ?: return
+        if (extractedTextByPath.containsKey(path)) {
+            updateSearchResult()
+            return
+        }
+        if (isExtracting) return
+
+        isExtracting = true
+        searchButton.isEnabled = false
+        searchStatus.text = "يتم استخراج النص محلياً من الصورة…"
+        searchResults.text = ""
+        Thread {
+            val extracted = runCatching {
+                val bitmap = ImageProcessor.loadBitmap(path, 1800)
+                try {
+                    OcrHelper.recognize(this@ImageViewerActivity, bitmap)
+                } finally {
+                    if (!bitmap.isRecycled) bitmap.recycle()
+                }
+            }.getOrDefault("")
+            runOnUiThread {
+                isExtracting = false
+                searchButton.isEnabled = true
+                extractedTextByPath[path] = extracted
+                updateSearchResult()
+            }
+        }.apply {
+            name = "image-ocr-search"
+            start()
+        }
+    }
+
+    private fun updateSearchResult() {
+        if (!::searchPanel.isInitialized || searchPanel.visibility != View.VISIBLE) return
+        val path = currentImagePath() ?: return
+        val extracted = extractedTextByPath[path]
+        val query = searchInput.text?.toString()?.trim().orEmpty()
+        searchButton.text = if (extracted == null) "استخراج النص والبحث" else "تحديث النتائج"
+
+        when {
+            isExtracting -> {
+                searchStatus.text = "يتم استخراج النص محلياً من الصورة…"
+                searchResults.text = ""
+            }
+            extracted == null -> {
+                searchStatus.text = "ابحث في الصورة ${currentIndex + 1} من ${images.size}: اكتب كلمة ثم اضغط استخراج النص والبحث."
+                searchResults.text = "لن تُرسل الصورة أو النص إلى الإنترنت."
+            }
+            extracted.isBlank() -> {
+                searchStatus.text = "لم يتم العثور على نص قابل للقراءة في هذه الصورة."
+                searchResults.text = "جرّب صورة أوضح أو استخدم تحسين المستند قبل البحث."
+            }
+            query.isBlank() -> {
+                searchStatus.text = "تم استخراج النص. اكتب كلمة أو عبارة للبحث داخل الصورة."
+                searchResults.text = extracted
+            }
+            else -> showMatches(extracted, query)
+        }
+    }
+
+    private fun showMatches(extracted: String, query: String) {
+        val matchingLines = extracted.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() && it.contains(query, ignoreCase = true) }
+            .toList()
+        if (matchingLines.isEmpty()) {
+            searchStatus.text = "لا توجد نتيجة مطابقة لـ «$query» في الصورة الحالية."
+            searchResults.text = "يمكنك تغيير العبارة أو قراءة النص المستخرج كاملاً بعد مسح كلمة البحث."
+            return
+        }
+        val result = matchingLines.joinToString("\n\n")
+        searchStatus.text = "${matchingLines.size} نتيجة مطابقة لـ «$query» داخل النص المستخرج."
+        searchResults.text = highlightMatches(result, query)
+    }
+
+    private fun highlightMatches(text: String, query: String): SpannableString {
+        val result = SpannableString(text)
+        var start = 0
+        while (true) {
+            val index = text.indexOf(query, start, ignoreCase = true)
+            if (index < 0) break
+            val end = index + query.length
+            result.setSpan(BackgroundColorSpan(getColor(R.color.accent)), index, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            result.setSpan(ForegroundColorSpan(Color.BLACK), index, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            start = end
+        }
+        return result
     }
 
     private inner class ImagesPagerAdapter : RecyclerView.Adapter<ImageViewHolder>() {

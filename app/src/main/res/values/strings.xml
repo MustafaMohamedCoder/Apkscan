@@ -33,6 +33,8 @@
     <string name="nav_search">البحث</string>
     <string name="nav_theme">نهاري</string>
     <string name="nav_settings">الإعدادات</string>
+    <string name="switch_to_light_theme">تفعيل الوضع النهاري</string>
+    <string name="switch_to_dark_theme">تفعيل الوضع الليلي</string>
 
     <!-- Misc referenced by code -->
     <string name="search">البحث</string>

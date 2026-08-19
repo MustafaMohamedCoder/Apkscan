@@ -32,10 +32,6 @@ class MainActivity : AppCompatActivity() {
         R.id.nav_home, R.id.nav_groups, R.id.nav_scanner,
         R.id.nav_search, R.id.nav_theme, R.id.nav_settings
     )
-    private val iconIds = intArrayOf(
-        R.drawable.ic_home, R.drawable.ic_groups_filled, R.drawable.ic_scanner_white,
-        R.drawable.ic_search_lens, R.drawable.ic_sun_filled, R.drawable.ic_settings_filled
-    )
     private val labelIds = intArrayOf(
         R.id.nav_home_label, R.id.nav_groups_label, R.id.nav_scanner_label,
         R.id.nav_search_label, R.id.nav_theme_label, R.id.nav_settings_label
@@ -171,6 +167,13 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.fragment_container)?.setBackgroundColor(ThemeHelper.bg(this))
         val bar = findViewById<LinearLayout>(R.id.bottom_nav)
         bar?.background?.setTint(ThemeHelper.navBarColor(this))
+        val isNight = ThemeHelper.isNight(this)
+        findViewById<ImageView>(R.id.nav_theme_icon)?.setImageResource(
+            if (isNight) R.drawable.ic_sun_filled else R.drawable.ic_moon
+        )
+        findViewById<View>(R.id.nav_theme)?.contentDescription = getString(
+            if (isNight) R.string.switch_to_light_theme else R.string.switch_to_dark_theme
+        )
         switchTab(lastTab, animate = false)
     }
 

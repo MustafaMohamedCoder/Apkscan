@@ -14,9 +14,9 @@
         android:layout_height="wrap_content"
         android:gravity="center_horizontal"
         android:orientation="vertical"
-        android:paddingStart="28dp"
+        android:paddingStart="@dimen/login_horizontal_padding"
         android:paddingTop="22dp"
-        android:paddingEnd="28dp"
+        android:paddingEnd="@dimen/login_horizontal_padding"
         android:paddingBottom="18dp">
 
         <!-- منطقة الهوية جزء من الشاشة نفسها وليست بطاقة منفصلة. -->
@@ -68,6 +68,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:fontFamily="@font/tajawal_bold"
+                android:labelFor="@id/username_input"
                 android:text="@string/username"
                 android:textColor="@color/white"
                 android:textSize="15sp" />
@@ -78,6 +79,7 @@
                 android:layout_height="56dp"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/input_bg"
+                android:autofillHints="username"
                 android:hint="@string/username"
                 android:inputType="text"
                 android:paddingStart="18dp"
@@ -92,6 +94,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="18dp"
                 android:fontFamily="@font/tajawal_bold"
+                android:labelFor="@id/password_input"
                 android:text="@string/password"
                 android:textColor="@color/white"
                 android:textSize="15sp" />
@@ -105,6 +108,7 @@
                     android:id="@+id/password_input"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
+                    android:autofillHints="password"
                     android:background="@drawable/input_bg"
                     android:hint="@string/password"
                     android:inputType="textPassword"
@@ -154,6 +158,7 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
                 android:layout_marginTop="10dp"
+                android:accessibilityLiveRegion="assertive"
                 android:text="@string/login_error"
                 android:textColor="@color/white"
                 android:visibility="gone" />

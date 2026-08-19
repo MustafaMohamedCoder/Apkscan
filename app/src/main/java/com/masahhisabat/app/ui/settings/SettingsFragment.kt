@@ -93,6 +93,9 @@ class SettingsFragment : Fragment() {
         val tv = row.findViewById<TextView>(titleId)
         tv.text = title
         if (errorText) tv.setTextColor(resources.getColor(R.color.error, null))
+        row.isClickable = true
+        row.isFocusable = true
+        row.contentDescription = title
         row.setOnClickListener { action() }
     }
 
@@ -150,12 +153,25 @@ class SettingsFragment : Fragment() {
         val pin = pinField("رمز PIN من 4 أرقام أو أكثر")
         val confirm = pinField("تأكيد رمز PIN")
         panel.addView(pin); panel.addView(confirm)
-        MaterialAlertDialogBuilder(ctx).setTitle("تفعيل قفل التطبيق").setView(panel)
-            .setPositiveButton("حفظ") { _, _ ->
+        val dialog = MaterialAlertDialogBuilder(ctx).setTitle("تفعيل قفل التطبيق").setView(panel)
+            .setPositiveButton("حفظ", null)
+            .setNegativeButton("إلغاء", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val value = pin.text.toString()
-                if (value.length < 4 || value != confirm.text.toString()) Toast.makeText(ctx, "تحقق من رمز PIN؛ يجب أن يتكون من 4 أرقام على الأقل", Toast.LENGTH_LONG).show()
-                else { AppRepository.setAppLockPin(value); SessionStore.unlock(ctx); activity?.recreate() }
-            }.setNegativeButton("إلغاء", null).show()
+                if (value.length < 4 || value != confirm.text.toString()) {
+                    confirm.error = "رمز PIN غير مطابق أو أقصر من 4 أرقام"
+                    Toast.makeText(ctx, "تحقق من رمز PIN؛ يجب أن يتكون من 4 أرقام على الأقل", Toast.LENGTH_LONG).show()
+                } else {
+                    AppRepository.setAppLockPin(value)
+                    SessionStore.unlock(ctx)
+                    dialog.dismiss()
+                    activity?.recreate()
+                }
+            }
+        }
+        dialog.show()
     }
 
     /** يسمح باختيار مظهر الهاتف التلقائي إلى جانب الخيارين اليدويين. */

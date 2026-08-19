@@ -42,7 +42,6 @@ class HomeFragment : Fragment() {
         if (isMustafa) configureRecentToggle(view)
 
         view.findViewById<MaterialButton>(R.id.btn_start_scan).setOnClickListener { openTab(R.id.nav_scanner) }
-        view.findViewById<MaterialButton>(R.id.btn_quick_scan).setOnClickListener { openTab(R.id.nav_scanner) }
         view.findViewById<MaterialButton>(R.id.btn_quick_group).setOnClickListener { openTab(R.id.nav_groups) }
         view.findViewById<MaterialButton>(R.id.btn_quick_search).setOnClickListener { openTab(R.id.nav_search) }
 

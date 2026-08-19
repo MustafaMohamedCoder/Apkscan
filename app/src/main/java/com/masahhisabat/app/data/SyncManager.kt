@@ -14,6 +14,8 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Base64
+import android.util.Base64InputStream
+import android.util.Base64OutputStream
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
@@ -24,6 +26,8 @@ import com.masahhisabat.app.BuildConfig
 import com.masahhisabat.app.R
 import com.google.gson.Gson
 import java.io.EOFException
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
@@ -73,6 +77,7 @@ object SyncManager {
     private const val AUTO_UPDATE_CHECK_ATTEMPTS = 3
     private const val AUTO_UPDATE_CHECK_RETRY_DELAY_MS = 10_000L
     private const val MAX_SYNC_IMAGE_BYTES = 12L * 1024L * 1024L
+    private const val SYNC_IO_BUFFER_BYTES = 48 * 1024
     private val gson = Gson()
 
     @Volatile private var server: ServerSocket? = null
@@ -980,7 +985,12 @@ object SyncManager {
         return try {
             val file = path?.takeIf { it.isNotBlank() }?.let(::File) ?: return null
             if (!file.isFile || file.length() !in 1..MAX_SYNC_IMAGE_BYTES) return null
-            SyncImagePayload(file.name, Base64.encodeToString(file.readBytes(), Base64.NO_WRAP))
+            val encodedCapacity = (((file.length() + 2L) / 3L) * 4L).toInt()
+            val encoded = ByteArrayOutputStream(encodedCapacity)
+            Base64OutputStream(encoded, Base64.NO_WRAP).use { output ->
+                FileInputStream(file).use { input -> input.copyTo(output, SYNC_IO_BUFFER_BYTES) }
+            }
+            SyncImagePayload(file.name, encoded.toString(Charsets.US_ASCII.name()))
         } catch (_: Throwable) {
             null
         }
@@ -990,15 +1000,23 @@ object SyncManager {
     private fun restoreImageFromSync(itemId: String, label: String, image: SyncImagePayload?): String? {
         return try {
             image ?: return null
-            val bytes = Base64.decode(image.data, Base64.NO_WRAP)
-            if (bytes.isEmpty() || bytes.size.toLong() > MAX_SYNC_IMAGE_BYTES) return null
+            if (image.data.isBlank()) return null
             val extension = image.fileName.substringAfterLast('.', "jpg")
                 .replace(Regex("[^A-Za-z0-9]"), "")
                 .take(8)
                 .ifBlank { "jpg" }
             val imageDir = File(AppRepository.dataDir(), "images").also { it.mkdirs() }
             val target = File(imageDir, "sync_${itemId}_${label}.${extension}")
-            target.outputStream().use { it.write(bytes) }
+            Base64InputStream(
+                ByteArrayInputStream(image.data.toByteArray(Charsets.US_ASCII)),
+                Base64.NO_WRAP
+            ).use { input ->
+                target.outputStream().use { output -> input.copyTo(output, SYNC_IO_BUFFER_BYTES) }
+            }
+            if (!target.isFile || target.length() !in 1..MAX_SYNC_IMAGE_BYTES) {
+                target.delete()
+                return null
+            }
             target.absolutePath
         } catch (_: Throwable) {
             null

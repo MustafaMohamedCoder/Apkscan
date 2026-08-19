@@ -175,6 +175,7 @@ class CropEditActivity : AppCompatActivity() {
     private fun processAndContinue() {
         if (edgeDetectionInProgress) return
         processing = true
+        setEditorControlsEnabled(false)
         loadingLabel.setText(R.string.loading)
         loadingPanel.visibility = View.VISIBLE
 
@@ -185,6 +186,7 @@ class CropEditActivity : AppCompatActivity() {
         ImageProcessor.process(lastMode, cropped, object : ImageProcessor.Callback {
             override fun onDone(bitmap: android.graphics.Bitmap) {
                 processing = false
+                setEditorControlsEnabled(true)
                 loadingPanel.visibility = View.GONE
                 if (bitmap !== cropped && !cropped.isRecycled) cropped.recycle()
                 processedBmp?.takeIf { it !== originalBmp && !it.isRecycled }?.recycle()
@@ -194,6 +196,7 @@ class CropEditActivity : AppCompatActivity() {
             }
             override fun onError() {
                 processing = false
+                setEditorControlsEnabled(true)
                 loadingPanel.visibility = View.GONE
                 Toast.makeText(this@CropEditActivity, "فشلت المعالجة — جاري استخدام الأصلية", Toast.LENGTH_SHORT).show()
                 processedBmp?.takeIf { it !== originalBmp && !it.isRecycled }?.recycle()
@@ -268,9 +271,7 @@ class CropEditActivity : AppCompatActivity() {
         })
     }
 
-    private fun setFilterUi(loading: Boolean) {
-        loadingLabel.setText(if (loading) R.string.filter_preview_loading else R.string.loading)
-        loadingPanel.visibility = if (loading) View.VISIBLE else View.GONE
+    private fun setEditorControlsEnabled(enabled: Boolean) {
         intArrayOf(
             R.id.btn_rotate,
             R.id.btn_grid,
@@ -279,7 +280,13 @@ class CropEditActivity : AppCompatActivity() {
             R.id.btn_filter,
             R.id.btn_compare,
             R.id.btn_done
-        ).forEach { id -> findViewById<View>(id).isEnabled = !loading }
+        ).forEach { id -> findViewById<View>(id).isEnabled = enabled }
+    }
+
+    private fun setFilterUi(loading: Boolean) {
+        loadingLabel.setText(if (loading) R.string.filter_preview_loading else R.string.loading)
+        loadingPanel.visibility = if (loading) View.VISIBLE else View.GONE
+        setEditorControlsEnabled(!loading)
     }
 
     private fun updateFilterModeLabel() {

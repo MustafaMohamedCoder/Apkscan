@@ -10,12 +10,14 @@ import android.graphics.RectF
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Size
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -48,6 +50,7 @@ class DocumentCameraActivity : AppCompatActivity() {
     private var camera: Camera? = null
     private var torchEnabled = false
     private var captureInProgress = false
+    private var cameraStartRequested = false
     private val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "document-preview-analyzer").apply { isDaemon = true }
     }
@@ -61,10 +64,7 @@ class DocumentCameraActivity : AppCompatActivity() {
 
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startCamera()
-        else {
-            Toast.makeText(this, "يلزم السماح بالكاميرا لمسح المستندات", Toast.LENGTH_LONG).show()
-            finish()
-        }
+        else showCameraPermissionFallback()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,11 +88,61 @@ class DocumentCameraActivity : AppCompatActivity() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             startCamera()
         } else {
+            requestCameraPermission()
+        }
+    }
+
+    /** يشرح سبب الإذن قبل إعادة الطلب بعد الرفض، ولا يحرم المستخدم من خيار المعرض. */
+    private fun requestCameraPermission() {
+        if (shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
+            AlertDialog.Builder(this)
+                .setTitle("السماح بالكاميرا")
+                .setMessage("تحتاج ميزة المسح إلى الكاميرا لالتقاط المستندات. يمكنك أيضاً متابعة العمل باختيار صورة محفوظة من المعرض.")
+                .setNegativeButton("اختيار صورة") { _, _ -> showGalleryOnlyState() }
+                .setPositiveButton("متابعة") { _, _ -> permissionLauncher.launch(Manifest.permission.CAMERA) }
+                .show()
+        } else {
             permissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
+    /** يعرض مساراً آمناً عند الرفض، بما في ذلك الرفض الدائم من إعدادات أندرويد. */
+    private fun showCameraPermissionFallback() {
+        val canRequestAgain = shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)
+        AlertDialog.Builder(this)
+            .setTitle("يلزم إذن الكاميرا للمسح")
+            .setMessage(
+                if (canRequestAgain) {
+                    "لم يتم السماح باستخدام الكاميرا. يمكنك إعادة طلب الإذن أو اختيار صورة من المعرض بدلاً من ذلك."
+                } else {
+                    "تم منع إذن الكاميرا. افتح إعدادات التطبيق واسمح بالكاميرا لتصوير المستندات، أو اختر صورة من المعرض."
+                }
+            )
+            .setNegativeButton("اختيار صورة") { _, _ -> showGalleryOnlyState() }
+            .setNeutralButton("إلغاء") { _, _ -> showGalleryOnlyState() }
+            .setPositiveButton(if (canRequestAgain) "إعادة المحاولة" else "فتح الإعدادات") { _, _ ->
+                if (canRequestAgain) requestCameraPermission() else openAppSettings()
+            }
+            .show()
+    }
+
+    private fun showGalleryOnlyState() {
+        captureButton.isEnabled = false
+        captureButton.alpha = 0.45f
+        flashButton.isEnabled = false
+        flashButton.alpha = 0.45f
+        statusText.text = "يمكنك اختيار صورة من المعرض ومتابعة تحسينها محلياً"
+    }
+
+    private fun openAppSettings() {
+        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", packageName, null)
+        })
+    }
+
     private fun startCamera() {
+        if (cameraStartRequested || isFinishing || isDestroyed) return
+        cameraStartRequested = true
         val providerFuture = ProcessCameraProvider.getInstance(this)
         providerFuture.addListener({
             try {
@@ -126,8 +176,9 @@ class DocumentCameraActivity : AppCompatActivity() {
                 flashButton.alpha = if (available) 1f else 0.45f
                 statusText.text = "وجّه المستند داخل الإطار ثم التقط الصورة"
             } catch (_: Exception) {
-                Toast.makeText(this, "تعذر تشغيل كاميرا المستندات", Toast.LENGTH_LONG).show()
-                finish()
+                cameraStartRequested = false
+                showGalleryOnlyState()
+                Toast.makeText(this, "تعذر تشغيل كاميرا المستندات، يمكنك اختيار صورة من المعرض", Toast.LENGTH_LONG).show()
             }
         }, ContextCompat.getMainExecutor(this))
     }
@@ -257,8 +308,9 @@ class DocumentCameraActivity : AppCompatActivity() {
 
     private fun setCaptureState(capturing: Boolean, message: String) {
         progress.visibility = if (capturing) View.VISIBLE else View.GONE
-        captureButton.isEnabled = !capturing
-        captureButton.alpha = if (capturing) 0.55f else 1f
+        val cameraReady = imageCapture != null
+        captureButton.isEnabled = !capturing && cameraReady
+        captureButton.alpha = if (capturing || !cameraReady) 0.45f else 1f
         statusText.text = message
     }
 
@@ -266,6 +318,13 @@ class DocumentCameraActivity : AppCompatActivity() {
         imageAnalysis?.clearAnalyzer()
         analysisExecutor.shutdownNow()
         super.onDestroy()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED && camera == null) {
+            startCamera()
+        }
     }
 
     private companion object {

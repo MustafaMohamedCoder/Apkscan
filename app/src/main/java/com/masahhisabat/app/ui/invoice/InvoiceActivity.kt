@@ -46,6 +46,7 @@ class InvoiceActivity : AppCompatActivity() {
     private lateinit var imgPreview: ImageView
     private lateinit var loadingPanel: LinearLayout
     private lateinit var extractPanel: LinearLayout
+    private lateinit var extractTitle: TextView
     private lateinit var saveBtn: MaterialButton
 
     private var imagePath: String = ""
@@ -71,7 +72,8 @@ class InvoiceActivity : AppCompatActivity() {
 
         imgPreview = findViewById(R.id.img_preview)
         loadingPanel = findViewById(R.id.loading_panel)
-        extractPanel = findViewById(R.id.card_preview)
+        extractPanel = findViewById(R.id.extract_card)
+        extractTitle = findViewById(R.id.tv_extract_title)
         saveBtn = findViewById(R.id.btn_save)
 
         findViewById<ImageView>(R.id.btn_back).setOnClickListener { finish() }
@@ -113,6 +115,7 @@ class InvoiceActivity : AppCompatActivity() {
         }
 
         extractPanel.visibility = View.GONE
+        extractTitle.visibility = View.GONE
         saveBtn.visibility = View.GONE
 
         // الاستخراج الذكي
@@ -131,6 +134,7 @@ class InvoiceActivity : AppCompatActivity() {
                 etTotal.setText(result.total ?: "")
                 etCurrency.setText(result.currency ?: "ر.س")
                 etItems.setText(result.itemsText ?: "")
+                extractTitle.visibility = View.VISIBLE
                 extractPanel.visibility = View.VISIBLE
                 saveBtn.visibility = View.VISIBLE
             }

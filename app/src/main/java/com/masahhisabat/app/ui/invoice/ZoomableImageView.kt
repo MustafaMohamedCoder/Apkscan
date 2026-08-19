@@ -6,7 +6,9 @@ import android.graphics.PointF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
+import android.view.ViewConfiguration
 import androidx.appcompat.widget.AppCompatImageView
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
@@ -44,6 +46,8 @@ class ZoomableImageView @JvmOverloads constructor(
     // تتبع النقر المزدوج
     private var lastTapTime = 0L
     private val doubleTapThreshold = 300L
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private var movedBeyondTouchSlop = false
 
     enum class Mode { NONE, DRAG, ZOOM }
 
@@ -151,6 +155,8 @@ class ZoomableImageView @JvmOverloads constructor(
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                start.set(event.x, event.y)
+                movedBeyondTouchSlop = false
                 if (!isZoomed) {
                     // يسمح للـ ViewPager باعتراض السحب أحادي الإصبع، مع بقاء الصورة مستقبلة للنقر المزدوج والتكبير.
                     val now = System.currentTimeMillis()
@@ -173,6 +179,7 @@ class ZoomableImageView @JvmOverloads constructor(
             }
 
             MotionEvent.ACTION_POINTER_DOWN -> {
+                movedBeyondTouchSlop = true
                 oldDist = spacing(event)
                 if (oldDist > 10f) {
                     midPoint(mid, event)
@@ -184,6 +191,9 @@ class ZoomableImageView @JvmOverloads constructor(
             }
 
             MotionEvent.ACTION_MOVE -> {
+                if (abs(x - start.x) > touchSlop || abs(event.y - start.y) > touchSlop) {
+                    movedBeyondTouchSlop = true
+                }
                 if (mode == Mode.ZOOM) {
                     val newDist = spacing(event)
                     if (newDist > 10f) {
@@ -210,20 +220,33 @@ class ZoomableImageView @JvmOverloads constructor(
                 return false
             }
 
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+            MotionEvent.ACTION_UP -> {
+                val wasTap = !movedBeyondTouchSlop
                 if (mode == Mode.DRAG || mode == Mode.ZOOM) {
                     fixTrans()
                     imageMatrix = matrix
                     mode = Mode.NONE
                     parent?.requestDisallowInterceptTouchEvent(false)
+                    if (wasTap) performClick()
                     return true
                 }
                 mode = Mode.NONE
                 parent?.requestDisallowInterceptTouchEvent(false)
                 return false
             }
+
+            MotionEvent.ACTION_POINTER_UP -> {
+                mode = Mode.NONE
+                parent?.requestDisallowInterceptTouchEvent(false)
+                return true
+            }
         }
         return super.onTouchEvent(event)
+    }
+
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
     }
 
     /** تكبير فوري نحو نقطة معينة (نقرة مزدوجة) مع ضمان حدود الصورة */

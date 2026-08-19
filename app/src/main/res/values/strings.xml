@@ -87,6 +87,8 @@
     <string name="extracting">جارٍ استخراج بيانات الفاتورة…</string>
     <string name="extract_failed">تعذر استخراج البيانات من الصورة. يمكنك إضافتها يدوياً.</string>
     <string name="extracted_data">البيانات المستخرجة</string>
+    <string name="invoice_preview_image">معاينة صورة الفاتورة</string>
+    <string name="message_image">صورة مرفقة بالرسالة</string>
     <string name="store_name">اسم المتجر</string>
     <string name="date">التاريخ</string>
     <string name="total">المبلغ الإجمالي</string>

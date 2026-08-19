@@ -743,6 +743,7 @@ class CropEditActivity : AppCompatActivity() {
                 }
                 MotionEvent.ACTION_UP -> {
                     draggingHandle = -1
+                    performClick()
                     // تنبيه اهتزازي عند الوصول للحواف
                     if (cropRect.left <= 0.005f || cropRect.right >= 0.995f ||
                         cropRect.top <= 0.005f || cropRect.bottom >= 0.995f) {
@@ -754,6 +755,11 @@ class CropEditActivity : AppCompatActivity() {
                 }
             }
             return super.onTouchEvent(event)
+        }
+
+        override fun performClick(): Boolean {
+            super.performClick()
+            return true
         }
 
         private fun clamp() {

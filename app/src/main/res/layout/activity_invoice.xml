@@ -46,6 +46,7 @@
                 android:id="@+id/img_preview"
                 android:layout_width="match_parent"
                 android:layout_height="240dp"
+                android:contentDescription="@string/invoice_preview_image"
                 android:scaleType="centerCrop" />
         </com.google.android.material.card.MaterialCardView>
 

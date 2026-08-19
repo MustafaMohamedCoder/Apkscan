@@ -102,11 +102,9 @@ class GroupsFragment : Fragment() {
     }
 
     private fun applyTheme(view: View) {
-        val bg = ThemeHelper.bg(requireContext())
-        val surface = ThemeHelper.surface(requireContext())
         val text = ThemeHelper.text(requireContext())
-        view.setBackgroundColor(bg)
-        view.findViewById<View>(R.id.groups_root).setBackgroundColor(bg)
+        view.setBackgroundResource(ThemeHelper.backgroundRes())
+        view.findViewById<View>(R.id.groups_root).setBackgroundResource(ThemeHelper.backgroundRes())
         view.findViewById<TextView>(R.id.title).apply {
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 26f)
             typeface = resources.getFont(R.font.tajawal_bold)
@@ -118,7 +116,8 @@ class GroupsFragment : Fragment() {
         }
         view.findViewById<TextView>(R.id.groups_empty)?.apply {
             setTextColor(ThemeHelper.textSecondary(requireContext()))
-            background?.setTint(ThemeHelper.surfaceHigh(requireContext()))
+            setBackgroundResource(ThemeHelper.glassPanelRes())
+            backgroundTintList = null
         }
         view.findViewById<TextView>(R.id.groups_summary)?.setTextColor(ThemeHelper.textSecondary(requireContext()))
         view.findViewById<TextView>(R.id.groups_sort_label)?.setTextColor(ThemeHelper.textSecondary(requireContext()))

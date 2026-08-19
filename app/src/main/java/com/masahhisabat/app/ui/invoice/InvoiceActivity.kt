@@ -276,15 +276,18 @@ class InvoiceActivity : AppCompatActivity() {
     }
 
     private fun applyTheme() {
-        window.decorView.setBackgroundColor(ThemeHelper.bg(this))
+        window.decorView.setBackgroundResource(ThemeHelper.backgroundRes())
         val bg = findViewById<View>(R.id.invoice_root)
-        bg.setBackgroundColor(ThemeHelper.bg(this))
+        bg.setBackgroundResource(ThemeHelper.backgroundRes())
         val surface = ThemeHelper.surface(this)
         val text = ThemeHelper.text(this)
         val textSec = ThemeHelper.textSecondary(this)
-        // بطاقات preview وextract بخلفية السطح (من XML: strokeWidth=0)
+        // بطاقات المعاينة والاستخراج تبقى زجاجية مع حد واضح فوق الخلفية المائية.
         listOf(R.id.card_preview, R.id.extract_card).forEach { id ->
-            (findViewById<View>(id) as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(surface)
+            (findViewById<View>(id) as? com.google.android.material.card.MaterialCardView)?.apply {
+                setCardBackgroundColor(surface)
+                strokeColor = ThemeHelper.cardStroke(this@InvoiceActivity)
+            }
         }
         // حقول الإدخال من input_bg — نلوّنها ديناميكيًا حسب الوضع
         listOf(R.id.et_name, R.id.et_store, R.id.et_date, R.id.et_total, R.id.et_currency, R.id.et_items, R.id.et_invoice_tags).forEach { id ->

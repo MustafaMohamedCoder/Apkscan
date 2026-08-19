@@ -163,10 +163,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyTheme() {
-        window.decorView.setBackgroundColor(ThemeHelper.bg(this))
-        findViewById<View>(R.id.fragment_container)?.setBackgroundColor(ThemeHelper.bg(this))
+        window.decorView.setBackgroundResource(ThemeHelper.backgroundRes())
+        findViewById<View>(R.id.fragment_container)?.setBackgroundResource(ThemeHelper.backgroundRes())
         val bar = findViewById<LinearLayout>(R.id.bottom_nav)
-        bar?.background?.setTint(ThemeHelper.navBarColor(this))
+        bar?.setBackgroundResource(R.drawable.nav_bar_bg)
+        bar?.backgroundTintList = null
         val isNight = ThemeHelper.isNight(this)
         findViewById<ImageView>(R.id.nav_theme_icon)?.setImageResource(
             if (isNight) R.drawable.ic_sun_filled else R.drawable.ic_moon

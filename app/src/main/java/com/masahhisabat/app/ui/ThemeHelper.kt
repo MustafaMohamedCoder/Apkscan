@@ -62,6 +62,12 @@ object ThemeHelper {
         if (isNight(context)) context.getColor(R.color.night_background)
         else context.getColor(R.color.day_background)
 
+    /** خلفية مائية طبقية خفيفة؛ مورد الليل يُختار تلقائيًا من Android. */
+    fun backgroundRes(): Int = R.drawable.water_background
+
+    /** سطح زجاجي جاهز للحاويات التي لا تستخدم MaterialCardView. */
+    fun glassPanelRes(): Int = R.drawable.glass_panel_bg
+
     fun surface(context: Context): Int =
         if (isNight(context)) context.getColor(R.color.night_surface)
         else context.getColor(R.color.day_surface)
@@ -122,7 +128,7 @@ object ThemeHelper {
     fun activeTintList(context: Context): ColorStateList =
         ColorStateList.valueOf(accent(context))
 
-    /** تدرج Teal احترافي للبطاقات البارزة (من teal-600 إلى teal-400) */
+    /** تدرج تركواز مائي للبطاقات البارزة. */
     fun primaryGradientColors(): IntArray = intArrayOf(
         0xFF0F766E.toInt(), 0xFF14B8A6.toInt()
     )

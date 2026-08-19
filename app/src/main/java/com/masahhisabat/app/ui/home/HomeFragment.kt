@@ -100,8 +100,8 @@ class HomeFragment : Fragment() {
         val context = requireContext()
         val text = ThemeHelper.text(context)
         val textSecondary = ThemeHelper.textSecondary(context)
-        view.setBackgroundColor(ThemeHelper.bg(context))
-        view.findViewById<View>(R.id.home_root).setBackgroundColor(ThemeHelper.bg(context))
+        view.setBackgroundResource(ThemeHelper.backgroundRes())
+        view.findViewById<View>(R.id.home_root).setBackgroundResource(ThemeHelper.backgroundRes())
 
         listOf(R.id.card_groups, R.id.card_invoices, R.id.quick_actions_card, R.id.continue_card, R.id.sync_card, R.id.recent_card).forEach { id ->
             view.findViewById<MaterialCardView>(id).apply {
@@ -110,12 +110,19 @@ class HomeFragment : Fragment() {
             }
         }
 
-        view.findViewById<TextView>(R.id.title).setTextColor(android.graphics.Color.WHITE)
-        view.findViewById<TextView>(R.id.greeting).setTextColor(0xCCFFFFFF.toInt())
-        view.findViewById<TextView>(R.id.subtitle).setTextColor(0xFFE6FFFB.toInt())
-        view.findViewById<ImageView>(R.id.welcome_badge).setColorFilter(android.graphics.Color.WHITE)
+        view.findViewById<MaterialCardView>(R.id.welcome_banner).apply {
+            setCardBackgroundColor(ThemeHelper.surfaceHigh(context))
+            strokeColor = ThemeHelper.cardStroke(context)
+        }
 
-        listOf(R.id.quick_actions_title, R.id.continue_title, R.id.sync_title, R.id.recent_title).forEach { id ->
+        val heroTitle = if (ThemeHelper.isNight(context)) android.graphics.Color.WHITE else text
+        val heroSecondary = if (ThemeHelper.isNight(context)) 0xD9E6FAFF.toInt() else textSecondary
+        view.findViewById<TextView>(R.id.title).setTextColor(heroTitle)
+        view.findViewById<TextView>(R.id.greeting).setTextColor(heroSecondary)
+        view.findViewById<TextView>(R.id.subtitle).setTextColor(heroSecondary)
+        view.findViewById<ImageView>(R.id.welcome_badge).setColorFilter(heroTitle)
+
+        listOf(R.id.home_overview_title, R.id.quick_actions_title, R.id.continue_title, R.id.sync_title, R.id.recent_title).forEach { id ->
             view.findViewById<TextView>(id).setTextColor(text)
         }
         listOf(R.id.groups_label, R.id.invoices_label, R.id.continue_detail, R.id.sync_status, R.id.recent_empty).forEach { id ->

@@ -117,8 +117,8 @@ class SearchFragment : Fragment() {
     }
 
     private fun applyTheme(view: View) {
-        view.setBackgroundColor(ThemeHelper.bg(requireContext()))
-        view.findViewById<View>(R.id.search_root).setBackgroundColor(ThemeHelper.bg(requireContext()))
+        view.setBackgroundResource(ThemeHelper.backgroundRes())
+        view.findViewById<View>(R.id.search_root).setBackgroundResource(ThemeHelper.backgroundRes())
         val ctx = requireContext()
         val text = ThemeHelper.text(ctx)
         view.findViewById<TextView>(R.id.title).setTextColor(text)

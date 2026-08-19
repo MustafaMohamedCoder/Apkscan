@@ -474,19 +474,24 @@ class GroupActivity : AppCompatActivity() {
     }
 
     private fun applyTheme() {
-        window.decorView.setBackgroundColor(ThemeHelper.bg(this))
-        findViewById<View>(R.id.group_root).setBackgroundColor(ThemeHelper.bg(this))
+        window.decorView.setBackgroundResource(ThemeHelper.backgroundRes())
+        findViewById<View>(R.id.group_root).setBackgroundResource(ThemeHelper.backgroundRes())
         val text = ThemeHelper.text(this)
         val textSec = ThemeHelper.textSecondary(this)
-        val surface = ThemeHelper.surface(this)
         findViewById<TextView>(R.id.group_title).setTextColor(text)
         findViewById<EditText>(R.id.et_search).setTextColor(text)
         findViewById<EditText>(R.id.et_search).setHintTextColor(textSec)
         findViewById<EditText>(R.id.et_search).background?.setTint(ThemeHelper.inputFill(this))
-        findViewById<View>(R.id.selection_bar)?.setBackgroundColor(ThemeHelper.surfaceHigh(this))
+        findViewById<View>(R.id.selection_bar)?.apply {
+            setBackgroundResource(ThemeHelper.glassPanelRes())
+            backgroundTintList = null
+        }
         findViewById<EditText>(R.id.et_message).setTextColor(ThemeHelper.text(this))
         findViewById<EditText>(R.id.et_message).background?.setTint(ThemeHelper.inputFill(this))
-        findViewById<View>(R.id.compose_bar)?.background?.setTint(ThemeHelper.surface(this))
+        findViewById<View>(R.id.compose_bar)?.apply {
+            setBackgroundResource(ThemeHelper.glassPanelRes())
+            backgroundTintList = null
+        }
         findViewById<TextView>(R.id.group_empty_title).setTextColor(text)
         findViewById<TextView>(R.id.group_empty_hint).setTextColor(textSec)
     }

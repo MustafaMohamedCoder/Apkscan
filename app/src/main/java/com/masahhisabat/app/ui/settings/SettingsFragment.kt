@@ -254,14 +254,16 @@ class SettingsFragment : Fragment() {
 
     private fun applyTheme(view: View) {
         val ctx = requireContext()
-        view.setBackgroundColor(ThemeHelper.bg(ctx))
+        view.setBackgroundResource(ThemeHelper.backgroundRes())
         val text = ThemeHelper.text(ctx)
         val textSec = ThemeHelper.textSecondary(ctx)
-        // الصفوف بخلفية card_surface_settings (قابلة للتكيف مع الوضع) — لا نكتب فوقها، بل نلوّنها ديناميكيًا
-        val rowBg = ThemeHelper.surfaceHigh(ctx)
+        // الصفوف تستخدم موردًا زجاجيًا له بديل ليلي تلقائي؛ لا نلوّن المورد كي لا نفقد الحد والانعكاس.
         listOf(R.id.item_theme, R.id.item_app_lock, R.id.item_accounts, R.id.item_activity, R.id.item_trash, R.id.item_auto_trash_purge, R.id.item_help, R.id.item_storage,
             R.id.item_export, R.id.item_import, R.id.item_sync, R.id.item_logout).forEach { id ->
-            view.findViewById<LinearLayout>(id)?.background?.setTint(rowBg)
+            view.findViewById<LinearLayout>(id)?.apply {
+                setBackgroundResource(R.drawable.card_surface_settings)
+                backgroundTintList = null
+            }
         }
         listOf(R.id.tv_theme_title, R.id.tv_app_lock_title, R.id.tv_accounts_title, R.id.tv_help_title, R.id.tv_storage_title,
             R.id.tv_activity_title, R.id.tv_trash_title, R.id.tv_auto_trash_purge_title, R.id.tv_export_title, R.id.tv_import_title, R.id.tv_sync_title).forEach { id ->

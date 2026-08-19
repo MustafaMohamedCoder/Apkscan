@@ -68,8 +68,8 @@ class ScannerFragment : Fragment() {
 
     private fun applyTheme(view: View) {
         val ctx = requireContext()
-        view.setBackgroundColor(ThemeHelper.bg(ctx))
-        view.findViewById<View>(R.id.scanner_root).setBackgroundColor(ThemeHelper.bg(ctx))
+        view.setBackgroundResource(ThemeHelper.backgroundRes())
+        view.findViewById<View>(R.id.scanner_root).setBackgroundResource(ThemeHelper.backgroundRes())
         view.findViewById<TextView>(R.id.title).apply {
             setTextColor(ThemeHelper.text(ctx))
             typeface = ctx.resources.getFont(R.font.tajawal_bold)

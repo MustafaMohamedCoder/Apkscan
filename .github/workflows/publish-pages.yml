@@ -1,0 +1,47 @@
+name: نشر الموقع التعريفي على GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: جلب ملفات الموقع من فرع gh-pages
+        uses: actions/checkout@v6
+        with:
+          ref: gh-pages
+          path: site
+          fetch-depth: 1
+
+      - name: تهيئة GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: استبعاد بيانات Git من الحزمة
+        run: rm -rf site/.git
+
+      - name: رفع ملفات الموقع
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: نشر الموقع
+        id: deployment
+        uses: actions/deploy-pages@v4

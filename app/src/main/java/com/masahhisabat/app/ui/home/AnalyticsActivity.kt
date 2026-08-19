@@ -29,6 +29,7 @@ import java.util.Locale
  */
 class AnalyticsActivity : AppCompatActivity() {
     private var selectedPeriod = DashboardAnalytics.ReportPeriod.LAST_7_DAYS
+    private var exportInProgress = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -268,15 +269,56 @@ class AnalyticsActivity : AppCompatActivity() {
     }
 
     private fun exportReportImage(report: DashboardAnalytics.PeriodReport) {
-        runCatching { LocalReportExporter.exportReportImage(this, report) }
-            .onSuccess { uri -> shareExport(uri, "image/jpeg", "صورة تقرير ${report.period.label}") }
-            .onFailure { Toast.makeText(this, "تعذر تصدير صورة التقرير", Toast.LENGTH_LONG).show() }
+        exportInBackground(
+            busyMessage = "يتم تجهيز صورة التقرير…",
+            failureMessage = "تعذر تصدير صورة التقرير"
+        ) {
+            LocalReportExporter.exportReportImage(this, report)
+        }.onSuccess { uri ->
+            shareExport(uri, "image/jpeg", "صورة تقرير ${report.period.label}")
+        }
     }
 
     private fun exportReportPdf(report: DashboardAnalytics.PeriodReport) {
-        runCatching { LocalReportExporter.exportReportPdf(this, report) }
-            .onSuccess { uri -> shareExport(uri, "application/pdf", "PDF تقرير ${report.period.label}") }
-            .onFailure { Toast.makeText(this, "تعذر تصدير ملف PDF", Toast.LENGTH_LONG).show() }
+        exportInBackground(
+            busyMessage = "يتم تجهيز ملف PDF…",
+            failureMessage = "تعذر تصدير ملف PDF"
+        ) {
+            LocalReportExporter.exportReportPdf(this, report)
+        }.onSuccess { uri ->
+            shareExport(uri, "application/pdf", "PDF تقرير ${report.period.label}")
+        }
+    }
+
+    private fun exportInBackground(
+        busyMessage: String,
+        failureMessage: String,
+        export: () -> android.net.Uri
+    ): ExportCallback {
+        if (exportInProgress) {
+            Toast.makeText(this, "التصدير جارٍ بالفعل، انتظر لحظات.", Toast.LENGTH_SHORT).show()
+            return ExportCallback {}
+        }
+        exportInProgress = true
+        Toast.makeText(this, busyMessage, Toast.LENGTH_SHORT).show()
+        lateinit var callback: ExportCallback
+        callback = ExportCallback { onSuccess ->
+            Thread {
+                val result = runCatching(export)
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    exportInProgress = false
+                    result.onSuccess(onSuccess).onFailure {
+                        Toast.makeText(this, failureMessage, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }.start()
+        }
+        return callback
+    }
+
+    private class ExportCallback(private val execute: ((android.net.Uri) -> Unit) -> Unit) {
+        fun onSuccess(action: (android.net.Uri) -> Unit) = execute(action)
     }
 
     private fun shareExport(uri: android.net.Uri, mimeType: String, title: String) {

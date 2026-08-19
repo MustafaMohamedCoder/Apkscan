@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.view.WindowManager
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -16,12 +17,14 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.biometric.BiometricManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.ActivityEntry
 import com.masahhisabat.app.data.SyncManager
+import com.masahhisabat.app.data.SyncDeviceStatus
 import com.masahhisabat.app.data.TrashCleanupScheduler
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.LoginActivity
@@ -40,7 +43,11 @@ class SettingsFragment : Fragment() {
     companion object {
         private const val IMPORT_REQUEST = 101
         private const val CONTENT_IMPORT_REQUEST = 102
+        private const val ENCRYPTED_IMPORT_REQUEST = 103
+        private const val ENCRYPTED_EXPORT_REQUEST = 104
     }
+
+    private var pendingBackupPassphrase: String? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return inflater.inflate(R.layout.fragment_settings, container, false)
@@ -54,6 +61,9 @@ class SettingsFragment : Fragment() {
         // إخفاء «إدارة الفريق» عن كل الحسابات عدا mustafa فقط
         // إخفاء «إدارة الفريق» وخيار تغيير كلمة المرور عن كل الحسابات عدا mustafa فقط
         view.findViewById<LinearLayout>(R.id.item_accounts)?.visibility =
+            if (SessionStore.currentUser(requireContext()) == "mustafa") View.VISIBLE else View.GONE
+        // سجل العمليات يتضمن تفاصيل تشغيل وإدارة؛ لذلك يبقى مرئياً للمالك فقط.
+        view.findViewById<LinearLayout>(R.id.item_activity)?.visibility =
             if (SessionStore.currentUser(requireContext()) == "mustafa") View.VISIBLE else View.GONE
         // تم حذف خيار «تغيير كلمة المرور» نهائيًا من الإعدادات بأمر المستخدم
         setupItem(view, R.id.item_accounts, R.id.tv_accounts_title, getString(R.string.manage_accounts)) {
@@ -100,7 +110,13 @@ class SettingsFragment : Fragment() {
     }
 
     private fun themeTitle(): String = "المظهر: ${ThemeHelper.mode().label}"
-    private fun appLockTitle(): String = if (AppRepository.hasAppLock()) "قفل التطبيق: مفعّل" else "قفل التطبيق: غير مفعّل"
+    private fun appLockTitle(): String = if (AppRepository.hasAppLock()) "قفل التطبيق: مفعّل (${lockTimeoutLabel()})" else "قفل التطبيق: غير مفعّل"
+    private fun lockTimeoutLabel(): String = when (AppRepository.appLockTimeoutMs()) {
+        0L -> "فوري"
+        30_000L -> "30 ثانية"
+        60_000L -> "دقيقة"
+        else -> "5 دقائق"
+    }
     private fun trashTitle(): String {
         val count = AppRepository.trashEntries().size
         return if (count == 0) "سلة المحذوفات" else "سلة المحذوفات ($count)"
@@ -136,14 +152,59 @@ class SettingsFragment : Fragment() {
     private fun showAppLockDialog() {
         val ctx = requireContext()
         if (AppRepository.hasAppLock()) {
+            val biometricLabel = if (AppRepository.isBiometricUnlockEnabled()) "مفعّل" else "غير مفعّل"
+            val privacyLabel = if (AppRepository.isScreenPrivacyEnabled()) "مفعّلة" else "غير مفعّلة"
             MaterialAlertDialogBuilder(ctx).setTitle("قفل التطبيق")
-                .setItems(arrayOf("تغيير رمز PIN", "إيقاف القفل")) { _, option ->
-                    if (option == 0) promptForNewPin() else MaterialAlertDialogBuilder(ctx)
-                        .setTitle("إيقاف قفل التطبيق؟").setMessage("لن يُطلب رمز PIN عند العودة إلى التطبيق.")
-                        .setPositiveButton("إيقاف") { _, _ -> AppRepository.clearAppLockPin(); SessionStore.unlock(ctx); activity?.recreate() }
-                        .setNegativeButton("إلغاء", null).show()
+                .setItems(arrayOf(
+                    "تغيير رمز PIN",
+                    "مهلة القفل: ${lockTimeoutLabel()}",
+                    "حماية المعاينة ولقطات الشاشة: $privacyLabel",
+                    "فتح بالبصمة: $biometricLabel",
+                    "إيقاف القفل"
+                )) { _, option ->
+                    when (option) {
+                        0 -> promptForNewPin()
+                        1 -> showLockTimeoutDialog()
+                        2 -> {
+                            val enabled = !AppRepository.isScreenPrivacyEnabled()
+                            AppRepository.setScreenPrivacyEnabled(enabled)
+                            if (enabled) requireActivity().window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+                            else requireActivity().window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                            Toast.makeText(ctx, if (enabled) "تمت حماية المعاينة ولقطات الشاشة" else "تم إيقاف حماية المعاينة", Toast.LENGTH_SHORT).show()
+                        }
+                        3 -> toggleBiometricUnlock()
+                        else -> MaterialAlertDialogBuilder(ctx)
+                            .setTitle("إيقاف قفل التطبيق؟").setMessage("لن يُطلب رمز PIN عند العودة إلى التطبيق.")
+                            .setPositiveButton("إيقاف") { _, _ -> AppRepository.clearAppLockPin(); SessionStore.unlock(ctx); activity?.recreate() }
+                            .setNegativeButton("إلغاء", null).show()
+                    }
                 }.show()
         } else promptForNewPin()
+    }
+
+    private fun showLockTimeoutDialog() {
+        val values = longArrayOf(0L, 30_000L, 60_000L, 300_000L)
+        val labels = arrayOf("فور مغادرة التطبيق", "بعد 30 ثانية", "بعد دقيقة", "بعد 5 دقائق")
+        val current = values.indexOf(AppRepository.appLockTimeoutMs()).coerceAtLeast(0)
+        MaterialAlertDialogBuilder(requireContext()).setTitle("مهلة قفل التطبيق")
+            .setSingleChoiceItems(labels, current) { dialog, selected ->
+                AppRepository.setAppLockTimeoutMs(values[selected])
+                Toast.makeText(requireContext(), "تم ضبط مهلة القفل: ${labels[selected]}", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }.setNegativeButton(R.string.cancel, null).show()
+    }
+
+    private fun toggleBiometricUnlock() {
+        val ctx = requireContext()
+        val manager = BiometricManager.from(ctx)
+        val available = manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS
+        if (!available) {
+            Toast.makeText(ctx, "البصمة غير مهيأة أو غير متاحة على هذا الجهاز؛ استخدم رمز PIN", Toast.LENGTH_LONG).show()
+            return
+        }
+        val enabled = !AppRepository.isBiometricUnlockEnabled()
+        AppRepository.setBiometricUnlockEnabled(enabled)
+        Toast.makeText(ctx, if (enabled) "تم تفعيل فتح القفل بالبصمة" else "تم إيقاف فتح القفل بالبصمة", Toast.LENGTH_SHORT).show()
     }
 
     private fun promptForNewPin() {
@@ -214,9 +275,96 @@ class SettingsFragment : Fragment() {
 
     /** سطر موجز يوضح وقت ووجهة وعدّاد آخر تبادل ناجح للبيانات. */
     private fun syncSummary(): String {
-        val entry = AppRepository.lastSuccessfulSync() ?: return "لم تتم مزامنة بيانات بعد"
+        val failedDevice = AppRepository.syncDevices()
+            .filter { it.lastSyncAt != null }
+            .maxByOrNull { it.lastSyncAt ?: 0L }
+            ?.takeIf { it.lastSyncSuccess == false }
+        if (failedDevice != null) {
+            val error = failedDevice.lastError?.take(90)?.let { " — $it" }.orEmpty()
+            return "آخر محاولة مع ${failedDevice.name} فشلت$error"
+        }
+        val entry = AppRepository.lastSuccessfulSync()
+            ?: return if (AppRepository.syncDevices().isEmpty()) "لم تتم مزامنة بيانات بعد" else "تم اكتشاف أجهزة؛ اضغط لمراجعة حالتها"
         val time = SimpleDateFormat("dd/MM HH:mm", Locale("ar")).format(Date(entry.at))
         return "آخر نجاح $time • ${entry.detail}".take(170)
+    }
+
+    /** يعرض آخر اتصال لكل جهاز والتعارضات التي حسمها التطبيق آلياً دون تغيير أي بيانات. */
+    private fun showSyncTransparencyDialog() {
+        val ctx = requireContext()
+        val devices = AppRepository.syncDevices()
+        val conflicts = AppRepository.syncConflicts()
+        if (devices.isEmpty()) {
+            MaterialAlertDialogBuilder(ctx)
+                .setTitle("حالة الأجهزة والتعارضات")
+                .setMessage("لا توجد أجهزة مسجلة بعد. ابدأ البحث أو المزامنة مع جهاز آخر على الشبكة المحلية.")
+                .setPositiveButton("بحث عن أجهزة") { _, _ -> showPeerDiscoveryDialog() }
+                .setNegativeButton(R.string.close, null)
+                .show()
+            return
+        }
+        val formatter = SimpleDateFormat("dd/MM HH:mm", Locale("ar"))
+        val rows = devices.map { device ->
+            val state = when (device.lastSyncSuccess) {
+                true -> "✓ آخر مزامنة ناجحة"
+                false -> "✕ فشلت آخر مزامنة"
+                null -> "• تم اكتشاف الجهاز"
+            }
+            "${device.name} — ${device.address}\n$state • آخر ظهور ${formatter.format(Date(device.lastSeenAt))}"
+        }.toTypedArray()
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("حالة الأجهزة (${devices.size})")
+            .setItems(rows) { _, which -> showDeviceStatusDialog(devices[which]) }
+            .setNeutralButton("التعارضات (${conflicts.size})") { _, _ -> showSyncConflictsDialog() }
+            .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
+    /** تفصيل جهاز محدد؛ لا يظهر إجراء الإعادة إلا وفق نتيجة آخر محاولة مسجلة. */
+    private fun showDeviceStatusDialog(device: SyncDeviceStatus) {
+        val ctx = requireContext()
+        val formatter = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("ar"))
+        val lastSync = device.lastSyncAt?.let { formatter.format(Date(it)) } ?: "لم تتم بعد"
+        val result = when (device.lastSyncSuccess) {
+            true -> "ناجحة"
+            false -> "فاشلة"
+            null -> "لم تتم بعد"
+        }
+        val message = buildString {
+            append("العنوان: ${device.address}\n")
+            append("آخر ظهور: ${formatter.format(Date(device.lastSeenAt))}\n")
+            append("آخر مزامنة: $lastSync\n")
+            append("النتيجة: $result")
+            device.lastError?.takeIf { it.isNotBlank() }?.let { append("\n\nسبب الفشل: $it") }
+        }
+        val action = if (device.lastSyncSuccess == false) "إعادة المحاولة" else "مزامنة الآن"
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle(device.name)
+            .setMessage(message)
+            .setPositiveButton(action) { _, _ ->
+                showSyncPreviewDialog(SyncManager.DiscoveredPeer(device.address, device.name))
+            }
+            .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
+    /** سجل موجز للتعارضات المُسوّاة، مع بيان مصدر القرار وسياسة الدمج المطبقة. */
+    private fun showSyncConflictsDialog() {
+        val ctx = requireContext()
+        val formatter = SimpleDateFormat("dd/MM HH:mm", Locale("ar"))
+        val conflicts = AppRepository.syncConflicts()
+        val rows = if (conflicts.isEmpty()) {
+            arrayOf("لا توجد تعارضات مُسجلة. عند اختلاف بيانات جهازين ستظهر هنا نتيجة الحل التلقائي.")
+        } else {
+            conflicts.take(100).map { conflict ->
+                "${formatter.format(Date(conflict.at))} — ${conflict.entityType}: ${conflict.entityId}\n${conflict.resolution}\nالمصدر: ${conflict.deviceName}"
+            }.toTypedArray()
+        }
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("تعارضات تمت تسويتها (${conflicts.size})")
+            .setItems(rows, null)
+            .setNegativeButton(R.string.close, null)
+            .show()
     }
 
     private fun showActivityLogDialog() {
@@ -266,13 +414,15 @@ class SettingsFragment : Fragment() {
     private fun showExportOptions() {
         MaterialAlertDialogBuilder(requireContext()).setTitle("تصدير البيانات")
             .setItems(arrayOf(
+                "نسخة احتياطية مشفرة (مستحسن)",
                 "نسخة احتياطية كاملة (ZIP)",
                 getString(R.string.export_groups_documents),
                 "تقرير بيانات (CSV / Excel)"
             )) { _, which ->
                 when (which) {
-                    0 -> exportData()
-                    1 -> exportGroupsAndDocuments()
+                    0 -> showEncryptedBackupDialog()
+                    1 -> exportData()
+                    2 -> exportGroupsAndDocuments()
                     else -> exportCsvReport()
                 }
             }.setNegativeButton(R.string.cancel, null).show()
@@ -282,19 +432,116 @@ class SettingsFragment : Fragment() {
         MaterialAlertDialogBuilder(requireContext()).setTitle("استيراد البيانات")
             .setItems(arrayOf(
                 getString(R.string.import_backup),
-                getString(R.string.import_groups_documents)
+                getString(R.string.import_groups_documents),
+                "استعادة نسخة مشفرة"
             )) { _, which ->
                 if (which == 0) {
                     openImportPicker(IMPORT_REQUEST)
-                } else {
+                } else if (which == 1) {
                     MaterialAlertDialogBuilder(requireContext())
                         .setTitle(getString(R.string.import_groups_documents))
                         .setMessage("سيتم دمج المجموعات والمستندات مع البيانات الحالية دون حذفها، مع إنشاء نسخة وقائية تلقائية قبل الاستيراد.")
                         .setPositiveButton("اختيار ملف") { _, _ -> openImportPicker(CONTENT_IMPORT_REQUEST) }
                         .setNegativeButton(R.string.cancel, null)
                         .show()
+                } else {
+                    openEncryptedImportPicker()
                 }
             }.setNegativeButton(R.string.cancel, null).show()
+    }
+
+    /** كلمة المرور تستخدم لتشفير هذه النسخة فقط، ولا تحفظ في الإعدادات أو في الملف نفسه. */
+    private fun showEncryptedBackupDialog() {
+        val ctx = requireContext()
+        val field = EditText(ctx).apply {
+            hint = "كلمة مرور النسخة (6 أحرف على الأقل)"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
+            contentDescription = "كلمة مرور النسخة الاحتياطية المشفرة"
+        }
+        val holder = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 16, 48, 0)
+            addView(field)
+        }
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("إنشاء نسخة مشفرة")
+            .setMessage("ستحتاج إلى كلمة المرور نفسها عند الاستعادة. لا يمكن استرجاعها إن فُقدت.")
+            .setView(holder)
+            .setPositiveButton("اختيار مكان الحفظ", null)
+            .setNegativeButton(R.string.cancel, null)
+            .create()
+            .also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val passphrase = field.text?.toString().orEmpty()
+                        if (passphrase.length < 6) {
+                            field.error = "أدخل 6 أحرف على الأقل"
+                        } else {
+                            pendingBackupPassphrase = passphrase
+                            openEncryptedExportPicker()
+                            dialog.dismiss()
+                        }
+                    }
+                }
+                dialog.show()
+            }
+    }
+
+    private fun openEncryptedExportPicker() {
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/octet-stream"
+            putExtra(Intent.EXTRA_TITLE, "masah_backup_${System.currentTimeMillis() / 1000}.masahbak")
+        }
+        try {
+            startActivityForResult(intent, ENCRYPTED_EXPORT_REQUEST)
+        } catch (_: Exception) {
+            pendingBackupPassphrase = null
+            Toast.makeText(requireContext(), "تعذر فتح اختيار مكان الحفظ", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun openEncryptedImportPicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            type = "application/octet-stream"
+            addCategory(Intent.CATEGORY_OPENABLE)
+        }
+        try {
+            startActivityForResult(intent, ENCRYPTED_IMPORT_REQUEST)
+        } catch (_: Exception) {
+            Toast.makeText(requireContext(), "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showEncryptedRestoreDialog(uri: Uri) {
+        val ctx = requireContext()
+        val field = EditText(ctx).apply {
+            hint = "كلمة مرور النسخة"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
+            contentDescription = "كلمة مرور استعادة النسخة المشفرة"
+        }
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("استعادة نسخة مشفرة")
+            .setMessage("سيجري إنشاء نسخة وقائية قبل استبدال البيانات الحالية.")
+            .setView(field)
+            .setPositiveButton("استعادة", null)
+            .setNegativeButton(R.string.cancel, null)
+            .create()
+            .also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val passphrase = field.text?.toString().orEmpty()
+                        if (passphrase.length < 6) field.error = "أدخل كلمة مرور صحيحة"
+                        else {
+                            restoreEncryptedBackup(uri, passphrase)
+                            dialog.dismiss()
+                        }
+                    }
+                }
+                dialog.show()
+            }
     }
 
     private fun exportCsvReport() {
@@ -314,13 +561,14 @@ class SettingsFragment : Fragment() {
     private fun showStorageDialog() {
         val ctx = requireContext()
         val usage = AppRepository.storageUsage()
+        val totalBytes = usage.dataBytes + usage.backupBytes
         fun size(bytes: Long): String = when {
             bytes >= 1024L * 1024L -> "%.1f MB".format(Locale.US, bytes / (1024f * 1024f))
             bytes >= 1024L -> "%.1f KB".format(Locale.US, bytes / 1024f)
             else -> "$bytes B"
         }
         MaterialAlertDialogBuilder(ctx).setTitle("إدارة التخزين")
-            .setMessage("البيانات والصور: ${size(usage.dataBytes)}\nالصور ضمن البيانات: ${size(usage.imageBytes)}\nالنسخ الوقائية: ${size(usage.backupBytes)}\n\nلا يحذف التنظيف أي مجموعة أو صورة محفوظة.")
+            .setMessage("إجمالي مساحة التطبيق: ${size(totalBytes)}\n\nالبيانات والصور: ${size(usage.dataBytes)}\nالصور ضمن البيانات: ${size(usage.imageBytes)}\nالنسخ الوقائية: ${size(usage.backupBytes)}\n\nينظف الخيار التالي الملفات المؤقتة فقط؛ لا يحذف أي مجموعة أو صورة أو نسخة احتياطية محفوظة.")
             .setPositiveButton("تنظيف المؤقت") { _, _ ->
                 val count = AppRepository.clearTemporaryFiles()
                 Toast.makeText(ctx, "تم حذف $count ملف مؤقت", Toast.LENGTH_SHORT).show()
@@ -385,11 +633,12 @@ class SettingsFragment : Fragment() {
 
         MaterialAlertDialogBuilder(ctx)
             .setTitle(R.string.local_sync)
-            .setItems(arrayOf("مزامنة مع جهاز آخر", "اختبار المزامنة والشبكة", "سجل أخطاء الشبكة")) { _, which ->
+            .setItems(arrayOf("مزامنة مع جهاز آخر", "حالة الأجهزة والتعارضات", "اختبار المزامنة والشبكة", "سجل أخطاء الشبكة")) { _, which ->
                 when (which) {
                     0 -> showPeerDiscoveryDialog()
-                    1 -> showNetworkSelfTest()
-                    2 -> showNetworkLogDialog()
+                    1 -> showSyncTransparencyDialog()
+                    2 -> showNetworkSelfTest()
+                    3 -> showNetworkLogDialog()
                 }
             }
             .setNegativeButton(R.string.close, null)
@@ -606,7 +855,20 @@ class SettingsFragment : Fragment() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == ENCRYPTED_EXPORT_REQUEST) {
+            val passphrase = pendingBackupPassphrase
+            pendingBackupPassphrase = null
+            val uri = data?.data
+            if (resultCode == Activity.RESULT_OK && uri != null && !passphrase.isNullOrBlank()) {
+                createEncryptedBackup(uri, passphrase)
+            }
+            return
+        }
         if (resultCode != Activity.RESULT_OK) return
+        if (requestCode == ENCRYPTED_IMPORT_REQUEST) {
+            data?.data?.let(::showEncryptedRestoreDialog)
+            return
+        }
         if (requestCode != IMPORT_REQUEST && requestCode != CONTENT_IMPORT_REQUEST) return
         val uri: Uri = data?.data ?: return
         requireActivity().contentResolver.openInputStream(uri)?.use { stream ->
@@ -645,6 +907,59 @@ class SettingsFragment : Fragment() {
                 tmp.delete()
             }
         }
+    }
+
+    private fun createEncryptedBackup(destination: Uri, passphrase: String) {
+        val ctx = requireContext().applicationContext
+        Toast.makeText(ctx, "جارٍ إنشاء النسخة المشفرة…", Toast.LENGTH_SHORT).show()
+        Thread {
+            var encryptedFile: java.io.File? = null
+            try {
+                encryptedFile = AppRepository.exportEncryptedData(ctx.cacheDir, passphrase)
+                ctx.contentResolver.openOutputStream(destination)?.use { target ->
+                    encryptedFile.inputStream().buffered().use { source -> source.copyTo(target) }
+                } ?: throw IllegalStateException("تعذر الكتابة في موقع الحفظ")
+                val user = SessionStore.currentUser(ctx) ?: "?"
+                AppRepository.logActivity(ActivityEntry(user, "صدّر $user نسخة احتياطية مشفرة"))
+                activity?.runOnUiThread {
+                    if (isAdded) Toast.makeText(requireContext(), "تم حفظ النسخة المشفرة بنجاح", Toast.LENGTH_LONG).show()
+                }
+            } catch (_: Exception) {
+                activity?.runOnUiThread {
+                    if (isAdded) Toast.makeText(requireContext(), "فشل إنشاء النسخة المشفرة. تحقق من المساحة وكلمة المرور.", Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                encryptedFile?.delete()
+            }
+        }.apply { name = "encrypted-backup-export" }.start()
+    }
+
+    private fun restoreEncryptedBackup(source: Uri, passphrase: String) {
+        val ctx = requireContext().applicationContext
+        Toast.makeText(ctx, "جارٍ التحقق من النسخة واستعادتها…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val encryptedFile = java.io.File(ctx.cacheDir, "encrypted_restore_${System.currentTimeMillis()}.masahbak")
+            try {
+                ctx.contentResolver.openInputStream(source)?.use { input ->
+                    encryptedFile.outputStream().use { output -> input.copyTo(output) }
+                } ?: throw IllegalStateException("تعذر قراءة الملف")
+                AppRepository.importEncryptedBackup(encryptedFile, passphrase)
+                val user = SessionStore.currentUser(ctx) ?: "?"
+                AppRepository.logActivity(ActivityEntry(user, "استورد $user نسخة احتياطية مشفرة"))
+                activity?.runOnUiThread {
+                    if (isAdded) {
+                        Toast.makeText(requireContext(), "تمت الاستعادة بنجاح", Toast.LENGTH_LONG).show()
+                        activity?.recreate()
+                    }
+                }
+            } catch (_: Exception) {
+                activity?.runOnUiThread {
+                    if (isAdded) Toast.makeText(requireContext(), "فشلت الاستعادة. تحقق من الملف وكلمة المرور.", Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                encryptedFile.delete()
+            }
+        }.apply { name = "encrypted-backup-import" }.start()
     }
 
     private fun confirmLogout() {

@@ -5,8 +5,10 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.view.WindowManager
 import android.widget.Toast
 import com.masahhisabat.app.data.AppRepository
+import com.masahhisabat.app.data.InvoiceReminderScheduler
 import com.masahhisabat.app.data.SyncManager
 import com.masahhisabat.app.data.TrashCleanupScheduler
 import com.masahhisabat.app.image.DocumentEdgeDetector
@@ -33,6 +35,8 @@ class App : Application() {
         DocumentEdgeDetector.initialize()
         // تنظيف السلة المؤجل لا يعمل إلا إذا أبقاه المستخدم مفعّلًا في الإعدادات.
         TrashCleanupScheduler.update(this)
+        // تذكيرات الفواتير تعمل محلياً عبر مهمة يومية مرنة تراعي البطارية.
+        InvoiceReminderScheduler.update(this)
         if (AppRepository.isAutoTrashPurgeEnabled()) {
             Thread { try { AppRepository.purgeExpiredTrash() } catch (_: Exception) { } }.start()
         }
@@ -46,15 +50,18 @@ class App : Application() {
             override fun onActivityStarted(activity: Activity) {
                 startedActivities++
                 foregroundHandler.removeCallbacks(lockWhenBackgrounded)
+                applyScreenPrivacy(activity)
                 if (activity !is LockActivity && SessionStore.requiresUnlock(activity)) {
                     activity.startActivity(Intent(activity, LockActivity::class.java))
                 }
             }
             override fun onActivityStopped(activity: Activity) {
                 startedActivities = (startedActivities - 1).coerceAtLeast(0)
-                if (startedActivities == 0) foregroundHandler.postDelayed(lockWhenBackgrounded, 30_000)
+                if (startedActivities == 0) {
+                    foregroundHandler.postDelayed(lockWhenBackgrounded, AppRepository.appLockTimeoutMs())
+                }
             }
-            override fun onActivityCreated(a: Activity, b: android.os.Bundle?) {}
+            override fun onActivityCreated(a: Activity, b: android.os.Bundle?) { applyScreenPrivacy(a) }
             override fun onActivityResumed(a: Activity) {}
             override fun onActivityPaused(a: Activity) {}
             override fun onActivitySaveInstanceState(a: Activity, b: android.os.Bundle) {}
@@ -75,6 +82,15 @@ class App : Application() {
                 }
             } catch (_: Throwable) {
             }
+        }
+    }
+
+    /** يمنع لقطات الشاشة ومعاينة المحتوى في قائمة التطبيقات الحديثة عند اختيار المستخدم للحماية. */
+    private fun applyScreenPrivacy(activity: Activity) {
+        if (AppRepository.isScreenPrivacyEnabled()) {
+            activity.window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
 }

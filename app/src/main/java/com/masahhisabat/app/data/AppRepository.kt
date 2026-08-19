@@ -8,6 +8,13 @@ import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 import java.io.File
 import java.util.Locale
+import javax.crypto.Cipher
+import javax.crypto.CipherInputStream
+import javax.crypto.CipherOutputStream
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.PBEKeySpec
+import javax.crypto.spec.SecretKeySpec
 
 /**
  * مستودع محلي شامل: مستخدمون، مجموعات، فواتير، سجل نشاط، سجل مزامنة، تفضيلات.
@@ -19,6 +26,11 @@ object AppRepository {
     private const val TRASH_WARNING_NOTIFIED_IDS_KEY = "trash_warning_notified_ids"
     private const val TRASH_RETENTION_MS = 30L * 24L * 60L * 60L * 1000L
     private const val TRASH_WARNING_WINDOW_MS = 3L * 24L * 60L * 60L * 1000L
+    private const val INVOICE_REMINDERS_ENABLED_KEY = "invoice_reminders_enabled"
+    private const val ENCRYPTED_BACKUP_MAGIC = "MSHB1"
+    private const val BACKUP_SALT_BYTES = 16
+    private const val BACKUP_IV_BYTES = 12
+    private const val BACKUP_KDF_ITERATIONS = 120_000
 
     private var appContext: Context? = null
     private val prefs: SharedPreferences by lazy {
@@ -245,6 +257,12 @@ object AppRepository {
     fun renameGroup(id: String, name: String) {
         saveList("groups.json", groups().map { if (it.id == id) it.copy(name = name) else it })
     }
+    /** تحفظ المجموعة في الأرشيف دون المساس برسائلها أو صورها. */
+    fun setGroupArchived(id: String, archived: Boolean) {
+        saveList("groups.json", groups().map {
+            if (it.id == id) it.copy(archivedAt = if (archived) System.currentTimeMillis() else null) else it
+        })
+    }
 
     /** ينقل المجموعة وكل رسائلها إلى السلة دون لمس صورها أو مجلدها الدائم. */
     fun moveGroupToTrash(id: String, deletedBy: String?): TrashEntry? {
@@ -364,6 +382,37 @@ object AppRepository {
         val dir = File(dataDir(), "invoices/$groupId")
         val current = items(groupId)
         writeTextAtomically(File(dir, "items.json"), gson.toJson(current.map { if (it.id == item.id) item else it }))
+    }
+
+    /** عناصر تذكير محلية مستحقة ولم يُعرض تنبيهها على هذا الجهاز بعد. */
+    fun dueInvoiceReminders(now: Long = System.currentTimeMillis()): List<Pair<Group, InvoiceItem>> {
+        if (!areInvoiceRemindersEnabled()) return emptyList()
+        return groups().flatMap { group ->
+            items(group.id).asSequence()
+                .filter { item -> item.reminderAt != null && item.reminderAt <= now && item.reminderNotifiedAt == null }
+                .map { item -> group to item }
+                .toList()
+        }
+    }
+
+    /** يسجّل عرض التنبيه كي لا يتكرر في تشغيل العامل اللاحق. */
+    fun markInvoiceRemindersShown(reminders: List<Pair<Group, InvoiceItem>>) {
+        val shownAt = System.currentTimeMillis()
+        reminders.groupBy({ it.first.id }, { it.second }).forEach { (groupId, groupItems) ->
+            val ids = groupItems.map { it.id }.toSet()
+            val updated = items(groupId).map { item ->
+                if (item.id in ids) item.copy(reminderNotifiedAt = shownAt) else item
+            }
+            val dir = File(dataDir(), "invoices/$groupId")
+            dir.mkdirs()
+            writeTextAtomically(File(dir, "items.json"), gson.toJson(updated))
+        }
+    }
+
+    fun areInvoiceRemindersEnabled(): Boolean = prefs.getBoolean(INVOICE_REMINDERS_ENABLED_KEY, true)
+
+    fun setInvoiceRemindersEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(INVOICE_REMINDERS_ENABLED_KEY, enabled).apply()
     }
 
     fun removeItem(groupId: String, itemId: String) {
@@ -642,6 +691,34 @@ object AppRepository {
     }
     fun clearSyncLog() = saveList("synclog.json", emptyList<SyncEntry>())
 
+    fun recordSyncDevice(
+        address: String,
+        name: String,
+        success: Boolean? = null,
+        error: String? = null
+    ) {
+        val now = System.currentTimeMillis()
+        val updated = syncDevices().toMutableList()
+        val index = updated.indexOfFirst { it.address == address }
+        val previous = updated.getOrNull(index)
+        val status = SyncDeviceStatus(
+            address = address,
+            name = name.ifBlank { previous?.name ?: address },
+            lastSeenAt = now,
+            lastSyncAt = success?.let { now } ?: previous?.lastSyncAt,
+            lastSyncSuccess = success ?: previous?.lastSyncSuccess,
+            lastError = if (success == true) null else error ?: previous?.lastError
+        )
+        if (index >= 0) updated[index] = status else updated.add(status)
+        saveList("sync_devices.json", updated.sortedByDescending { it.lastSeenAt }.take(50))
+    }
+
+    fun logSyncConflict(conflict: SyncConflict) {
+        saveList("sync_conflicts.json", syncConflicts().toMutableList().also { it.add(0, conflict) }.take(200))
+    }
+
+    fun clearSyncConflicts() = saveList("sync_conflicts.json", emptyList<SyncConflict>())
+
     // ---------- التفضيلات ----------
     fun isNightMode(): Boolean = prefs.getBoolean("night_mode", true)
     fun setNightMode(night: Boolean) = prefs.edit().putBoolean("night_mode", night).apply()
@@ -664,8 +741,19 @@ object AppRepository {
     }
     fun hasAppLock(): Boolean = !prefs.getString("app_lock_pin", "").isNullOrBlank()
     fun setAppLockPin(pin: String) = prefs.edit().putString("app_lock_pin", HashUtil.encodePlain(pin)).apply()
-    fun clearAppLockPin() = prefs.edit().remove("app_lock_pin").apply()
+    fun clearAppLockPin() = prefs.edit().remove("app_lock_pin").remove("app_lock_biometric").apply()
     fun verifyAppLockPin(pin: String): Boolean = HashUtil.decodePlain(prefs.getString("app_lock_pin", "") ?: "") == pin
+    /** مهلة القفل تحفظ بالملي ثانية وتبقى ضمن خيارات واجهة الإعدادات المعتمدة فقط. */
+    fun appLockTimeoutMs(): Long = prefs.getLong("app_lock_timeout_ms", 30_000L)
+        .takeIf { it in setOf(0L, 30_000L, 60_000L, 300_000L) } ?: 30_000L
+    fun setAppLockTimeoutMs(timeoutMs: Long) {
+        val safe = timeoutMs.takeIf { it in setOf(0L, 30_000L, 60_000L, 300_000L) } ?: 30_000L
+        prefs.edit().putLong("app_lock_timeout_ms", safe).apply()
+    }
+    fun isScreenPrivacyEnabled(): Boolean = prefs.getBoolean("app_lock_screen_privacy", false)
+    fun setScreenPrivacyEnabled(enabled: Boolean) = prefs.edit().putBoolean("app_lock_screen_privacy", enabled).apply()
+    fun isBiometricUnlockEnabled(): Boolean = prefs.getBoolean("app_lock_biometric", false)
+    fun setBiometricUnlockEnabled(enabled: Boolean) = prefs.edit().putBoolean("app_lock_biometric", enabled).apply()
     fun rememberLogin(username: String) = prefs.edit().putString("remember_user", normalizeUsername(username)).apply()
     fun rememberedLogin(): String? = prefs.getString("remember_user", null)?.let(::normalizeUsername)
     fun clearRemember() = prefs.edit().remove("remember_user").apply()
@@ -750,6 +838,8 @@ object AppRepository {
     fun groups(): List<Group> = loadList("groups.json", Group::class.java)
     fun activityLog(): List<ActivityEntry> = loadList("activity.json", ActivityEntry::class.java)
     fun syncLog(): List<SyncEntry> = loadList("synclog.json", SyncEntry::class.java)
+    fun syncDevices(): List<SyncDeviceStatus> = loadList("sync_devices.json", SyncDeviceStatus::class.java)
+    fun syncConflicts(): List<SyncConflict> = loadList("sync_conflicts.json", SyncConflict::class.java)
     fun totalInvoiceCount(): Int = groups().sumOf { items(it.id).size }
 
     fun exportData(outDir: File): File {
@@ -764,6 +854,80 @@ object AppRepository {
             }
         }
         return zipFile
+    }
+
+    /** ينشئ نسخة كاملة مشفرة محليًا؛ لا تحفظ كلمة المرور ولا تغادر الجهاز. */
+    fun exportEncryptedData(outDir: File, passphrase: String): File {
+        require(passphrase.length >= 6) { "weak_passphrase" }
+        outDir.mkdirs()
+        val temporaryDir = File(outDir, ".masah_backup_tmp").also { it.mkdirs() }
+        val plainZip = exportData(temporaryDir)
+        val encrypted = File(outDir, "masah_backup_${System.currentTimeMillis()}.masahbak")
+        val salt = ByteArray(BACKUP_SALT_BYTES).also { java.security.SecureRandom().nextBytes(it) }
+        val iv = ByteArray(BACKUP_IV_BYTES).also { java.security.SecureRandom().nextBytes(it) }
+        try {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
+                init(Cipher.ENCRYPT_MODE, backupKey(passphrase, salt), GCMParameterSpec(128, iv))
+            }
+            java.io.DataOutputStream(encrypted.outputStream().buffered()).use { output ->
+                output.write(ENCRYPTED_BACKUP_MAGIC.toByteArray(Charsets.US_ASCII))
+                output.writeByte(salt.size)
+                output.write(salt)
+                output.writeByte(iv.size)
+                output.write(iv)
+                CipherOutputStream(output, cipher).use { encryptedStream ->
+                    plainZip.inputStream().buffered().use { source -> source.copyTo(encryptedStream) }
+                }
+            }
+            return encrypted
+        } catch (error: Exception) {
+            encrypted.delete()
+            throw error
+        } finally {
+            plainZip.delete()
+            temporaryDir.delete()
+        }
+    }
+
+    /** يفك النسخة المشفرة مؤقتًا ثم يمررها إلى مسار الاستيراد المتحقق الحالي. */
+    fun importEncryptedBackup(encryptedFile: File, passphrase: String) {
+        require(passphrase.length >= 6) { "weak_passphrase" }
+        val ctx = appContext ?: throw IllegalStateException("init() must be called first")
+        val temporaryZip = File(ctx.cacheDir, "encrypted_import_${System.currentTimeMillis()}.zip")
+        try {
+            java.io.DataInputStream(encryptedFile.inputStream().buffered()).use { input ->
+                val magic = ByteArray(ENCRYPTED_BACKUP_MAGIC.length)
+                input.readFully(magic)
+                if (!magic.contentEquals(ENCRYPTED_BACKUP_MAGIC.toByteArray(Charsets.US_ASCII))) {
+                    throw IllegalArgumentException("invalid_encrypted_backup")
+                }
+                val saltLength = input.readUnsignedByte()
+                if (saltLength !in 12..64) throw IllegalArgumentException("invalid_encrypted_backup")
+                val salt = ByteArray(saltLength).also(input::readFully)
+                val ivLength = input.readUnsignedByte()
+                if (ivLength !in 12..32) throw IllegalArgumentException("invalid_encrypted_backup")
+                val iv = ByteArray(ivLength).also(input::readFully)
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
+                    init(Cipher.DECRYPT_MODE, backupKey(passphrase, salt), GCMParameterSpec(128, iv))
+                }
+                CipherInputStream(input, cipher).use { decrypted ->
+                    temporaryZip.outputStream().buffered().use { output -> decrypted.copyTo(output) }
+                }
+            }
+            importBackup(temporaryZip)
+        } finally {
+            temporaryZip.delete()
+        }
+    }
+
+    private fun backupKey(passphrase: String, salt: ByteArray): SecretKeySpec {
+        val spec = PBEKeySpec(passphrase.toCharArray(), salt, BACKUP_KDF_ITERATIONS, 256)
+        return try {
+            val material = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+            SecretKeySpec(material, "AES")
+        } finally {
+            spec.clearPassword()
+        }
     }
 
     data class ContentBackupResult(

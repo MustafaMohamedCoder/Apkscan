@@ -388,6 +388,7 @@ object SyncManager {
     private fun handleClient(socket: Socket, context: Context) {
         Thread {
             socket.use { client ->
+                val clientAddress = client.inetAddress?.hostAddress?.takeIf { it.isNotBlank() } ?: "عنوان غير معروف"
                 try {
                     client.soTimeout = SYNC_READ_TIMEOUT_MS
                     val reader = client.getInputStream().bufferedReader()
@@ -398,7 +399,7 @@ object SyncManager {
                     val preview = previewPayload(payload)
                     AppRepository.logSync(SyncEntry(
                         "معاينة استقبال",
-                        "من ${client.inetAddress.hostAddress}: ستُضاف ${preview.newItems} عناصر و${preview.newUsers} مستخدمين و${preview.newGroups} مجموعات.",
+                        "من $clientAddress: ستُضاف ${preview.newItems} عناصر و${preview.newUsers} مستخدمين و${preview.newGroups} مجموعات.",
                         true
                     ))
                     val isMustafaUserFile = payload.mode == AUTO_USER_SYNC_MODE
@@ -422,7 +423,7 @@ object SyncManager {
                         client.getOutputStream().write("\n".toByteArray())
                     }
                     client.getOutputStream().flush()
-                    val sender = payload.deviceName?.takeIf { it.isNotBlank() } ?: client.inetAddress.hostAddress
+                    val sender = payload.deviceName?.takeIf { it.isNotBlank() } ?: clientAddress
                     val action = when {
                         isMustafaUserFile -> "استقبال تلقائي للمستخدمين"
                         isAutomaticDataSync -> "استقبال تلقائي للبيانات"
@@ -436,9 +437,12 @@ object SyncManager {
                         "استُقبلت ${result.items} عناصر و${result.users} مستخدمين من $sender"
                     }
                     AppRepository.logSync(SyncEntry(action, detail, true))
+                    recordSyncDevice(clientAddress, sender, success = true)
                 } catch (e: Throwable) {
                     Log.e(TAG, "client error", e)
-                    AppRepository.logSync(SyncEntry("استقبال", "فشلت المزامنة: ${syncErrorMessage(e)}", false))
+                    val errorMessage = syncErrorMessage(e)
+                    AppRepository.logSync(SyncEntry("استقبال", "فشلت المزامنة: $errorMessage", false))
+                    recordSyncDevice(clientAddress, clientAddress, success = false, error = errorMessage)
                 }
             }
         }.apply {
@@ -479,6 +483,7 @@ object SyncManager {
                     throw IOException("استجابة غير مكتملة من الجهاز الآخر")
                 }
                 AppRepository.logSync(SyncEntry("إرسال", "إلى $peerName: أُرسلت ${currentPayload.users.size} مستخدمين و${currentPayload.totalItems} عناصر — استُقبلت $gotItems عناصر و$gotUsers مستخدمين", true))
+                recordSyncDevice(host, peerName, success = true)
                 onProgress(100, "اكتملت المزامنة بنجاح")
                 return SyncResult(true, gotItems, gotUsers)
             }
@@ -487,6 +492,7 @@ object SyncManager {
             Log.e(TAG, "sync error", e)
             val sentSummary = payload?.let { " بعد تجهيز ${it.totalItems} عناصر و${it.users.size} مستخدمين" }.orEmpty()
             AppRepository.logSync(SyncEntry("إرسال", "فشلت المزامنة مع $peerName$sentSummary: $errorMessage", false))
+            recordSyncDevice(host, peerName, success = false, error = errorMessage)
             onProgress(0, errorMessage)
             return SyncResult(false, 0, 0, errorMessage)
         }
@@ -515,6 +521,7 @@ object SyncManager {
                     "إلى $peerName: تم إرسال ${payload.users.size} حسابًا وتحديث $changedUsers حسابًا.",
                     true
                 ))
+                recordSyncDevice(host, peerName, success = true)
                 return SyncResult(true, 0, changedUsers)
             }
         } catch (e: Throwable) {
@@ -524,6 +531,7 @@ object SyncManager {
                 "تعذر إرسال ملف المستخدمين إلى $peerName: $errorMessage",
                 false
             ))
+            recordSyncDevice(host, peerName, success = false, error = errorMessage)
             return SyncResult(false, 0, 0, errorMessage)
         }
     }
@@ -567,6 +575,7 @@ object SyncManager {
                     "بعد تسجيل الدخول مع $peerName: أُرسلت ${outgoing.totalItems} عنصرًا واستُقبلت ${received.items} عنصرًا.",
                     true
                 ))
+                recordSyncDevice(host, peerName, success = true)
                 return SyncResult(true, received.items, received.users)
             }
         } catch (e: Throwable) {
@@ -576,6 +585,7 @@ object SyncManager {
                 "تعذر مزامنة المجموعات والفواتير مع $peerName: $errorMessage",
                 false
             ))
+            recordSyncDevice(host, peerName, success = false, error = errorMessage)
             return SyncResult(false, 0, 0, errorMessage)
         }
     }
@@ -791,6 +801,39 @@ object SyncManager {
         is SocketException -> "انقطع اتصال الشبكة أثناء المزامنة."
         is IOException -> "لم تكتمل المزامنة بسبب استجابة غير صالحة أو اتصال غير مستقر."
         else -> "حدث خطأ غير متوقع أثناء المزامنة. أعد المحاولة."
+    }
+
+    /** يحفظ ملخص آخر محاولة مع جهاز، ولا يسمح لفشل ملف السجل بتعطيل المزامنة نفسها. */
+    private fun recordSyncDevice(address: String, name: String, success: Boolean, error: String? = null) {
+        try {
+            AppRepository.recordSyncDevice(address, name, success, error)
+        } catch (storageError: Throwable) {
+            Log.w(TAG, "تعذر حفظ حالة جهاز المزامنة", storageError)
+        }
+    }
+
+    /** يحدث وقت آخر ظهور للجهاز دون تغيير نتيجة آخر محاولة مزامنة. */
+    private fun recordDiscoveredDevice(address: String, name: String) {
+        try {
+            AppRepository.recordSyncDevice(address, name)
+        } catch (storageError: Throwable) {
+            Log.w(TAG, "تعذر حفظ ظهور جهاز مكتشف", storageError)
+        }
+    }
+
+    /** يسجل التعارضات التي حُسمت تلقائياً لتكون قابلة للمراجعة من الإعدادات. */
+    private fun recordSyncConflict(payload: SyncPayload, entityType: String, entityId: String, resolution: String) {
+        try {
+            val deviceName = payload.deviceName?.takeIf { it.isNotBlank() } ?: "جهاز غير مسمى"
+            AppRepository.logSyncConflict(SyncConflict(
+                entityType = entityType,
+                entityId = entityId,
+                deviceName = deviceName,
+                resolution = resolution
+            ))
+        } catch (storageError: Throwable) {
+            Log.w(TAG, "تعذر حفظ سجل تعارض المزامنة", storageError)
+        }
     }
 
     /**
@@ -1060,6 +1103,18 @@ object SyncManager {
     /** تطبيق بيانات مستقبلة ومزامنتها مع المحلي: المستخدمون يُدمجون (إضافة الجدد، تحديث كلمات المرور)، والبيانات تُضاف. */
     private fun applyPayload(context: Context, payload: SyncPayload): ApplyResult {
         // تطبق حالات السلة أولًا حتى لا تعود البيانات المحذوفة من جهاز آخر.
+        val localTrash = AppRepository.trashRecords().associateBy { it.id }
+        payload.trashRecords.orEmpty().forEach { incoming ->
+            val existing = localTrash[incoming.id] ?: return@forEach
+            if (existing.state != incoming.state && existing.stateChangedAt != incoming.stateChangedAt) {
+                val resolution = if (incoming.stateChangedAt > existing.stateChangedAt) {
+                    "اعتمدت حالة السلة الأحدث الواردة من الجهاز الآخر."
+                } else {
+                    "احتُفظ بحالة السلة المحلية لأنها الأحدث."
+                }
+                recordSyncConflict(payload, "trash", incoming.id, resolution)
+            }
+        }
         AppRepository.mergeTrashRecords(payload.trashRecords.orEmpty())
         var addedUsers = 0
         // 1) مزامنة المستخدمين: دمج حسب اسم المستخدم
@@ -1083,6 +1138,16 @@ object SyncManager {
                             it.copy(passwordHash = u.passwordHash, role = role, enabled = u.enabled)
                         } else it
                     }
+                } else if (
+                    existing != null &&
+                    (existing.passwordHash != u.passwordHash || existing.role != role || existing.enabled != u.enabled)
+                ) {
+                    recordSyncConflict(
+                        payload,
+                        "user",
+                        normalizedUsername,
+                        "احتُفظ بإعدادات المستخدم المحلية لأن المزامنة غير السلطوية لا تستبدل حساباً قائماً."
+                    )
                 }
             }
         }
@@ -1097,15 +1162,29 @@ object SyncManager {
             if (group == null) {
                 group = Group(p.groupId, p.groupName)
                 AppRepository.addGroup(group)
+            } else if (group.name != p.groupName) {
+                recordSyncConflict(
+                    payload,
+                    "group",
+                    p.groupId,
+                    "احتُفظ باسم المجموعة المحلي عند اختلاف الاسم بين الجهازين."
+                )
             }
-            val exists = AppRepository.items(p.groupId).any { it.id == p.item.id }
-            if (!exists) {
+            val existingItem = AppRepository.items(p.groupId).find { it.id == p.item.id }
+            if (existingItem == null) {
                 val syncedItem = p.item.copy(
                     imagePath = restoreImageFromSync(p.item.id, "original", p.image),
                     processedPath = restoreImageFromSync(p.item.id, "processed", p.processedImage)
                 )
                 AppRepository.addItem(p.groupId, syncedItem)
                 addedItems++
+            } else if (existingItem != p.item) {
+                recordSyncConflict(
+                    payload,
+                    "item",
+                    p.item.id,
+                    "احتُفظ بالعنصر المحلي الموجود لتجنب استبدال محتوى تم تعديله على هذا الجهاز."
+                )
             }
         }
         return ApplyResult(addedItems, addedUsers)
@@ -1132,6 +1211,12 @@ object SyncManager {
                 local.add(replacement)
                 changedUsers++
             } else if (existing != replacement) {
+                recordSyncConflict(
+                    payload,
+                    "user",
+                    username,
+                    "اعتمدت نسخة حساب المستخدم القادمة من جهاز mustafa بوصفها المصدر السلطوي."
+                )
                 local[index] = replacement
                 changedUsers++
             }
@@ -1203,7 +1288,9 @@ object SyncManager {
                             } else {
                                 text.removePrefix("HERE ").substringAfter(" ", parts[0])
                             }
-                            found.addIfAbsent(DiscoveredPeer(parts[0], peerName, advertisedVersion))
+                            val peer = DiscoveredPeer(parts[0], peerName, advertisedVersion)
+                            found.addIfAbsent(peer)
+                            recordDiscoveredDevice(peer.address, peer.name)
                         }
                     } catch (_: Exception) { break }
                 }

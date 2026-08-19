@@ -34,6 +34,14 @@ data class InvoiceItem(
     @SerializedName("items_text") val itemsText: String? = null,
     @SerializedName("sender") val sender: String? = null, // اسم المستخدم الذي أرسل الرسالة
     @SerializedName("seen") val seen: Boolean = false, // true عندما يراها مستخدمون آخرون
+    /** new | in_review | completed | paid. تحافظ القيمة الافتراضية على توافق الفواتير القديمة. */
+    val status: String = "new",
+    /** وسوم محلية تُستخدم في البحث والفلترة دون اتصال. */
+    val tags: List<String> = emptyList(),
+    @SerializedName("reminder_at") val reminderAt: Long? = null,
+    @SerializedName("reminder_notified_at") val reminderNotifiedAt: Long? = null,
+    /** نص مستخرج محلياً اختياري يدعم البحث والنسخ من المستند. */
+    @SerializedName("document_text") val documentText: String? = null,
     @SerializedName("created_at") val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -41,7 +49,8 @@ data class InvoiceItem(
 data class Group(
     val id: String = generateId(),
     val name: String,
-    @SerializedName("created_at") val createdAt: Long = System.currentTimeMillis()
+    @SerializedName("created_at") val createdAt: Long = System.currentTimeMillis(),
+    @SerializedName("archived_at") val archivedAt: Long? = null
 )
 
 /** عنصر محفوظ في سلة المحذوفات المحلية حتى يستعيده المستخدم أو يحذفه نهائيًا. */
@@ -74,6 +83,26 @@ data class SyncEntry(
     val action: String,
     val detail: String,
     val success: Boolean,
+    @SerializedName("at") val at: Long = System.currentTimeMillis()
+)
+
+/** حالة آخر اتصال معروف بجهاز على الشبكة المحلية. */
+data class SyncDeviceStatus(
+    val address: String,
+    val name: String,
+    @SerializedName("last_seen_at") val lastSeenAt: Long = System.currentTimeMillis(),
+    @SerializedName("last_sync_at") val lastSyncAt: Long? = null,
+    @SerializedName("last_sync_success") val lastSyncSuccess: Boolean? = null,
+    @SerializedName("last_error") val lastError: String? = null
+)
+
+/** سجل مراجعة لتعارض حُلّ آلياً وفق سياسة «الأحدث مع احتفاظ بنسخة وقائية». */
+data class SyncConflict(
+    val id: String = generateId(),
+    @SerializedName("entity_type") val entityType: String,
+    @SerializedName("entity_id") val entityId: String,
+    @SerializedName("device_name") val deviceName: String,
+    val resolution: String,
     @SerializedName("at") val at: Long = System.currentTimeMillis()
 )
 

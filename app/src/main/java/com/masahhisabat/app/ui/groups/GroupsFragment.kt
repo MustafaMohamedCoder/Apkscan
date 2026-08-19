@@ -261,7 +261,8 @@ class GroupsFragment : Fragment() {
             val filterMode = AppRepository.groupFilterMode()
             val sortMode = AppRepository.groupSortMode()
             val summary = requireView().findViewById<TextView>(R.id.groups_summary)
-            summary.text = "${allGroups.size} مجموعة · $totalDocuments مستند"
+            val archivedCount = allGroups.count { it.archivedAt != null }
+            summary.text = "${allGroups.size - archivedCount} نشطة · $archivedCount مؤرشفة · $totalDocuments مستند"
             requireView().findViewById<TextView>(R.id.groups_sort_label).text =
                 "${sortLabel(sortMode)} · ${filterLabel(filterMode)}"
 
@@ -315,7 +316,8 @@ class GroupsFragment : Fragment() {
             "empty" -> (snapshot?.documentCount ?: 0) == 0
             "pinned" -> group.id in pinned
             "recent_30d" -> group.createdAt >= System.currentTimeMillis() - 30L * 24L * 60L * 60L * 1000L
-            else -> true
+            "archived" -> group.archivedAt != null
+            else -> group.archivedAt == null
         }
     }
 
@@ -371,9 +373,10 @@ class GroupsFragment : Fragment() {
             "تحتوي على مستندات",
             "فارغة",
             "المجموعات المثبتة",
-            "أُنشئت خلال آخر 30 يومًا"
+            "أُنشئت خلال آخر 30 يومًا",
+            "المجموعات المؤرشفة"
         )
-        val values = arrayOf("all", "with_documents", "empty", "pinned", "recent_30d")
+        val values = arrayOf("all", "with_documents", "empty", "pinned", "recent_30d", "archived")
         val selected = values.indexOf(AppRepository.groupFilterMode()).coerceAtLeast(0)
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("تصفية المجموعات")
@@ -400,6 +403,7 @@ class GroupsFragment : Fragment() {
         "empty" -> "فارغة"
         "pinned" -> "مثبتة"
         "recent_30d" -> "آخر 30 يومًا"
+        "archived" -> "مؤرشفة"
         else -> "الكل"
     }
 
@@ -462,7 +466,7 @@ class GroupsFragment : Fragment() {
             holder.card.setCardBackgroundColor(surface)
             holder.card.strokeColor = ThemeHelper.cardStroke(ctx)
             holder.card.strokeWidth = 1
-            holder.name.text = g.name
+            holder.name.text = if (g.archivedAt != null) "${g.name} · مؤرشفة" else g.name
             holder.name.setTextColor(text)
             holder.name.typeface = ctx.resources.getFont(R.font.tajawal_bold)
             val items = AppRepository.items(g.id)
@@ -494,7 +498,8 @@ class GroupsFragment : Fragment() {
                     return@setOnClickListener
                 }
                 val isPinned = g.id in AppRepository.favoriteGroupIds()
-                val actions = arrayOf(if (isPinned) "إلغاء التثبيت" else "تثبيت أعلى القائمة", "إعادة تسمية", "حذف")
+                val archiveAction = if (g.archivedAt == null) "أرشفة المجموعة" else "إلغاء الأرشفة"
+                val actions = arrayOf(if (isPinned) "إلغاء التثبيت" else "تثبيت أعلى القائمة", archiveAction, "إعادة تسمية", "حذف")
                 MaterialAlertDialogBuilder(ctx)
                     .setItems(actions) { _, which ->
                         when (which) {
@@ -505,8 +510,16 @@ class GroupsFragment : Fragment() {
                                 refresh()
                                 Toast.makeText(ctx, if (isPinned) "تم إلغاء تثبيت المجموعة" else "تم تثبيت المجموعة", Toast.LENGTH_SHORT).show()
                             }
-                            1 -> renameGroupDialog(g)
-                            2 -> confirmDelete(g)
+                            1 -> {
+                                val archive = g.archivedAt == null
+                                AppRepository.setGroupArchived(g.id, archive)
+                                val user = SessionStore.currentUser(ctx) ?: "?"
+                                AppRepository.logActivity(ActivityEntry(user, if (archive) "أرشف $user المجموعة ${g.name}" else "ألغى $user أرشفة المجموعة ${g.name}"))
+                                refresh()
+                                Toast.makeText(ctx, if (archive) "تمت أرشفة المجموعة" else "أعيدت المجموعة إلى القائمة", Toast.LENGTH_SHORT).show()
+                            }
+                            2 -> renameGroupDialog(g)
+                            3 -> confirmDelete(g)
                         }
                     }
                     .show()

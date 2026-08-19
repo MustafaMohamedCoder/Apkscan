@@ -149,6 +149,20 @@
     <string name="trash_warning_title">حذف نهائي قريب</string>
     <string name="trash_warning_text_one">تبقّى 3 أيام أو أقل قبل حذف %1$s نهائيًا.</string>
     <string name="trash_warning_text_many">تبقّى 3 أيام أو أقل قبل حذف %1$d عناصر من سلة المحذوفات نهائيًا.</string>
+    <string name="invoice_status_label">الحالة</string>
+    <string name="invoice_status_new">جديدة</string>
+    <string name="invoice_status_review">قيد المراجعة</string>
+    <string name="invoice_status_completed">مكتملة</string>
+    <string name="invoice_status_paid">مدفوعة</string>
+    <string name="invoice_tags_hint">وسوم مفصولة بفاصلة، مثل: عاجلة، مورد</string>
+    <string name="invoice_reminder_none">بدون تذكير</string>
+    <string name="invoice_reminder_select">اختيار تاريخ التذكير</string>
+    <string name="invoice_reminder_channel_name">تذكيرات الفواتير</string>
+    <string name="invoice_reminder_channel_description">تنبيهات محلية للفاتورة عند حلول موعد التذكير.</string>
+    <string name="invoice_reminder_title">تذكير فاتورة</string>
+    <string name="invoice_reminder_default_label">فاتورة محفوظة</string>
+    <string name="invoice_reminder_one">حان موعد متابعة فاتورة «%1$s».</string>
+    <string name="invoice_reminder_many">لديك %1$d فواتير تحتاج إلى متابعة.</string>
 
     <!-- Team -->
     <string name="team_management">إدارة الفريق</string>

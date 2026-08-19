@@ -147,6 +147,10 @@ class SearchFragment : Fragment() {
         loadingBar.visibility = View.VISIBLE
 
         val results = mutableListOf<Pair<String, InvoiceItem>>()
+        val groupMatches = AppRepository.groups().filter { group ->
+            q.isNotBlank() && group.name.lowercase().contains(q) &&
+                (filterGroup.isBlank() || group.name.lowercase().contains(filterGroup.lowercase()))
+        }
         for (g in AppRepository.groups()) {
             for (item in AppRepository.items(g.id)) {
                 if ((q.isBlank() || matches(item, q)) && matchesFilters(item, g.name)) {
@@ -161,15 +165,16 @@ class SearchFragment : Fragment() {
         handler.post {
             loadingBar.visibility = View.GONE
             resultsPanel.removeAllViews()
-            if (results.isEmpty()) {
+            if (results.isEmpty() && groupMatches.isEmpty()) {
                 emptyText.visibility = View.VISIBLE
             } else {
                 emptyText.visibility = View.GONE
+                groupMatches.forEach { group -> resultsPanel.addView(buildGroupResultCard(group)) }
                 results.forEach { (groupName, item) ->
                     resultsPanel.addView(buildResultCard(groupName, item))
                 }
             }
-            updateSearchState(results.size)
+            updateSearchState(results.size + groupMatches.size)
         }
     }
 
@@ -179,7 +184,8 @@ class SearchFragment : Fragment() {
             (item.total?.contains(q) == true) ||
             (item.currency?.lowercase()?.contains(q) == true) ||
             (item.text?.lowercase()?.contains(q) == true) ||
-            (item.itemsText?.lowercase()?.contains(q) == true)
+            (item.itemsText?.lowercase()?.contains(q) == true) ||
+            (item.documentText?.lowercase()?.contains(q) == true)
 
     private fun matchesFilters(item: InvoiceItem, groupName: String): Boolean {
         if (filterDate.isNotBlank() && (item.date?.contains(filterDate) != true)) return false
@@ -316,6 +322,38 @@ class SearchFragment : Fragment() {
                 AppRepository.groups().find { g -> AppRepository.items(g.id).any { it.id == item.id } }?.id))
         }
         return card
+    }
+
+    /** تظهر المجموعة المطابقة حتى إن لم تحوِ رسائل، ليكون البحث مركزاً موحداً فعلياً. */
+    private fun buildGroupResultCard(group: com.masahhisabat.app.data.Group): View {
+        val ctx = requireContext()
+        return MaterialCardView(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = 12 }
+            radius = 20f
+            cardElevation = 2f
+            strokeColor = ThemeHelper.cardStroke(ctx)
+            strokeWidth = 1
+            setCardBackgroundColor(ThemeHelper.surface(ctx))
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(24, 18, 24, 18)
+                addView(TextView(ctx).apply {
+                    text = "مجموعة · ${group.name}"
+                    textSize = 16f
+                    typeface = ctx.resources.getFont(R.font.tajawal_bold)
+                    setTextColor(ThemeHelper.text(ctx))
+                })
+                addView(TextView(ctx).apply {
+                    text = "${AppRepository.items(group.id).size} عنصر${if (group.archivedAt != null) " · مؤرشفة" else ""}"
+                    textSize = 13f
+                    typeface = ctx.resources.getFont(R.font.tajawal_regular)
+                    setTextColor(ThemeHelper.textSecondary(ctx))
+                })
+            })
+            setOnClickListener { startActivity(Intent(ctx, GroupActivity::class.java).putExtra("group_id", group.id)) }
+        }
     }
 
     private fun showFilterDialog() {

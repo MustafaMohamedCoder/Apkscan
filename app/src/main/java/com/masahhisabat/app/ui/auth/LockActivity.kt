@@ -8,6 +8,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.ui.ThemeHelper
@@ -58,6 +60,13 @@ class LockActivity : AppCompatActivity() {
         }
         content.addView(title); content.addView(hint); content.addView(input)
         content.addView(action, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = 20 })
+        if (AppRepository.isBiometricUnlockEnabled()) {
+            val biometric = MaterialButton(this).apply {
+                text = "فتح بالبصمة"
+                setOnClickListener { authenticateWithBiometric() }
+            }
+            content.addView(biometric, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = 8 })
+        }
         setContentView(content)
         setFinishOnTouchOutside(false)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -65,5 +74,22 @@ class LockActivity : AppCompatActivity() {
                 moveTaskToBack(true)
             }
         })
+    }
+
+    private fun authenticateWithBiometric() {
+        val executor = ContextCompat.getMainExecutor(this)
+        val prompt = BiometricPrompt(this, executor, object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                super.onAuthenticationSucceeded(result)
+                SessionStore.unlock(this@LockActivity)
+                finish()
+            }
+        })
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("فتح ماسح الحسابات")
+            .setSubtitle("استخدم بصمة الجهاز للمتابعة")
+            .setNegativeButtonText("استخدم رمز PIN")
+            .build()
+        prompt.authenticate(info)
     }
 }

@@ -2,6 +2,8 @@ package com.masahhisabat.app.ui.scanner
 
 import android.content.Context
 import android.content.ContentValues
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -34,6 +36,7 @@ import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.ActivityEntry
 import com.masahhisabat.app.data.InvoiceItem
+import com.masahhisabat.app.data.InvoiceExtractor
 import com.masahhisabat.app.data.currentInvoiceName
 import com.masahhisabat.app.image.ImageProcessor
 import com.masahhisabat.app.image.ProcessMode
@@ -392,22 +395,110 @@ class CropEditActivity : AppCompatActivity() {
         v?.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
         Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
 
-        val options = arrayOf(
+        val existingPages = PdfSessionManager.pageCount(this)
+        val options = mutableListOf(
             getString(R.string.save_gallery),
             getString(R.string.add_to_group),
-            getString(R.string.share)
+            getString(R.string.share),
+            "استخراج النص محلياً",
+            "تصدير كملف PDF${if (existingPages > 0) " ($existingPages صفحات محفوظة)" else ""}",
+            "إضافة صفحة إلى جلسة PDF متعددة الصفحات"
         )
+        if (existingPages > 0) options += "إلغاء جلسة PDF الحالية"
         MaterialAlertDialogBuilder(ctx)
             .setTitle(R.string.save_options)
-            .setItems(options) { _, which ->
+            .setItems(options.toTypedArray()) { _, which ->
                 when (which) {
                     0 -> requestSaveToGallery(bitmap)
                     1 -> chooseGroupAndAdd(bitmap)
                     2 -> shareBitmap(bitmap)
+                    3 -> extractTextLocally(bitmap)
+                    4 -> exportPdf(bitmap)
+                    5 -> addPageToPdfSession(bitmap)
+                    6 -> {
+                        PdfSessionManager.clear(this)
+                        Toast.makeText(this, "ألغيت جلسة PDF", Toast.LENGTH_SHORT).show()
+                        showSuccessAndContinue(bitmap)
+                    }
                 }
             }
             .setOnCancelListener { finish() }
             .show()
+    }
+
+    private fun addPageToPdfSession(bitmap: Bitmap) {
+        processing = true
+        loadingLabel.setText(R.string.loading)
+        loadingPanel.visibility = View.VISIBLE
+        Thread {
+            val result = runCatching { PdfSessionManager.appendPage(this, bitmap) }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                processing = false
+                loadingPanel.visibility = View.GONE
+                result.onSuccess { count ->
+                    MaterialAlertDialogBuilder(this)
+                        .setTitle("جلسة PDF متعددة الصفحات")
+                        .setMessage("أضيفت الصفحة $count. التقط الصفحة التالية ثم اختر تصدير PDF عند اكتمال المستند.")
+                        .setPositiveButton("التقاط صفحة أخرى") { _, _ ->
+                            startActivity(Intent(this, DocumentCameraActivity::class.java))
+                            finish()
+                        }
+                        .setNegativeButton(R.string.close) { _, _ -> finish() }
+                        .show()
+                }.onFailure { error ->
+                    Toast.makeText(this, error.message ?: "تعذر إضافة الصفحة", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.apply { name = "pdf-session-add-page"; start() }
+    }
+
+    private fun extractTextLocally(bitmap: Bitmap) {
+        processing = true
+        loadingLabel.setText(R.string.loading)
+        loadingPanel.visibility = View.VISIBLE
+        Thread {
+            val extracted = runCatching { InvoiceExtractor.extract(this, bitmap) }.getOrNull()
+            val text = extracted?.rawText.orEmpty()
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                processing = false
+                loadingPanel.visibility = View.GONE
+                MaterialAlertDialogBuilder(this)
+                    .setTitle("النص المستخرج محلياً")
+                    .setMessage(text.ifBlank { "لم يتم العثور على نص واضح في المستند. جرّب فلتر التباين أو صورة أوضح." })
+                    .setPositiveButton("نسخ النص") { _, _ ->
+                        if (text.isNotBlank()) {
+                            (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
+                                .setPrimaryClip(ClipData.newPlainText("نص المستند", text))
+                            Toast.makeText(this, "تم نسخ النص", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .setNeutralButton("إضافة إلى مجموعة") { _, _ -> chooseGroupAndAdd(bitmap, text.ifBlank { null }) }
+                    .setNegativeButton(R.string.close, null)
+                    .show()
+            }
+        }.apply { name = "local-ocr"; start() }
+    }
+
+    private fun exportPdf(bitmap: Bitmap) {
+        processing = true
+        loadingLabel.setText(R.string.loading)
+        loadingPanel.visibility = View.VISIBLE
+        Thread {
+            val result = runCatching { PdfSessionManager.exportCurrentSession(this, bitmap) }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                processing = false
+                loadingPanel.visibility = View.GONE
+                result.onSuccess { message ->
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                    finish()
+                }.onFailure { error ->
+                    Toast.makeText(this, error.message ?: "تعذر تصدير PDF", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.apply { name = "pdf-session-export"; start() }
     }
 
     private fun newFile(bitmap: android.graphics.Bitmap): String {
@@ -415,7 +506,7 @@ class CropEditActivity : AppCompatActivity() {
         return ImageProcessor.saveTo(bitmap, dir, "scan").absolutePath
     }
 
-    private fun chooseGroupAndAdd(bitmap: Bitmap) {
+    private fun chooseGroupAndAdd(bitmap: Bitmap, documentText: String? = null) {
         val groups = AppRepository.groups()
         if (groups.isEmpty()) {
             Toast.makeText(this, R.string.no_groups_for_image, Toast.LENGTH_LONG).show()
@@ -424,12 +515,12 @@ class CropEditActivity : AppCompatActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.add_to_group)
             .setItems(groups.map { it.name }.toTypedArray()) { _, which ->
-                addImageToGroup(bitmap, groups[which].id, groups[which].name)
+                addImageToGroup(bitmap, groups[which].id, groups[which].name, documentText)
             }
             .show()
     }
 
-    private fun addImageToGroup(bitmap: Bitmap, groupId: String, groupName: String) {
+    private fun addImageToGroup(bitmap: Bitmap, groupId: String, groupName: String, documentText: String? = null) {
         processing = true
         loadingLabel.setText(R.string.loading)
         loadingPanel.visibility = View.VISIBLE
@@ -438,7 +529,12 @@ class CropEditActivity : AppCompatActivity() {
                 val scanPath = newFile(bitmap)
                 val persistentPath = AppRepository.persistAppImage(scanPath)
                     ?: throw IllegalStateException("تعذر حفظ الصورة في التخزين الدائم")
-                AppRepository.addItem(groupId, InvoiceItem(type = "image", imagePath = persistentPath, processedPath = null))
+                AppRepository.addItem(groupId, InvoiceItem(
+                    type = "image",
+                    imagePath = persistentPath,
+                    processedPath = null,
+                    documentText = documentText
+                ))
                 val user = SessionStore.currentUser(this) ?: "?"
                 AppRepository.logActivity(ActivityEntry(user, "أضاف $user مستندًا ممسوحًا إلى $groupName"))
                 if (persistentPath != scanPath) File(scanPath).delete()

@@ -1,6 +1,7 @@
 package com.masahhisabat.app.ui.invoice
 
 import android.content.Context
+import android.app.DatePickerDialog
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.os.VibrationEffect
@@ -21,12 +22,16 @@ import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.ActivityEntry
 import com.masahhisabat.app.data.InvoiceExtractor
 import com.masahhisabat.app.data.InvoiceItem
+import com.masahhisabat.app.data.InvoiceReminderScheduler
 import com.masahhisabat.app.data.currentInvoiceName
 import com.masahhisabat.app.data.generateId
 import com.masahhisabat.app.image.ImageProcessor
 import com.masahhisabat.app.image.ProcessMode
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.SessionStore
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 /**
  * شاشة إنشاء فاتورة جديدة أو إضافة صورة إلى فاتورة قائمة:
@@ -58,7 +63,12 @@ class InvoiceActivity : AppCompatActivity() {
     private lateinit var etTotal: EditText
     private lateinit var etCurrency: EditText
     private lateinit var etItems: EditText
+    private lateinit var etTags: EditText
+    private lateinit var statusBtn: MaterialButton
+    private lateinit var reminderBtn: MaterialButton
     private var currentGroupId: String? = null
+    private var invoiceStatus = "new"
+    private var reminderAt: Long? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         com.masahhisabat.app.data.AppRepository.initAppContext(this)
@@ -101,6 +111,10 @@ class InvoiceActivity : AppCompatActivity() {
         etTotal = findViewById(R.id.et_total)
         etCurrency = findViewById(R.id.et_currency)
         etItems = findViewById(R.id.et_items)
+        etTags = findViewById(R.id.et_invoice_tags)
+        statusBtn = findViewById(R.id.btn_invoice_status)
+        reminderBtn = findViewById(R.id.btn_invoice_reminder)
+        setupInvoiceMetadataControls()
 
         val suggestedName = currentGroupId?.let { AppRepository.lastInvoiceName() } ?: currentInvoiceName()
         etName.setText(suggestedName)
@@ -122,7 +136,7 @@ class InvoiceActivity : AppCompatActivity() {
         loadingPanel.visibility = View.VISIBLE
         val imageBmp = ImageProcessor.loadBitmap(imagePath, 2048)
         Thread {
-            val result = InvoiceExtractor.extract(imageBmp)
+            val result = InvoiceExtractor.extract(this, imageBmp)
             runOnUiThread {
                 loadingPanel.visibility = View.GONE
                 if (result.rawText.isBlank()) {
@@ -166,7 +180,10 @@ class InvoiceActivity : AppCompatActivity() {
                 date = etDate.text.toString().trim().ifBlank { null },
                 total = etTotal.text.toString().trim().ifBlank { null },
                 currency = etCurrency.text.toString().trim().ifBlank { null },
-                itemsText = etItems.text.toString().trim().ifBlank { null }
+                itemsText = etItems.text.toString().trim().ifBlank { null },
+                status = invoiceStatus,
+                tags = etTags.text.toString().split(',', '،').map { it.trim() }.filter { it.isNotBlank() }.distinct(),
+                reminderAt = reminderAt
             )
 
             val groupId = if (action == ACTION_ADD) currentGroupId!!
@@ -177,12 +194,43 @@ class InvoiceActivity : AppCompatActivity() {
             }
 
             AppRepository.addItem(groupId, item)
+            InvoiceReminderScheduler.update(this)
             val user = SessionStore.currentUser(this) ?: "?"
             AppRepository.logActivity(ActivityEntry(user, getString(R.string.log_create_invoice, user, name)))
             (getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
                 ?.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
             Toast.makeText(this, R.string.success, Toast.LENGTH_SHORT).show()
             finish()
+        }
+    }
+
+    private fun setupInvoiceMetadataControls() {
+        statusBtn.setOnClickListener {
+            val codes = arrayOf("new", "in_review", "completed", "paid")
+            val labels = arrayOf(
+                getString(R.string.invoice_status_new), getString(R.string.invoice_status_review),
+                getString(R.string.invoice_status_completed), getString(R.string.invoice_status_paid)
+            )
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.invoice_status_label)
+                .setSingleChoiceItems(labels, codes.indexOf(invoiceStatus).coerceAtLeast(0)) { dialog, which ->
+                    invoiceStatus = codes[which]
+                    statusBtn.text = labels[which]
+                    dialog.dismiss()
+                }
+                .show()
+        }
+        reminderBtn.setOnClickListener {
+            val calendar = Calendar.getInstance().apply { timeInMillis = reminderAt ?: System.currentTimeMillis() }
+            DatePickerDialog(this, { _, year, month, day ->
+                val selected = Calendar.getInstance().apply {
+                    set(year, month, day, 9, 0, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                reminderAt = selected.timeInMillis
+                reminderBtn.text = getString(R.string.invoice_reminder_select) + ": " +
+                    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(selected.time)
+            }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
         }
     }
 
@@ -239,7 +287,7 @@ class InvoiceActivity : AppCompatActivity() {
             (findViewById<View>(id) as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(surface)
         }
         // حقول الإدخال من input_bg — نلوّنها ديناميكيًا حسب الوضع
-        listOf(R.id.et_name, R.id.et_store, R.id.et_date, R.id.et_total, R.id.et_currency, R.id.et_items).forEach { id ->
+        listOf(R.id.et_name, R.id.et_store, R.id.et_date, R.id.et_total, R.id.et_currency, R.id.et_items, R.id.et_invoice_tags).forEach { id ->
             findViewById<EditText>(id)?.apply {
                 setTextColor(text)
                 setHintTextColor(textSec)

@@ -1,13 +1,16 @@
 package com.masahhisabat.app.data
 
+import android.content.Context
 import android.graphics.Bitmap
+import com.googlecode.tesseract.android.TessBaseAPI
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
  * استخراج ذكي محلي لبيانات الفاتورة من الصورة:
- * - إذا كان النظام يحتوي على ML Kit للتعرف على النصوص فسيُستخدم، وإلا نعمل ببيانات افتراضية مع تنبيه مناسب.
+ * - يستخدم محرك Tesseract محلياً مع نموذج اللغة العربية المضمّن في التطبيق.
  * النتيجة تُعرض للمستخدم ليعدلها قبل الحفظ.
  */
 object InvoiceExtractor {
@@ -24,10 +27,10 @@ object InvoiceExtractor {
     private val currencySymbols = listOf("ر.س", "ريال", "درهم", "ج.م", "د.ك", "د.إ", "SAR", "AED", "EGP", "KWD")
     private val totalKeywords = listOf("الإجمالي", "المجموع", "المجموع الكلي", "الاجمالي", "total")
 
-    /** يحاول قراءة نص الصورة عبر ترويس بصري محلي بسيط إذا تعذر وجود مكتبة OCR */
-    fun extract(image: Bitmap): Extracted {
+    /** يقرأ نص الصورة محلياً ثم يستخرج الحقول المقترحة منها. */
+    fun extract(context: Context, image: Bitmap): Extracted {
         val result = Extracted()
-        val recognized = OcrHelper.recognize(image)
+        val recognized = OcrHelper.recognize(context, image)
         result.rawText = recognized
         if (recognized.isBlank()) return result
 
@@ -75,38 +78,35 @@ object InvoiceExtractor {
 }
 
 /**
- * أداة OCR محلية بسيطة تعتمد على Android ML Kit Text Recognition إن توفر
- * وإلا تُرجع نصاً فارغاً (التعامل مع الصور غير الواضحة دون تعطل).
+ * محرك OCR محلي يعتمد Tesseract. تُنسخ بيانات اللغة إلى مساحة التطبيق الخاصة
+ * في أول استخدام فقط، لذلك يظل التنفيذ متوافقاً مع Android 10+ ودون شبكة.
  */
 object OcrHelper {
-    fun recognize(image: Bitmap): String {
-        return try {
-            // محاولة استخدام Google ML Kit عبر الانعكاس (اختياري runtime)
-            val clazz = Class.forName("com.google.mlkit.vision.text.TextRecognition")
-            val recognizer = clazz.getMethod("getClient", Object::class.java).invoke(null, null)
-            val fb = Class.forName("com.google.mlkit.vision.common.InputImage")
-            val inputImage = fb.getMethod("fromBitmap", Bitmap::class.java).invoke(null, image)
-            var resultText = ""
-            val task = recognizer.javaClass.getMethod("process", fb).invoke(recognizer, inputImage)
-            task.javaClass.getMethod("addOnSuccessListener", Class.forName("com.google.android.gms.tasks.OnSuccessListener"))
-                .invoke(task, java.lang.reflect.Proxy.newProxyInstance(
-                    Class.forName("com.google.android.gms.tasks.OnSuccessListener").classLoader,
-                    arrayOf(Class.forName("com.google.android.gms.tasks.OnSuccessListener"))
-                ) { _, method, _ ->
-                    if (method.name == "onSuccess") {
-                        // Text result
-                        resultText = ""
-                    }
-                    null
-                })
-            task.javaClass.getMethod("addOnCompleteListener", Class.forName("com.google.android.gms.tasks.OnCompleteListener"))
-                .invoke(task, java.lang.reflect.Proxy.newProxyInstance(
-                    Class.forName("com.google.android.gms.tasks.OnCompleteListener").classLoader,
-                    arrayOf(Class.forName("com.google.android.gms.tasks.OnCompleteListener"))
-                ) { _, _, _ -> null })
-            resultText
-        } catch (e: Throwable) {
-            ""
+    private const val LANGUAGE = "ara"
+    private const val ASSET_MODEL = "tessdata/ara.traineddata"
+
+    @Synchronized
+    fun recognize(context: Context, image: Bitmap): String {
+        val root = File(context.filesDir, "tesseract")
+        return runCatching {
+            ensureLanguageModel(context, root)
+            val tess = TessBaseAPI()
+            try {
+                check(tess.init(root.absolutePath, LANGUAGE)) { "تعذر تهيئة قراءة النص المحلية" }
+                tess.setImage(image)
+                tess.getUTF8Text().orEmpty().trim()
+            } finally {
+                tess.recycle()
+            }
+        }.getOrDefault("")
+    }
+
+    private fun ensureLanguageModel(context: Context, root: File) {
+        val model = File(root, ASSET_MODEL)
+        if (model.exists() && model.length() > 0L) return
+        model.parentFile?.mkdirs()
+        context.assets.open(ASSET_MODEL).use { input ->
+            model.outputStream().use { output -> input.copyTo(output) }
         }
     }
 }

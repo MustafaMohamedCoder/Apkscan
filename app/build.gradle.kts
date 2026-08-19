@@ -22,8 +22,8 @@ android {
         applicationId = "com.masahhisabat.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.2.4"
+        versionCode = 9
+        versionName = "1.2.5"
 
         // أجهزة Android الفعلية المستهدفة تعمل بمعماريات ARM؛ استبعاد x86 يزيل نسخ OpenCV غير اللازمة.
         ndk {
@@ -96,8 +96,12 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+    // المصادقة بالبصمة تعمل محلياً عبر طبقة AndroidX المتوافقة مع أجهزة هواوي، مع بقاء PIN بديلاً دائماً.
+    implementation("androidx.biometric:biometric:1.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("com.google.code.gson:gson:2.10.1")
+    // محرك Tesseract يعمل محلياً؛ لا يحتاج إلى خدمات Google أو اتصال أثناء القراءة.
+    implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")
     // حزمة OpenCV الرسمية: تُضمّن محلياً في APK ولا تعتمد على خدمات Google وقت التشغيل.
     implementation("org.opencv:opencv:4.9.0")
 }

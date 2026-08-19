@@ -28,7 +28,7 @@
 
     <!-- Bottom navigation -->
     <string name="nav_home">الرئيسية</string>
-    <string name="nav_groups">المجموعات</string>
+    <string name="nav_groups">التجار</string>
     <string name="nav_scanner">السكانر</string>
     <string name="nav_search">البحث</string>
     <string name="nav_theme">نهاري</string>
@@ -45,7 +45,7 @@
 
     <!-- Home -->
     <string name="invoices_count">الفواتير</string>
-    <string name="groups_count">المجموعات</string>
+    <string name="groups_count">التجار</string>
     <string name="start_scan">ابدأ مسحاً جديداً</string>
     <string name="recent_operations">آخر العمليات</string>
     <string name="no_operations">لا توجد عمليات بعد – ابدأ بمسح أول فاتورة لك</string>
@@ -60,7 +60,7 @@
     <string name="document_perspective_fixed">تم تصحيح منظور المستند تلقائياً. يمكنك قصه أو معالجته قبل الحفظ.</string>
     <string name="save_options">ماذا تريد أن تفعل بالصورة؟</string>
     <string name="save_gallery">حفظ في المعرض</string>
-    <string name="add_to_group">إضافة إلى مجموعة</string>
+    <string name="add_to_group">إضافة إلى تاجر</string>
     <string name="new_invoice">إنشاء فاتورة جديدة</string>
     <string name="add_to_invoice">إضافة إلى فاتورة قائمة</string>
     <string name="invoice_name_hint">فاتورة 2026-08-18 · 00:14</string>
@@ -86,14 +86,14 @@
     <string name="choose_document_filter">اختر فلتر توضيح المستند</string>
     <string name="filter_preview_loading">جارٍ تطبيق الفلتر…</string>
     <string name="filter_preview_ready">تمت معاينة فلتر %1$s</string>
-    <string name="no_groups_for_image">أنشئ مجموعة أولاً لإضافة الصورة إليها.</string>
+    <string name="no_groups_for_image">أنشئ تاجرًا أولاً لإضافة الصورة إلى أرشيفه.</string>
     <string name="edge_reached">وصلت إلى حافة الصورة</string>
 
     <!-- Invoices & Groups -->
     <string name="invoices">الفواتير</string>
-    <string name="group_name">اسم المجموعة</string>
-    <string name="new_group">مجموعة جديدة</string>
-    <string name="no_invoices">لا توجد فواتير في هذه المجموعة</string>
+    <string name="group_name">اسم التاجر أو المورد</string>
+    <string name="new_group">تاجر جديد</string>
+    <string name="no_invoices">لا توجد فواتير أو طلبات لهذا التاجر</string>
     <string name="add_text">إضافة نص</string>
     <string name="manual_text">نص يدوي</string>
     <string name="extracting">جارٍ استخراج بيانات الفاتورة…</string>

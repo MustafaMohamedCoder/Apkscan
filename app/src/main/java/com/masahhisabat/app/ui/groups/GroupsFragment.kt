@@ -40,6 +40,7 @@ class GroupsFragment : Fragment() {
     private lateinit var recycler: RecyclerView
     private var groupQuery = ""
     private var allGroups: List<Group> = emptyList()
+    private lateinit var tradersAdapter: GroupsAdapter
 
     private data class GroupSnapshot(
         val documentCount: Int,
@@ -64,6 +65,8 @@ class GroupsFragment : Fragment() {
             recycler.layoutManager = if (columns == 1) LinearLayoutManager(requireContext())
             else GridLayoutManager(requireContext(), columns)
             recycler.setHasFixedSize(true)
+            tradersAdapter = GroupsAdapter()
+            recycler.adapter = tradersAdapter
 
             val search = view.findViewById<EditText>(R.id.et_group_search)
             val clearSearch = view.findViewById<ImageView>(R.id.btn_clear_group_search)
@@ -354,7 +357,7 @@ class GroupsFragment : Fragment() {
             } else {
                 empty?.visibility = View.GONE
                 recycler.visibility = View.VISIBLE
-                recycler.adapter = GroupsAdapter(groups)
+                tradersAdapter.submit(groups, snapshots)
             }
         } catch (e: Exception) {
             logAndToast(e, "قراءة المجموعات")
@@ -501,8 +504,17 @@ class GroupsFragment : Fragment() {
         Toast.makeText(requireContext(), "خطأ في $tag: ${e.message ?: e.javaClass.simpleName}", Toast.LENGTH_LONG).show()
     }
 
-    inner class GroupsAdapter(private val groups: List<Group>) :
+    private inner class GroupsAdapter :
         RecyclerView.Adapter<GroupsAdapter.VH>() {
+        private var groups: List<Group> = emptyList()
+        private var snapshots: Map<String, GroupSnapshot> = emptyMap()
+
+        fun submit(newGroups: List<Group>, newSnapshots: Map<String, GroupSnapshot>) {
+            groups = newGroups
+            snapshots = newSnapshots
+            notifyDataSetChanged()
+        }
+
         inner class VH(view: View) : RecyclerView.ViewHolder(view) {
             val card: MaterialCardView = view.findViewById(R.id.group_card)
             val name: TextView = view.findViewById(R.id.group_name)
@@ -544,13 +556,12 @@ class GroupsFragment : Fragment() {
             holder.name.text = if (g.archivedAt != null) "${g.name} · مؤرشف" else g.name
             holder.name.setTextColor(text)
             holder.name.typeface = ctx.resources.getFont(R.font.tajawal_bold)
-            val items = AppRepository.items(g.id)
-            val snapshot = GroupSnapshot(
-                documentCount = items.size,
-                lastActivity = items.maxOfOrNull { it.createdAt } ?: g.createdAt,
-                lastPreview = messagePreview(items.maxByOrNull { it.createdAt }),
-                openOrders = items.count { it.status == "new" || it.status == "in_review" },
-                unpaidInvoices = items.count { it.status != "paid" && !it.total.isNullOrBlank() }
+            val snapshot = snapshots[g.id] ?: GroupSnapshot(
+                documentCount = 0,
+                lastActivity = g.createdAt,
+                lastPreview = "لا توجد مستندات بعد",
+                openOrders = 0,
+                unpaidInvoices = 0
             )
             holder.preview.text = buildString {
                 append("${snapshot.documentCount} فاتورة/طلب")
@@ -563,7 +574,7 @@ class GroupsFragment : Fragment() {
             holder.date.text = activityTime(snapshot.lastActivity)
             holder.date.setTextColor(textSec)
             holder.date.typeface = ctx.resources.getFont(R.font.tajawal_medium)
-            val documents = items.size
+            val documents = snapshot.documentCount
             holder.itemCount.text = documents.toString()
             holder.itemCount.setTextColor(ThemeHelper.chipTextColor(ctx))
             holder.itemCount.background?.setTint(ThemeHelper.chipBgColor(ctx))
@@ -571,6 +582,8 @@ class GroupsFragment : Fragment() {
             holder.more.setColorFilter(textSec)
             holder.pin.visibility = if (g.id in AppRepository.favoriteGroupIds()) View.VISIBLE else View.GONE
             holder.pin.setColorFilter(ThemeHelper.accent(ctx))
+            holder.itemView.contentDescription = "فتح أرشيف التاجر ${g.name}"
+            holder.more.contentDescription = "إجراءات التاجر ${g.name}"
 
             // النقر على البطاقة (أو الاسم) يفتح المجموعة
             holder.itemView.setOnClickListener {

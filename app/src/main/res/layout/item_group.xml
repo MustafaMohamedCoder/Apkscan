@@ -65,7 +65,7 @@
                     android:layout_marginStart="6dp"
                     android:src="@drawable/ic_pin"
                     android:visibility="gone"
-                    android:contentDescription="مجموعة مثبتة" />
+                android:contentDescription="تاجر مثبت" />
                 <TextView
                     android:id="@+id/group_date"
                     android:layout_width="wrap_content"
@@ -116,6 +116,6 @@
             android:src="@drawable/ic_more"
             android:background="@drawable/group_more_bg"
             android:foreground="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/edit" />
+            android:contentDescription="إجراءات التاجر" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

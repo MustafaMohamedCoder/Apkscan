@@ -196,6 +196,7 @@ class GroupActivity : AppCompatActivity() {
                         AppRepository.clearMessageDraft(groupId)
                         hideSoftKeyboard(etMessage)
                         refresh()
+                        scrollToLatestMessage()
                         Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(ctx, error, Toast.LENGTH_LONG).show()
@@ -304,7 +305,10 @@ class GroupActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.attachment_label).text = "الصورة جاهزة — اكتب نصًا اختياريًا ثم أضفها"
         findViewById<View>(R.id.attachment_preview).visibility = View.VISIBLE
         findViewById<MaterialButton>(R.id.btn_add_attachment).isEnabled = true
-        findViewById<EditText>(R.id.et_message).hint = "اكتب نصًا مصاحبًا للصورة..."
+        val message = findViewById<EditText>(R.id.et_message)
+        message.hint = "اكتب نصًا مصاحبًا للصورة..."
+        message.requestFocus()
+        showSoftKeyboard(message)
     }
 
     private fun clearPendingAttachment(deleteFile: Boolean) {
@@ -333,8 +337,30 @@ class GroupActivity : AppCompatActivity() {
 
     private fun applyFilter() {
         val q = searchInput.text.toString().trim().lowercase()
-        adapter.submit(if (q.isBlank()) AppRepository.items(groupId)
-        else AppRepository.items(groupId).filter { itemMatches(it, q) })
+        val visibleItems = if (q.isBlank()) AppRepository.items(groupId)
+        else AppRepository.items(groupId).filter { itemMatches(it, q) }
+        adapter.submit(visibleItems)
+        updateEmptyState(visibleItems.size, q.isNotBlank())
+    }
+
+    private fun updateEmptyState(visibleItems: Int, isSearching: Boolean) {
+        val emptyState = findViewById<View>(R.id.group_empty_state)
+        val title = findViewById<TextView>(R.id.group_empty_title)
+        val hint = findViewById<TextView>(R.id.group_empty_hint)
+        val empty = visibleItems == 0
+        emptyState.visibility = if (empty) View.VISIBLE else View.GONE
+        if (empty) {
+            title.text = if (isSearching) "لا توجد نتائج مطابقة" else "لا توجد رسائل بعد"
+            hint.text = if (isSearching) "جرّب كلمة بحث أخرى أو أعد ضبط البحث" else "اكتب رسالة أو أضف صورة لبدء المحادثة"
+        }
+    }
+
+    private fun scrollToLatestMessage() {
+        if (searchInput.text.toString().isNotBlank()) return
+        recycler.post {
+            val count = adapter.itemCount
+            if (count > 0) recycler.scrollToPosition(count - 1)
+        }
     }
 
     private fun itemMatches(item: InvoiceItem, q: String): Boolean =
@@ -461,6 +487,8 @@ class GroupActivity : AppCompatActivity() {
         findViewById<EditText>(R.id.et_message).setTextColor(ThemeHelper.text(this))
         findViewById<EditText>(R.id.et_message).background?.setTint(ThemeHelper.inputFill(this))
         findViewById<View>(R.id.compose_bar)?.background?.setTint(ThemeHelper.surface(this))
+        findViewById<TextView>(R.id.group_empty_title).setTextColor(text)
+        findViewById<TextView>(R.id.group_empty_hint).setTextColor(textSec)
     }
 
     inner class ItemsAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {

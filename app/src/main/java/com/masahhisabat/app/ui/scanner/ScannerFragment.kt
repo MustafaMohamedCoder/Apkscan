@@ -38,9 +38,11 @@ import java.io.File
 class ScannerFragment : Fragment() {
 
     private var lastCapturePath: String? = null
+    private var isScannerBusy = false
     private val cameraLauncher = registerForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
+        setScannerBusy(false)
         val capturePath = lastCapturePath
         if (success && capturePath != null && isAdded) {
             val captureFile = File(capturePath)
@@ -61,10 +63,12 @@ class ScannerFragment : Fragment() {
         if (uri != null && isAdded) {
             // نسخ ملف المعرض قد يكون كبيرًا؛ لا نسمح له بحجب واجهة الماسح.
             val ctx = requireContext().applicationContext
+            setScannerBusy(true, "يجري تجهيز الصورة للمعالجة…")
             Thread {
                 val copied = copyToInternal(ctx, uri)
                 activity?.runOnUiThread {
                     if (!isAdded) return@runOnUiThread
+                    setScannerBusy(false)
                     if (copied != null) showPostScanOptions(copied)
                     else Toast.makeText(requireContext(), "تعذر قراءة الصورة", Toast.LENGTH_SHORT).show()
                 }
@@ -85,6 +89,7 @@ class ScannerFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        lastCapturePath = savedInstanceState?.getString(STATE_CAPTURE_PATH) ?: lastCapturePath
         applyTheme(view)
         refreshRecentScans()
 
@@ -97,6 +102,11 @@ class ScannerFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         if (isAdded && view != null) refreshRecentScans()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(STATE_CAPTURE_PATH, lastCapturePath)
     }
 
     private fun applyTheme(view: View) {
@@ -112,6 +122,7 @@ class ScannerFragment : Fragment() {
         view.findViewById<TextView>(R.id.scan_methods_label).setTextColor(ThemeHelper.text(ctx))
         view.findViewById<TextView>(R.id.recent_title).setTextColor(ThemeHelper.text(ctx))
         view.findViewById<TextView>(R.id.recent_scans_empty).setTextColor(ThemeHelper.textSecondary(ctx))
+        view.findViewById<TextView>(R.id.scan_status_text).setTextColor(ThemeHelper.textSecondary(ctx))
         view.findViewById<MaterialCardView>(R.id.recent_scans_card).apply {
             setCardBackgroundColor(ThemeHelper.surface(ctx))
             strokeColor = ThemeHelper.cardStroke(ctx)
@@ -216,10 +227,31 @@ class ScannerFragment : Fragment() {
     }
 
     private fun openCamera() {
-        val file = File(requireContext().cacheDir, "scan_${System.currentTimeMillis()}.jpg")
-        lastCapturePath = file.absolutePath
-        val uri = FileProvider.getUriForFile(requireContext(), "${requireContext().packageName}.fileprovider", file)
-        cameraLauncher.launch(uri)
+        if (isScannerBusy) return
+        setScannerBusy(true, "يجري فتح الكاميرا…")
+        try {
+            val file = File(requireContext().cacheDir, "scan_${System.currentTimeMillis()}.jpg")
+            lastCapturePath = file.absolutePath
+            val uri = FileProvider.getUriForFile(requireContext(), "${requireContext().packageName}.fileprovider", file)
+            cameraLauncher.launch(uri)
+        } catch (_: Exception) {
+            lastCapturePath = null
+            setScannerBusy(false)
+            Toast.makeText(requireContext(), "تعذر فتح الكاميرا، حاول مرة أخرى", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun setScannerBusy(busy: Boolean, message: String = "") {
+        isScannerBusy = busy
+        val screen = view ?: return
+        val camera = screen.findViewById<FrameLayout>(R.id.btn_camera)
+        val gallery = screen.findViewById<FrameLayout>(R.id.btn_gallery)
+        camera.isEnabled = !busy
+        gallery.isEnabled = !busy
+        camera.alpha = if (busy) 0.55f else 1f
+        gallery.alpha = if (busy) 0.55f else 1f
+        screen.findViewById<View>(R.id.scanner_status).visibility = if (busy) View.VISIBLE else View.GONE
+        screen.findViewById<TextView>(R.id.scan_status_text).text = message
     }
 
     private fun copyToInternal(context: Context, uri: Uri): String? {
@@ -315,5 +347,9 @@ class ScannerFragment : Fragment() {
         } catch (e: Exception) {
             Toast.makeText(requireContext(), "تعذرت المشاركة", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private companion object {
+        const val STATE_CAPTURE_PATH = "scanner_capture_path"
     }
 }

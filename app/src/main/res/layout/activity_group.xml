@@ -82,6 +82,9 @@
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_weight="1"
+            android:importantForAutofill="no"
+            android:imeOptions="actionSearch"
+            android:inputType="text"
             android:background="@drawable/input_bg"
             android:hint="@string/search_group_hint"
             android:paddingStart="16dp"
@@ -126,6 +129,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:paddingStart="8dp"
+            android:paddingEnd="8dp"
             android:textSize="14sp"
             android:textStyle="bold" />
 

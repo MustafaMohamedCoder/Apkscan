@@ -64,6 +64,16 @@
     <string name="new_invoice">إنشاء فاتورة جديدة</string>
     <string name="add_to_invoice">إضافة إلى فاتورة قائمة</string>
     <string name="invoice_name_hint">فاتورة 2026-08-18 · 00:14</string>
+    <string name="invoice_name_label">اسم الفاتورة</string>
+    <string name="date_format_hint">2026-08-18</string>
+    <string name="amount_format_hint">0.00</string>
+    <string name="currency_hint">ر.س</string>
+    <string name="message_text_section">نص الرسالة</string>
+    <string name="message_text_hint">اكتب نص الرسالة…</string>
+    <string name="image_data">بيانات الصورة</string>
+    <string name="store_or_subject_hint">اسم المتجر أو الموضوع</string>
+    <string name="date_format_example">التاريخ (yyyy-MM-dd)</string>
+    <string name="invoice_details_hint">تفاصيل الفاتورة</string>
 
     <!-- Crop -->
     <string name="crop_title">اقتصاص المستند</string>

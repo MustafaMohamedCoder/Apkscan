@@ -100,9 +100,11 @@
                 android:padding="16dp">
 
                 <TextView
+                    android:id="@+id/tv_invoice_name"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="اسم الفاتورة"
+                    android:labelFor="@id/et_name"
+                    android:text="@string/invoice_name_label"
                     android:textSize="13sp" />
 
                 <EditText
@@ -113,6 +115,8 @@
                     android:layout_marginBottom="12dp"
                     android:background="@drawable/input_bg"
                     android:hint="@string/invoice_name_hint"
+                    android:importantForAutofill="no"
+                    android:inputType="textCapSentences"
                     android:paddingStart="14dp"
                     android:paddingEnd="14dp"
                     android:singleLine="true" />
@@ -132,6 +136,7 @@
                             android:id="@+id/tv_store"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:labelFor="@id/et_store"
                             android:text="@string/store_name"
                             android:textSize="13sp" />
 
@@ -142,6 +147,8 @@
                             android:layout_marginTop="4dp"
                             android:background="@drawable/input_bg"
                             android:hint="@string/store_name"
+                            android:importantForAutofill="no"
+                            android:inputType="textCapWords"
                             android:paddingStart="14dp"
                             android:paddingEnd="14dp"
                             android:singleLine="true" />
@@ -158,6 +165,7 @@
                             android:id="@+id/tv_date"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:labelFor="@id/et_date"
                             android:text="@string/date"
                             android:textSize="13sp" />
 
@@ -167,7 +175,8 @@
                             android:layout_height="48dp"
                             android:layout_marginTop="4dp"
                             android:background="@drawable/input_bg"
-                            android:hint="2026-08-18"
+                            android:hint="@string/date_format_hint"
+                            android:importantForAutofill="no"
                             android:inputType="date"
                             android:paddingStart="14dp"
                             android:paddingEnd="14dp"
@@ -191,6 +200,7 @@
                             android:id="@+id/tv_total"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:labelFor="@id/et_total"
                             android:text="@string/total"
                             android:textSize="13sp" />
 
@@ -200,7 +210,8 @@
                             android:layout_height="48dp"
                             android:layout_marginTop="4dp"
                             android:background="@drawable/input_bg"
-                            android:hint="0.00"
+                            android:hint="@string/amount_format_hint"
+                            android:importantForAutofill="no"
                             android:inputType="numberDecimal"
                             android:paddingStart="14dp"
                             android:paddingEnd="14dp"
@@ -218,6 +229,7 @@
                             android:id="@+id/tv_currency"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:labelFor="@id/et_currency"
                             android:text="@string/currency"
                             android:textSize="13sp" />
 
@@ -227,7 +239,9 @@
                             android:layout_height="48dp"
                             android:layout_marginTop="4dp"
                             android:background="@drawable/input_bg"
-                            android:hint="ر.س"
+                            android:hint="@string/currency_hint"
+                            android:importantForAutofill="no"
+                            android:inputType="text"
                             android:paddingStart="14dp"
                             android:paddingEnd="14dp"
                             android:singleLine="true" />
@@ -239,6 +253,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
+                    android:labelFor="@id/et_items"
                     android:text="@string/items"
                     android:textSize="13sp" />
 
@@ -250,6 +265,8 @@
                     android:background="@drawable/input_bg"
                     android:gravity="top"
                     android:hint="@string/items"
+                    android:importantForAutofill="no"
+                    android:inputType="textMultiLine|textCapSentences"
                     android:minHeight="80dp"
                     android:padding="14dp" />
             </LinearLayout>

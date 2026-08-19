@@ -13,7 +13,8 @@
             android:id="@+id/tv_text_section"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="نص الرسالة"
+            android:labelFor="@id/et_message_text"
+            android:text="@string/message_text_section"
             android:textSize="14sp"
             android:textStyle="bold" />
 
@@ -23,8 +24,10 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:background="@drawable/input_bg"
-            android:hint="اكتب نص الرسالة..."
+            android:hint="@string/message_text_hint"
             android:gravity="top"
+            android:importantForAutofill="no"
+            android:inputType="textMultiLine|textCapSentences"
             android:minHeight="80dp"
             android:padding="14dp" />
 
@@ -33,7 +36,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:text="بيانات الصورة"
+            android:labelFor="@id/et_store"
+            android:text="@string/image_data"
             android:textSize="14sp"
             android:textStyle="bold" />
 
@@ -43,7 +47,9 @@
             android:layout_height="48dp"
             android:layout_marginTop="6dp"
             android:background="@drawable/input_bg"
-            android:hint="اسم المتجر / الموضوع"
+            android:hint="@string/store_or_subject_hint"
+            android:importantForAutofill="no"
+            android:inputType="textCapWords"
             android:paddingStart="14dp"
             android:paddingEnd="14dp"
             android:singleLine="true" />
@@ -54,7 +60,9 @@
             android:layout_height="48dp"
             android:layout_marginTop="6dp"
             android:background="@drawable/input_bg"
-            android:hint="التاريخ (yyyy-MM-dd)"
+            android:hint="@string/date_format_example"
+            android:importantForAutofill="no"
+            android:inputType="date"
             android:paddingStart="14dp"
             android:paddingEnd="14dp"
             android:singleLine="true" />
@@ -65,7 +73,9 @@
             android:layout_height="48dp"
             android:layout_marginTop="6dp"
             android:background="@drawable/input_bg"
-            android:hint="المبلغ"
+            android:hint="@string/total"
+            android:importantForAutofill="no"
+            android:inputType="numberDecimal"
             android:paddingStart="14dp"
             android:paddingEnd="14dp"
             android:singleLine="true" />
@@ -76,8 +86,10 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:background="@drawable/input_bg"
-            android:hint="تفاصيل الفاتورة"
+            android:hint="@string/invoice_details_hint"
             android:gravity="top"
+            android:importantForAutofill="no"
+            android:inputType="textMultiLine|textCapSentences"
             android:minHeight="80dp"
             android:padding="14dp" />
 

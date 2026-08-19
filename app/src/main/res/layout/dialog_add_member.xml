@@ -14,9 +14,11 @@
         android:visibility="gone" />
 
     <TextView
+        android:id="@+id/label_member_username"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="اسم المستخدم"
+        android:labelFor="@id/et_username"
+        android:text="@string/username"
         android:textSize="14sp"
         android:textStyle="bold" />
 
@@ -26,16 +28,20 @@
         android:layout_height="48dp"
         android:layout_marginTop="6dp"
         android:layout_marginBottom="12dp"
+        android:autofillHints="username"
         android:background="@drawable/input_bg"
-        android:hint="مثال: sara"
+        android:hint="@string/example_user"
+        android:inputType="text"
         android:paddingStart="14dp"
         android:paddingEnd="14dp"
         android:singleLine="true" />
 
     <TextView
+        android:id="@+id/label_member_password"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="كلمة المرور"
+        android:labelFor="@id/et_password"
+        android:text="@string/password"
         android:textSize="14sp"
         android:textStyle="bold" />
 
@@ -48,8 +54,9 @@
             android:id="@+id/et_password"
             android:layout_width="match_parent"
             android:layout_height="48dp"
+            android:autofillHints="password"
             android:background="@drawable/input_bg"
-            android:hint="يولد تلقائيًا"
+            android:hint="@string/auto_generate"
             android:inputType="textPassword"
             android:paddingStart="14dp"
             android:paddingEnd="48dp"
@@ -61,13 +68,15 @@
             android:layout_gravity="end|center_vertical"
             android:padding="12dp"
             android:src="@drawable/ic_eye"
-            android:contentDescription="إظهار كلمة المرور" />
+            android:contentDescription="@string/show_password" />
     </FrameLayout>
 
     <TextView
+        android:id="@+id/label_member_role"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="الدور"
+        android:labelFor="@id/sp_role"
+        android:text="@string/role"
         android:textSize="14sp"
         android:textStyle="bold" />
 

@@ -282,7 +282,7 @@ object SyncManager {
                 AppRepository.logSync(SyncEntry("تنزيل تحديث", "تم تنزيل الإصدار ${header.versionName} من ${peer.name}", true))
                 Handler(Looper.getMainLooper()).post {
                     notifyUpdateReady(context, targetFile, header.versionName, peer.name)
-                    requestPackageInstall(context, targetFile, header.versionName)
+                    requestPackageInstall(context, targetFile)
                 }
                 return true
             }
@@ -323,7 +323,7 @@ object SyncManager {
         digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private fun requestPackageInstall(context: Context, file: File, versionName: String) {
+    private fun requestPackageInstall(context: Context, file: File) {
         try {
             context.startActivity(buildInstallOrPermissionIntent(context, file))
         } catch (e: Throwable) {
@@ -533,12 +533,11 @@ object SyncManager {
      * لا تشمل حسابات المستخدمين؛ إذ تبقى مزامنتها التلقائية محصورة في بروتوكول جهاز mustafa.
      */
     private fun syncAutomaticDataWithHost(context: Context, host: String, peerName: String): SyncResult {
-        var outgoing: SyncPayload? = null
         try {
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(host, TCP_PORT), CONNECT_TIMEOUT_MS)
                 socket.soTimeout = SYNC_READ_TIMEOUT_MS
-                outgoing = buildAutomaticDataPayload()
+                val outgoing = buildAutomaticDataPayload()
                 val writer = socket.getOutputStream().bufferedWriter()
                 writer.write(gson.toJson(outgoing))
                 writer.newLine()
@@ -565,7 +564,7 @@ object SyncManager {
                 val received = applyPayload(context, returnedPayload)
                 AppRepository.logSync(SyncEntry(
                     "مزامنة تلقائية للبيانات",
-                    "بعد تسجيل الدخول مع $peerName: أُرسلت ${outgoing?.totalItems ?: 0} عنصرًا واستُقبلت ${received.items} عنصرًا.",
+                    "بعد تسجيل الدخول مع $peerName: أُرسلت ${outgoing.totalItems} عنصرًا واستُقبلت ${received.items} عنصرًا.",
                     true
                 ))
                 return SyncResult(true, received.items, received.users)

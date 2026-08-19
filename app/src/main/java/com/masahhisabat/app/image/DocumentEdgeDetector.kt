@@ -43,6 +43,12 @@ object DocumentEdgeDetector {
         val shouldAutoCorrect: Boolean
     )
 
+    /** نتيجة موحدة لمسار الالتقاط: الاكتشاف يبقى متاحًا حتى إن فشل التصحيح التلقائي. */
+    data class CorrectionResult(
+        val detection: Result,
+        val correctedBitmap: Bitmap?
+    )
+
     /** تهيئة آمنة؛ لا يؤدي فشل مكتبة الرؤية إلى منع المستخدم من الاقتصاص اليدوي. */
     fun initialize(): Boolean = synchronized(this) {
         if (!initialized) {
@@ -109,6 +115,21 @@ object DocumentEdgeDetector {
             input.release(); grayscale.release(); enhanced.release(); blurred.release(); edges.release(); adaptive.release(); kernel.release()
             if (working !== source && !working.isRecycled) working.recycle()
         }
+    }
+
+    /**
+     * يطبق اكتشاف الشكل الرباعي ثم تصحيح المنظور في المسار ذاته، ولكن فقط عندما
+     * تتجاوز النتيجة حد الثقة. النتيجة منخفضة الثقة لا تفقد الصورة الأصلية وتبقى
+     * قابلة للقص اليدوي في المحرر.
+     */
+    fun detectAndStraighten(source: Bitmap): CorrectionResult {
+        val detection = detect(source)
+        val corrected = if (detection.shouldAutoCorrect) {
+            straighten(source, detection.corners)
+        } else {
+            null
+        }
+        return CorrectionResult(detection, corrected)
     }
 
     private fun findBestCandidate(mask: Mat, width: Int, height: Int): Candidate? {

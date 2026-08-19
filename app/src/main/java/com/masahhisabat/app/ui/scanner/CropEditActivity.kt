@@ -291,14 +291,13 @@ class CropEditActivity : AppCompatActivity() {
         setEdgeDetectionUi(detecting = true)
 
         Thread {
-            val detection = try {
-                ImageProcessor.detectDocumentEdges(bitmap)
+            val correction = try {
+                ImageProcessor.detectAndCorrectDocument(bitmap)
             } catch (_: Throwable) {
                 null
             }
-            val straightened = if (detection?.shouldAutoCorrect == true) {
-                try { ImageProcessor.straightenDocument(bitmap, detection.corners) } catch (_: Throwable) { null }
-            } else null
+            val detection = correction?.detection
+            val straightened = correction?.correctedBitmap
             runOnUiThread {
                 if (isFinishing || isDestroyed || token != edgeDetectionToken || !::cropView.isInitialized) {
                     straightened?.takeIf { !it.isRecycled }?.recycle()
@@ -316,7 +315,8 @@ class CropEditActivity : AppCompatActivity() {
                     originalBmp = straightened
                     cropView.setBitmap(straightened)
                     cropView.setCropRect(0.035f, 0.035f, 0.965f, 0.965f)
-                    editorStatus.text = "تم تصحيح منظور المستند تلقائيًا"
+                    val confidencePercent = (((detection?.confidence ?: 0f) * 100f).toInt())
+                    editorStatus.text = "تم تصحيح منظور المستند تلقائيًا — دقة الكشف $confidencePercent%"
                     if (!oldOriginal.isRecycled) oldOriginal.recycle()
                     if (showResult) Toast.makeText(this, R.string.document_perspective_fixed, Toast.LENGTH_LONG).show()
                 } else if (detection != null) {

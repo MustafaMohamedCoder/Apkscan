@@ -273,6 +273,12 @@ object ImageProcessor {
         val shouldAutoCorrect: Boolean
     )
 
+    /** نتيجة خوارزمية المسح الكاملة: زوايا مقترحة، درجة ثقة، وصورة مستقيمة عند الأمان. */
+    data class DocumentCorrection(
+        val detection: EdgeDetection,
+        val correctedBitmap: Bitmap?
+    )
+
     /** كشف رباعي للمستند محلياً مع تقييم للثقة، دون خدمات Google أو اتصال بالشبكة. */
     fun detectDocumentEdges(src: Bitmap): EdgeDetection {
         val result = DocumentEdgeDetector.detect(src)
@@ -282,6 +288,29 @@ object ImageProcessor {
             confidence = result.confidence,
             corners = result.corners,
             shouldAutoCorrect = result.shouldAutoCorrect
+        )
+    }
+
+    /**
+     * يشغل كشف الزوايا الأربع وتصحيح المنظور محليًا في عملية واحدة. إذا لم تتجاوز
+     * النتيجة حد الثقة، يعيد صورة null مع إطار مقترح حتى يبقى القص اليدوي متاحًا.
+     */
+    fun detectAndCorrectDocument(src: Bitmap): DocumentCorrection {
+        val result = DocumentEdgeDetector.detectAndStraighten(src)
+        return DocumentCorrection(
+            detection = EdgeDetection(
+                bounds = RectF(
+                    result.detection.left,
+                    result.detection.top,
+                    result.detection.right,
+                    result.detection.bottom
+                ),
+                isDocumentDetected = result.detection.isDocumentDetected,
+                confidence = result.detection.confidence,
+                corners = result.detection.corners,
+                shouldAutoCorrect = result.detection.shouldAutoCorrect
+            ),
+            correctedBitmap = result.correctedBitmap
         )
     }
 

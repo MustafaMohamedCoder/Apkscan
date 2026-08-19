@@ -689,9 +689,18 @@ object AppRepository {
     fun favoriteGroupIds(): Set<String> = prefs.getStringSet("favorite_group_ids", emptySet())?.toSet() ?: emptySet()
     fun setFavoriteGroupIds(ids: Set<String>) = prefs.edit().putStringSet("favorite_group_ids", ids).apply()
     fun groupSortMode(): String = prefs.getString("group_sort_mode", "recent")
-        ?.takeIf { it in setOf("recent", "name", "created") } ?: "recent"
+        ?.takeIf { it in setOf("recent", "name", "created", "created_oldest", "size_desc", "size_asc") } ?: "recent"
     fun setGroupSortMode(mode: String) {
-        prefs.edit().putString("group_sort_mode", mode.takeIf { it in setOf("recent", "name", "created") } ?: "recent").apply()
+        prefs.edit().putString("group_sort_mode", mode.takeIf {
+            it in setOf("recent", "name", "created", "created_oldest", "size_desc", "size_asc")
+        } ?: "recent").apply()
+    }
+    fun groupFilterMode(): String = prefs.getString("group_filter_mode", "all")
+        ?.takeIf { it in setOf("all", "with_documents", "empty", "pinned", "recent_30d") } ?: "all"
+    fun setGroupFilterMode(mode: String) {
+        prefs.edit().putString("group_filter_mode", mode.takeIf {
+            it in setOf("all", "with_documents", "empty", "pinned", "recent_30d")
+        } ?: "all").apply()
     }
     /** آخر مزامنة بيانات مكتملة، مع استبعاد بدء الخادم والمعاينة والاختبارات. */
     fun lastSuccessfulSync(): SyncEntry? = syncLog().firstOrNull {

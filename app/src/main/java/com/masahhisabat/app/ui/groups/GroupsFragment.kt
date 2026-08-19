@@ -41,6 +41,11 @@ class GroupsFragment : Fragment() {
     private var groupQuery = ""
     private var allGroups: List<Group> = emptyList()
 
+    private data class GroupSnapshot(
+        val documentCount: Int,
+        val lastActivity: Long
+    )
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return inflater.inflate(R.layout.fragment_groups, container, false)
     }
@@ -81,6 +86,7 @@ class GroupsFragment : Fragment() {
                 showNewGroupDialog()
             }
             view.findViewById<View>(R.id.btn_sort_groups).setOnClickListener { showSortGroupsDialog() }
+            view.findViewById<View>(R.id.btn_filter_groups).setOnClickListener { showFilterGroupsDialog() }
             view.findViewById<TextView>(R.id.groups_empty).setOnClickListener {
                 if (canManage) showNewGroupDialog()
                 else Toast.makeText(requireContext(), "لا تملك صلاحية إنشاء المجموعات", Toast.LENGTH_SHORT).show()
@@ -121,6 +127,9 @@ class GroupsFragment : Fragment() {
             compoundDrawableTintList = android.content.res.ColorStateList.valueOf(ThemeHelper.textSecondary(requireContext()))
         }
         view.findViewById<ImageView>(R.id.btn_clear_group_search)?.setColorFilter(ThemeHelper.textSecondary(requireContext()))
+        view.findViewById<android.widget.ImageButton>(R.id.btn_filter_groups)?.setColorFilter(
+            ThemeHelper.textSecondary(requireContext())
+        )
         view.findViewById<android.widget.ImageButton>(R.id.btn_sort_groups)?.setColorFilter(
             ThemeHelper.textSecondary(requireContext())
         )
@@ -237,19 +246,30 @@ class GroupsFragment : Fragment() {
     private fun refresh() {
         try {
             allGroups = AppRepository.groups()
-            val totalDocuments = allGroups.sumOf { AppRepository.items(it.id).size }
-            requireView().findViewById<TextView>(R.id.groups_summary).text =
-                "${allGroups.size} مجموعة · $totalDocuments مستند"
+            val snapshots = allGroups.associate { group ->
+                val items = AppRepository.items(group.id)
+                group.id to GroupSnapshot(
+                    documentCount = items.size,
+                    lastActivity = items.maxOfOrNull { it.createdAt } ?: group.createdAt
+                )
+            }
+            val totalDocuments = snapshots.values.sumOf { it.documentCount }
+            val pinned = AppRepository.favoriteGroupIds()
+            val filterMode = AppRepository.groupFilterMode()
+            val sortMode = AppRepository.groupSortMode()
+            val summary = requireView().findViewById<TextView>(R.id.groups_summary)
+            summary.text = "${allGroups.size} مجموعة · $totalDocuments مستند"
+            requireView().findViewById<TextView>(R.id.groups_sort_label).text =
+                "${sortLabel(sortMode)} · ${filterLabel(filterMode)}"
 
             val query = groupQuery.trim()
-            val groups = sortedGroups(allGroups).filter { query.isBlank() || it.name.contains(query, ignoreCase = true) }
+            val groups = sortedGroups(allGroups, snapshots, pinned).filter { group ->
+                (query.isBlank() || group.name.contains(query, ignoreCase = true)) &&
+                    matchesFilter(group, snapshots[group.id], pinned, filterMode)
+            }
             val empty = requireView().findViewById<TextView>(R.id.groups_empty)
             if (groups.isEmpty()) {
-                empty?.text = if (query.isBlank()) {
-                    "لا توجد مجموعات بعد. اضغط هنا لإنشاء مجموعتك الأولى."
-                } else {
-                    "لا توجد مجموعة تطابق «$query». جرّب كلمة أخرى أو أنشئ مجموعة جديدة."
-                }
+                empty?.text = emptyStateMessage(query, filterMode)
                 empty?.visibility = View.VISIBLE
                 recycler.visibility = View.GONE
             } else {
@@ -263,23 +283,49 @@ class GroupsFragment : Fragment() {
     }
 
     /** تثبت المفضلة أولًا ثم تطبق أسلوب الترتيب الذي اختاره المستخدم. */
-    private fun sortedGroups(groups: List<Group>): List<Group> {
-        val pinned = AppRepository.favoriteGroupIds()
-        val mode = AppRepository.groupSortMode()
-        val lastActivity = if (mode == "recent") groups.associateWith { group ->
-            AppRepository.items(group.id).maxOfOrNull { it.createdAt } ?: group.createdAt
-        } else emptyMap()
-        val order = when (mode) {
-            "name" -> compareBy<Group> { it.name.trim() }
+    private fun sortedGroups(
+        groups: List<Group>,
+        snapshots: Map<String, GroupSnapshot>,
+        pinned: Set<String>
+    ): List<Group> {
+        val order = when (AppRepository.groupSortMode()) {
+            "name" -> compareBy<Group> { it.name.trim().lowercase(java.util.Locale.getDefault()) }
             "created" -> compareByDescending<Group> { it.createdAt }
-            else -> compareByDescending<Group> { lastActivity[it] ?: it.createdAt }
+            "created_oldest" -> compareBy<Group> { it.createdAt }
+            "size_desc" -> compareByDescending<Group> { snapshots[it.id]?.documentCount ?: 0 }
+                .thenByDescending { snapshots[it.id]?.lastActivity ?: it.createdAt }
+            "size_asc" -> compareBy<Group> { snapshots[it.id]?.documentCount ?: 0 }
+                .thenByDescending { snapshots[it.id]?.lastActivity ?: it.createdAt }
+            else -> compareByDescending<Group> { snapshots[it.id]?.lastActivity ?: it.createdAt }
         }
         return groups.sortedWith(compareByDescending<Group> { it.id in pinned }.then(order))
     }
 
+    private fun matchesFilter(
+        group: Group,
+        snapshot: GroupSnapshot?,
+        pinned: Set<String>,
+        filterMode: String
+    ): Boolean {
+        return when (filterMode) {
+            "with_documents" -> (snapshot?.documentCount ?: 0) > 0
+            "empty" -> (snapshot?.documentCount ?: 0) == 0
+            "pinned" -> group.id in pinned
+            "recent_30d" -> group.createdAt >= System.currentTimeMillis() - 30L * 24L * 60L * 60L * 1000L
+            else -> true
+        }
+    }
+
     private fun showSortGroupsDialog() {
-        val modes = arrayOf("آخر نشاط", "الاسم", "تاريخ الإنشاء")
-        val values = arrayOf("recent", "name", "created")
+        val modes = arrayOf(
+            "آخر نشاط",
+            "الاسم (أ-ي)",
+            "تاريخ الإنشاء (الأحدث)",
+            "تاريخ الإنشاء (الأقدم)",
+            "الحجم (الأكبر أولًا)",
+            "الحجم (الأصغر أولًا)"
+        )
+        val values = arrayOf("recent", "name", "created", "created_oldest", "size_desc", "size_asc")
         val selected = values.indexOf(AppRepository.groupSortMode()).coerceAtLeast(0)
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("ترتيب المجموعات")
@@ -290,6 +336,52 @@ class GroupsFragment : Fragment() {
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    private fun showFilterGroupsDialog() {
+        val modes = arrayOf(
+            "كل المجموعات",
+            "تحتوي على مستندات",
+            "فارغة",
+            "المجموعات المثبتة",
+            "أُنشئت خلال آخر 30 يومًا"
+        )
+        val values = arrayOf("all", "with_documents", "empty", "pinned", "recent_30d")
+        val selected = values.indexOf(AppRepository.groupFilterMode()).coerceAtLeast(0)
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("تصفية المجموعات")
+            .setSingleChoiceItems(modes, selected) { dialog, which ->
+                AppRepository.setGroupFilterMode(values[which])
+                dialog.dismiss()
+                refresh()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun sortLabel(mode: String): String = when (mode) {
+        "name" -> "الاسم"
+        "created" -> "الأحدث"
+        "created_oldest" -> "الأقدم"
+        "size_desc" -> "الحجم الأكبر"
+        "size_asc" -> "الحجم الأصغر"
+        else -> "آخر نشاط"
+    }
+
+    private fun filterLabel(mode: String): String = when (mode) {
+        "with_documents" -> "بها مستندات"
+        "empty" -> "فارغة"
+        "pinned" -> "مثبتة"
+        "recent_30d" -> "آخر 30 يومًا"
+        else -> "الكل"
+    }
+
+    private fun emptyStateMessage(query: String, filterMode: String): String = when {
+        allGroups.isEmpty() -> "لا توجد مجموعات بعد. اضغط هنا لإنشاء مجموعتك الأولى."
+        query.isNotBlank() && filterMode != "all" -> "لا توجد نتائج تطابق البحث والتصفية الحالية. جرّب تغيير أحدهما."
+        query.isNotBlank() -> "لا توجد مجموعة تطابق «$query». جرّب كلمة أخرى."
+        filterMode != "all" -> "لا توجد مجموعات ضمن التصفية الحالية. جرّب تصفية أخرى."
+        else -> "لا توجد مجموعات بعد. اضغط هنا لإنشاء مجموعتك الأولى."
     }
 
     private fun logAndToast(e: Exception, tag: String) {

@@ -257,6 +257,18 @@ object AppRepository {
     fun renameGroup(id: String, name: String) {
         saveList("groups.json", groups().map { if (it.id == id) it.copy(name = name) else it })
     }
+    /** تحديث بطاقة التاجر دون تغيير المعرّف أو أرشيف الفواتير والطلبات المرتبط به. */
+    fun updateTraderDetails(id: String, name: String, phone: String?, notes: String?) {
+        val cleanName = name.trim()
+        require(cleanName.isNotBlank()) { "اسم التاجر مطلوب" }
+        saveList("groups.json", groups().map {
+            if (it.id == id) it.copy(
+                name = cleanName,
+                supplierPhone = phone?.trim()?.takeIf { value -> value.isNotBlank() },
+                supplierNotes = notes?.trim()?.takeIf { value -> value.isNotBlank() }
+            ) else it
+        })
+    }
     /** تحفظ المجموعة في الأرشيف دون المساس برسائلها أو صورها. */
     fun setGroupArchived(id: String, archived: Boolean) {
         saveList("groups.json", groups().map {

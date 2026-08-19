@@ -44,7 +44,9 @@ class GroupsFragment : Fragment() {
     private data class GroupSnapshot(
         val documentCount: Int,
         val lastActivity: Long,
-        val lastPreview: String
+        val lastPreview: String,
+        val openOrders: Int,
+        val unpaidInvoices: Int
     )
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -106,11 +108,13 @@ class GroupsFragment : Fragment() {
         view.setBackgroundResource(ThemeHelper.backgroundRes())
         view.findViewById<View>(R.id.groups_root).setBackgroundResource(ThemeHelper.backgroundRes())
         view.findViewById<TextView>(R.id.title).apply {
+            this.text = "التجار والموردون"
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 26f)
             typeface = resources.getFont(R.font.tajawal_bold)
             setTextColor(text)
         }
         view.findViewById<TextView>(R.id.subtitle)?.apply {
+            this.text = "أرشيف فواتير وطلبات المحل حسب كل تاجر"
             typeface = resources.getFont(R.font.tajawal_medium)
             setTextColor(ThemeHelper.textSecondary(requireContext()))
         }
@@ -149,7 +153,7 @@ class GroupsFragment : Fragment() {
             setPadding(padding, 0, padding, 0)
         }
         val inputLayout = TextInputLayout(ctx).apply {
-            hint = "اسم المجموعة"
+            hint = "اسم التاجر أو المورد"
             boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
             setBoxStrokeColor(ThemeHelper.accent(ctx))
             layoutParams = LinearLayout.LayoutParams(
@@ -163,13 +167,32 @@ class GroupsFragment : Fragment() {
             setHintTextColor(ThemeHelper.inputHint(ctx))
             setSingleLine(true)
             imeOptions = EditorInfo.IME_ACTION_DONE
-            contentDescription = "حقل اسم المجموعة"
+            contentDescription = "حقل اسم التاجر"
         }
         inputLayout.addView(input)
         container.addView(inputLayout)
+        fun optionalField(hint: String): TextInputEditText {
+            val layout = TextInputLayout(ctx).apply {
+                this.hint = hint
+                boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+                setBoxStrokeColor(ThemeHelper.accent(ctx))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
+            return TextInputEditText(ctx).apply {
+                setTextColor(ThemeHelper.inputText(ctx))
+                setHintTextColor(ThemeHelper.inputHint(ctx))
+                layout.addView(this)
+                container.addView(layout)
+            }
+        }
+        val phone = optionalField("هاتف التاجر (اختياري)")
+        val notes = optionalField("ملاحظات عن التاجر أو الطلبات (اختياري)")
         val dialog = MaterialAlertDialogBuilder(ctx)
-            .setTitle("مجموعة جديدة")
-            .setMessage("اكتب اسمًا واضحًا للمجموعة قبل إنشائها.")
+            .setTitle("تاجر أو مورد جديد")
+            .setMessage("أنشئ أرشيفًا مستقلًا لفواتير وطلبات هذا التاجر.")
             .setView(container)
             .setPositiveButton("✓ تأكيد", null)
             .setNegativeButton(R.string.cancel, null)
@@ -181,22 +204,26 @@ class GroupsFragment : Fragment() {
             if (creating) return
             val name = input.text?.toString()?.trim().orEmpty()
             if (name.isBlank()) {
-                inputLayout.error = "اكتب اسم المجموعة أولًا"
+                inputLayout.error = "اكتب اسم التاجر أولًا"
                 input.requestFocus()
                 return
             }
             creating = true
             try {
-                AppRepository.addGroup(Group(name = name))
+                AppRepository.addGroup(Group(
+                    name = name,
+                    supplierPhone = phone.text?.toString(),
+                    supplierNotes = notes.text?.toString()
+                ))
                 val user = SessionStore.currentUser(ctx) ?: "?"
                 AppRepository.logActivity(ActivityEntry(user, getString(R.string.log_create_group, user, name)))
                 dialog.dismiss()
                 refresh()
-                Toast.makeText(ctx, "تم إنشاء المجموعة: $name", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, "تمت إضافة التاجر: $name", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 creating = false
-                inputLayout.error = "تعذر حفظ المجموعة، حاول مرة أخرى"
-                logAndToast(e, "حفظ اسم المجموعة")
+                inputLayout.error = "تعذر حفظ بيانات التاجر، حاول مرة أخرى"
+                logAndToast(e, "حفظ بيانات التاجر")
             }
         }
 
@@ -218,6 +245,53 @@ class GroupsFragment : Fragment() {
             }, 180)
         }
         dialog.show()
+    }
+
+    private fun showTraderDetailsDialog(g: Group) {
+        val ctx = requireContext()
+        val padding = (24 * resources.displayMetrics.density).toInt()
+        val container = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(padding, 0, padding, 0)
+        }
+        fun field(hint: String, value: String?, singleLine: Boolean = true): TextInputEditText {
+            val layout = TextInputLayout(ctx).apply {
+                this.hint = hint
+                boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+                setBoxStrokeColor(ThemeHelper.accent(ctx))
+            }
+            return TextInputEditText(ctx).apply {
+                setText(value.orEmpty())
+                setSingleLine(singleLine)
+                setTextColor(ThemeHelper.inputText(ctx))
+                setHintTextColor(ThemeHelper.inputHint(ctx))
+                layout.addView(this)
+                container.addView(layout)
+            }
+        }
+        val name = field("اسم التاجر أو المورد", g.name)
+        val phone = field("هاتف التاجر", g.supplierPhone)
+        val notes = field("ملاحظات", g.supplierNotes, false)
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("بيانات التاجر")
+            .setMessage("تُحفظ هذه المعلومات محليًا ضمن أرشيف فواتير وطلبات التاجر.")
+            .setView(container)
+            .setPositiveButton(R.string.save) { _, _ ->
+                try {
+                    AppRepository.updateTraderDetails(
+                        g.id,
+                        name.text?.toString().orEmpty(),
+                        phone.text?.toString(),
+                        notes.text?.toString()
+                    )
+                    refresh()
+                    Toast.makeText(ctx, "تم حفظ بيانات التاجر", Toast.LENGTH_SHORT).show()
+                } catch (error: Exception) {
+                    Toast.makeText(ctx, error.message ?: "تعذر حفظ بيانات التاجر", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     private fun renameGroupDialog(g: Group) {
@@ -252,7 +326,9 @@ class GroupsFragment : Fragment() {
                 group.id to GroupSnapshot(
                     documentCount = items.size,
                     lastActivity = latest?.createdAt ?: group.createdAt,
-                    lastPreview = messagePreview(latest)
+                    lastPreview = messagePreview(latest),
+                    openOrders = items.count { it.status == "new" || it.status == "in_review" },
+                    unpaidInvoices = items.count { it.status != "paid" && !it.total.isNullOrBlank() }
                 )
             }
             val totalDocuments = snapshots.values.sumOf { it.documentCount }
@@ -261,7 +337,7 @@ class GroupsFragment : Fragment() {
             val sortMode = AppRepository.groupSortMode()
             val summary = requireView().findViewById<TextView>(R.id.groups_summary)
             val archivedCount = allGroups.count { it.archivedAt != null }
-            summary.text = "${allGroups.size - archivedCount} نشطة · $archivedCount مؤرشفة · $totalDocuments مستند"
+            summary.text = "${allGroups.size - archivedCount} تاجر نشط · $archivedCount مؤرشف · $totalDocuments فاتورة/طلب"
             requireView().findViewById<TextView>(R.id.groups_sort_label).text =
                 "${sortLabel(sortMode)} · ${filterLabel(filterMode)}"
 
@@ -407,11 +483,11 @@ class GroupsFragment : Fragment() {
     }
 
     private fun emptyStateMessage(query: String, filterMode: String): String = when {
-        allGroups.isEmpty() -> "لا توجد مجموعات بعد. اضغط هنا لإنشاء مجموعتك الأولى."
+        allGroups.isEmpty() -> "لا يوجد تجار بعد. اضغط هنا لإضافة أول تاجر أو مورد."
         query.isNotBlank() && filterMode != "all" -> "لا توجد نتائج تطابق البحث والتصفية الحالية. جرّب تغيير أحدهما."
         query.isNotBlank() -> "لا توجد مجموعة تطابق «$query». جرّب كلمة أخرى."
         filterMode != "all" -> "لا توجد مجموعات ضمن التصفية الحالية. جرّب تصفية أخرى."
-        else -> "لا توجد مجموعات بعد. اضغط هنا لإنشاء مجموعتك الأولى."
+        else -> "لا يوجد تجار بعد. اضغط هنا لإضافة أول تاجر أو مورد."
     }
 
     private fun logAndToast(e: Exception, tag: String) {
@@ -465,15 +541,26 @@ class GroupsFragment : Fragment() {
             holder.card.setCardBackgroundColor(surface)
             holder.card.strokeColor = ThemeHelper.cardStroke(ctx)
             holder.card.strokeWidth = 1
-            holder.name.text = if (g.archivedAt != null) "${g.name} · مؤرشفة" else g.name
+            holder.name.text = if (g.archivedAt != null) "${g.name} · مؤرشف" else g.name
             holder.name.setTextColor(text)
             holder.name.typeface = ctx.resources.getFont(R.font.tajawal_bold)
             val items = AppRepository.items(g.id)
-            val latest = items.maxByOrNull { it.createdAt }
-            holder.preview.text = messagePreview(latest)
+            val snapshot = GroupSnapshot(
+                documentCount = items.size,
+                lastActivity = items.maxOfOrNull { it.createdAt } ?: g.createdAt,
+                lastPreview = messagePreview(items.maxByOrNull { it.createdAt }),
+                openOrders = items.count { it.status == "new" || it.status == "in_review" },
+                unpaidInvoices = items.count { it.status != "paid" && !it.total.isNullOrBlank() }
+            )
+            holder.preview.text = buildString {
+                append("${snapshot.documentCount} فاتورة/طلب")
+                if (snapshot.openOrders > 0) append(" · ${snapshot.openOrders} قيد المتابعة")
+                if (snapshot.unpaidInvoices > 0) append(" · ${snapshot.unpaidInvoices} غير مسددة")
+                if (!g.supplierPhone.isNullOrBlank()) append(" · ${g.supplierPhone}")
+            }
             holder.preview.setTextColor(textSec)
             holder.preview.typeface = ctx.resources.getFont(R.font.tajawal_regular)
-            holder.date.text = activityTime(latest?.createdAt ?: g.createdAt)
+            holder.date.text = activityTime(snapshot.lastActivity)
             holder.date.setTextColor(textSec)
             holder.date.typeface = ctx.resources.getFont(R.font.tajawal_medium)
             val documents = items.size
@@ -497,8 +584,8 @@ class GroupsFragment : Fragment() {
                     return@setOnClickListener
                 }
                 val isPinned = g.id in AppRepository.favoriteGroupIds()
-                val archiveAction = if (g.archivedAt == null) "أرشفة المجموعة" else "إلغاء الأرشفة"
-                val actions = arrayOf(if (isPinned) "إلغاء التثبيت" else "تثبيت أعلى القائمة", archiveAction, "إعادة تسمية", "حذف")
+                val archiveAction = if (g.archivedAt == null) "أرشفة التاجر" else "إلغاء الأرشفة"
+                val actions = arrayOf(if (isPinned) "إلغاء التثبيت" else "تثبيت أعلى القائمة", archiveAction, "تعديل بيانات التاجر", "حذف")
                 MaterialAlertDialogBuilder(ctx)
                     .setItems(actions) { _, which ->
                         when (which) {
@@ -517,7 +604,7 @@ class GroupsFragment : Fragment() {
                                 refresh()
                                 Toast.makeText(ctx, if (archive) "تمت أرشفة المجموعة" else "أعيدت المجموعة إلى القائمة", Toast.LENGTH_SHORT).show()
                             }
-                            2 -> renameGroupDialog(g)
+                            2 -> showTraderDetailsDialog(g)
                             3 -> confirmDelete(g)
                         }
                     }

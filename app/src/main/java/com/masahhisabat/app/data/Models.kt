@@ -45,10 +45,12 @@ data class InvoiceItem(
     @SerializedName("created_at") val createdAt: Long = System.currentTimeMillis()
 )
 
-/** مجموعة تضم فواتير */
+/** تاجر أو مورد يضم أرشيف فواتيره وطلباته. بقي الاسم الفني Group متوافقاً مع بيانات الإصدارات السابقة. */
 data class Group(
     val id: String = generateId(),
     val name: String,
+    @SerializedName("supplier_phone") val supplierPhone: String? = null,
+    @SerializedName("supplier_notes") val supplierNotes: String? = null,
     @SerializedName("created_at") val createdAt: Long = System.currentTimeMillis(),
     @SerializedName("archived_at") val archivedAt: Long? = null
 )

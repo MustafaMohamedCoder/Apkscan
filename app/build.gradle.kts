@@ -22,8 +22,8 @@ android {
         applicationId = "com.masahhisabat.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 18
-        versionName = "1.2.14"
+        versionCode = 19
+        versionName = "1.2.15"
 
         // أجهزة Android الفعلية المستهدفة تعمل بمعماريات ARM؛ استبعاد x86 يزيل نسخ OpenCV غير اللازمة.
         ndk {

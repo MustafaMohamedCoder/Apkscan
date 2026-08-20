@@ -3,6 +3,7 @@ package com.masahhisabat.app.ui.call
 import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
+import android.app.AlertDialog
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.PictureInPictureParams
@@ -63,6 +64,7 @@ class LocalCallActivity : Activity() {
     private var callStartedElapsed = 0L
     private var ending = false
     private var answerFeedbackDelivered = false
+    private var mediaPermissionDialogVisible = false
     private val callTimer = object : Runnable {
         override fun run() {
             updateDuration()
@@ -76,8 +78,8 @@ class LocalCallActivity : Activity() {
         peerUser = intent.getStringExtra(EXTRA_PEER_USER).orEmpty().ifBlank { "مستخدم" }
         mediaType = intent.getStringExtra(EXTRA_MEDIA_TYPE).orEmpty().ifBlank { "voice" }
         startedAt = System.currentTimeMillis()
-        requestPermissionsIfNeeded()
         render()
+        requestPermissionsIfNeeded()
     }
 
     private fun render() {
@@ -518,7 +520,35 @@ class LocalCallActivity : Activity() {
         val needed = requiredMediaPermissions().filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (needed.isNotEmpty()) ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQUEST_MEDIA)
+        if (needed.isEmpty() || mediaPermissionDialogVisible || isFinishing) return
+
+        val needsCamera = needed.contains(Manifest.permission.CAMERA)
+        val permissionSummary = if (needsCamera) "الميكروفون والكاميرا" else "الميكروفون"
+        val purpose = if (needsCamera) {
+            "سنستخدم الميكروفون للصوت والكاميرا لإرسال الفيديو للطرف الآخر داخل الشبكة المحلية فقط."
+        } else {
+            "سنستخدم الميكروفون لإرسال صوتك للطرف الآخر داخل الشبكة المحلية فقط."
+        }
+
+        mediaPermissionDialogVisible = true
+        AlertDialog.Builder(this)
+            .setTitle("قبل بدء المكالمة")
+            .setMessage("تحتاج هذه المكالمة إذن $permissionSummary. $purpose لن يبدأ الاتصال قبل موافقتك.")
+            .setNegativeButton("ليس الآن") { _, _ ->
+                mediaPermissionDialogVisible = false
+                acceptButton?.isEnabled = false
+                statusView?.text = "لم يتم طلب إذن $permissionSummary — يمكنك منحه لاحقًا عند المتابعة"
+            }
+            .setPositiveButton("متابعة") { _, _ ->
+                mediaPermissionDialogVisible = false
+                ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQUEST_MEDIA)
+            }
+            .setOnCancelListener {
+                mediaPermissionDialogVisible = false
+                acceptButton?.isEnabled = false
+                statusView?.text = "تم إلغاء طلب الإذن — لن تبدأ المكالمة قبل منح الإذن المطلوب"
+            }
+            .show()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

@@ -92,18 +92,15 @@ class DocumentCameraActivity : AppCompatActivity() {
         }
     }
 
-    /** يشرح سبب الإذن قبل إعادة الطلب بعد الرفض، ولا يحرم المستخدم من خيار المعرض. */
+    /** يشرح سبب الإذن قبل كل طلب، ولا يحرم المستخدم من خيار المعرض. */
     private fun requestCameraPermission() {
-        if (shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
-            AlertDialog.Builder(this)
-                .setTitle("السماح بالكاميرا")
-                .setMessage("تحتاج ميزة المسح إلى الكاميرا لالتقاط المستندات. يمكنك أيضاً متابعة العمل باختيار صورة محفوظة من المعرض.")
-                .setNegativeButton("اختيار صورة") { _, _ -> showGalleryOnlyState() }
-                .setPositiveButton("متابعة") { _, _ -> permissionLauncher.launch(Manifest.permission.CAMERA) }
-                .show()
-        } else {
-            permissionLauncher.launch(Manifest.permission.CAMERA)
-        }
+        AlertDialog.Builder(this)
+            .setTitle("قبل فتح الكاميرا")
+            .setMessage("يحتاج الماسح إذن الكاميرا لالتقاط المستندات واكتشاف حوافها على جهازك. يمكنك بدلاً من ذلك اختيار صورة محفوظة من المعرض.")
+            .setNegativeButton("اختيار صورة") { _, _ -> showGalleryOnlyState() }
+            .setPositiveButton("متابعة") { _, _ -> permissionLauncher.launch(Manifest.permission.CAMERA) }
+            .setOnCancelListener { showGalleryOnlyState() }
+            .show()
     }
 
     /** يعرض مساراً آمناً عند الرفض، بما في ذلك الرفض الدائم من إعدادات أندرويد. */

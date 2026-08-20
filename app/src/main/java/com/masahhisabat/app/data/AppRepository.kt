@@ -911,6 +911,20 @@ object AppRepository {
     }
     fun isUserOnline(username: String, now: Long = System.currentTimeMillis()): Boolean =
         presence().firstOrNull { it.username == username }?.let { now - it.lastSeenAt <= 90_000L } == true
+
+    // ---------- سجل المكالمات المحلية ----------
+    fun callLogs(): List<CallLog> = loadList("call_logs.json", CallLog::class.java)
+        .sortedByDescending { it.startedAt }
+
+    fun addCallLog(log: CallLog) {
+        saveList("call_logs.json", (callLogs() + log).distinctBy { it.id }
+            .sortedByDescending { it.startedAt }.take(500))
+    }
+
+    fun updateCallLog(id: String, update: (CallLog) -> CallLog) {
+        saveList("call_logs.json", callLogs().map { if (it.id == id) update(it) else it })
+    }
+
     fun activityLog(): List<ActivityEntry> = loadList("activity.json", ActivityEntry::class.java)
     fun syncLog(): List<SyncEntry> = loadList("synclog.json", SyncEntry::class.java)
     fun syncDevices(): List<SyncDeviceStatus> = loadList("sync_devices.json", SyncDeviceStatus::class.java)

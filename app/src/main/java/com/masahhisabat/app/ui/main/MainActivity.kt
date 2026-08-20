@@ -75,6 +75,7 @@ class MainActivity : AppCompatActivity() {
             // تبدأ كل جلسة مزامنة شاملة ثنائية الاتجاه؛ ملف mustafa السلطوي يبقى متاحًا أيضًا للتوافق القديم.
             SyncManager.startAutomaticUserSync(this)
             SyncManager.startAutomaticDataSyncAfterLogin(this)
+            com.masahhisabat.app.data.LocalCallService.start(this)
         } catch (e: Exception) {
             try {
                 val sw = java.io.StringWriter()
@@ -98,6 +99,7 @@ class MainActivity : AppCompatActivity() {
         if (SessionStore.currentUser(this) != null) {
             SyncManager.startAutomaticUserSync(this)
             SyncManager.startAutomaticDataSyncAfterLogin(this)
+            com.masahhisabat.app.data.LocalCallService.start(this)
         }
     }
 

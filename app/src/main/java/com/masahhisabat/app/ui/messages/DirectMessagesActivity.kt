@@ -1,6 +1,7 @@
 package com.masahhisabat.app.ui.messages
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -50,6 +51,23 @@ class DirectMessagesActivity : AppCompatActivity() {
         root.addView(toolbar)
         recipient = Spinner(this)
         root.addView(recipient, LinearLayout.LayoutParams(-1, 52))
+        val callBar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        val voiceCall = MaterialButton(this).apply {
+            text = "مكالمة صوتية"
+            setOnClickListener { openCall("voice") }
+        }
+        val videoCall = MaterialButton(this).apply {
+            text = "مكالمة فيديو"
+            setOnClickListener { openCall("video") }
+        }
+        callBar.addView(voiceCall, LinearLayout.LayoutParams(0, 48, 1f))
+        callBar.addView(videoCall, LinearLayout.LayoutParams(0, 48, 1f))
+        val history = MaterialButton(this).apply {
+            text = "سجل المكالمات"
+            setOnClickListener { showCallHistory() }
+        }
+        callBar.addView(history, LinearLayout.LayoutParams(0, 48, 1f))
+        root.addView(callBar)
         status = TextView(this).apply { textSize = 13f; setPadding(12, 2, 12, 10) }
         root.addView(status)
         list = RecyclerView(this).apply { layoutManager = LinearLayoutManager(this@DirectMessagesActivity); setPadding(4, 8, 4, 8); clipToPadding = false }
@@ -83,6 +101,30 @@ class DirectMessagesActivity : AppCompatActivity() {
         status.setTextColor(if (online) Color.rgb(35, 160, 85) else ThemeHelper.textSecondary(this))
         adapter.submit(AppRepository.directConversation(currentUser, targetUser))
         list.post { list.scrollToPosition((adapter.itemCount - 1).coerceAtLeast(0)) }
+    }
+
+    private fun showCallHistory() {
+        val formatter = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
+        val rows = AppRepository.callLogs().take(30).map {
+            val kind = if (it.type == "video") "فيديو" else "صوتية"
+            "${it.caller} ← ${it.callee} | $kind | ${it.status} | ${formatter.format(Date(it.startedAt))}"
+        }
+        AlertDialog.Builder(this)
+            .setTitle("سجل المكالمات")
+            .setMessage(if (rows.isEmpty()) "لا توجد مكالمات مسجلة" else rows.joinToString("\\n"))
+            .setPositiveButton("إغلاق", null)
+            .show()
+    }
+
+    private fun openCall(type: String) {
+        if (targetUser.isBlank()) {
+            Toast.makeText(this, "اختر مستخدمًا أولًا", Toast.LENGTH_SHORT).show()
+            return
+        }
+        startActivity(Intent(this, com.masahhisabat.app.ui.call.LocalCallActivity::class.java).apply {
+            putExtra(com.masahhisabat.app.ui.call.LocalCallActivity.EXTRA_PEER_USER, targetUser)
+            putExtra(com.masahhisabat.app.ui.call.LocalCallActivity.EXTRA_MEDIA_TYPE, type)
+        })
     }
 
     private fun sendMessage() {

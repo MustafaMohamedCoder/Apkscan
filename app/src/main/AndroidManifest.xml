@@ -18,6 +18,11 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -30,6 +35,11 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MasahHisabat">
+
+        <service
+            android:name=".data.LocalCallService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <activity
             android:name=".ui.auth.LoginActivity"
@@ -89,8 +99,14 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
-        <activity android:name=".ui.notifications.NotificationsActivity"
+                <activity
+            android:name=".ui.notifications.NotificationsActivity"
             android:exported="false" />
+
+        <activity
+            android:name=".ui.call.LocalCallActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

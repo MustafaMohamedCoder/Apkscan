@@ -116,6 +116,23 @@ data class SyncEntry(
     @SerializedName("at") val at: Long = System.currentTimeMillis()
 )
 
+/** سجل مكالمة محلية بين مستخدمين داخل الشبكة نفسها. */
+data class CallLog(
+    val id: String = generateId(),
+    @SerializedName("caller") val caller: String,
+    @SerializedName("callee") val callee: String,
+    /** voice | video */
+    val type: String = "voice",
+    /** incoming | outgoing */
+    val direction: String = "outgoing",
+    /** ringing | accepted | declined | missed | ended | failed */
+    val status: String = "ringing",
+    @SerializedName("started_at") val startedAt: Long = System.currentTimeMillis(),
+    @SerializedName("ended_at") val endedAt: Long? = null,
+    @SerializedName("duration_seconds") val durationSeconds: Long = 0L,
+    @SerializedName("peer_address") val peerAddress: String? = null
+)
+
 /** حالة آخر اتصال معروف بجهاز على الشبكة المحلية. */
 data class SyncDeviceStatus(
     val address: String,
@@ -124,6 +141,21 @@ data class SyncDeviceStatus(
     @SerializedName("last_sync_at") val lastSyncAt: Long? = null,
     @SerializedName("last_sync_success") val lastSyncSuccess: Boolean? = null,
     @SerializedName("last_error") val lastError: String? = null
+)
+
+/** رسالة إشارة لمكالمة محلية؛ لا تحمل الصوت أو الفيديو نفسه. */
+data class CallSignal(
+    val id: String = generateId(),
+    val kind: String,
+    val callId: String,
+    val fromUser: String,
+    val toUser: String,
+    val sdp: String? = null,
+    val candidate: String? = null,
+    val sdpMid: String? = null,
+    val sdpMLineIndex: Int? = null,
+    val mediaType: String = "voice",
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 /** سجل مراجعة لتعارض حُلّ آلياً وفق سياسة «الأحدث مع احتفاظ بنسخة وقائية». */

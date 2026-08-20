@@ -91,6 +91,42 @@ object SyncManager {
     @Volatile private var updateCheckRunning = false
     @Volatile private var multicastLock: WifiManager.MulticastLock? = null
     val peers = CopyOnWriteArrayList<String>()
+    private val callSignalListeners = CopyOnWriteArrayList<(CallSignal, String) -> Unit>()
+
+    fun addCallSignalListener(listener: (CallSignal, String) -> Unit) {
+        callSignalListeners.addIfAbsent(listener)
+    }
+
+    fun removeCallSignalListener(listener: (CallSignal, String) -> Unit) {
+        callSignalListeners.remove(listener)
+    }
+
+    fun sendCallSignal(host: String, signal: CallSignal): Boolean {
+        return try {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(host, TCP_PORT), CONNECT_TIMEOUT_MS)
+                socket.soTimeout = SYNC_READ_TIMEOUT_MS
+                val writer = socket.getOutputStream().bufferedWriter()
+                writer.write("CALL ${gson.toJson(signal)}")
+                writer.newLine()
+                writer.flush()
+                socket.getInputStream().bufferedReader().readLine()?.startsWith("CALL_OK") == true
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "call signal failed", e)
+            false
+        }
+    }
+
+    /** بث إشارة المكالمة للأجهزة المكتشفة؛ الجهاز غير المعني يتجاهلها وفق toUser. */
+    fun broadcastCallSignal(signal: CallSignal): Int {
+        var delivered = 0
+        peers.filter { !isLocalAddress(it) }.distinct().forEach { host ->
+            if (sendCallSignal(host, signal)) delivered++
+        }
+        return delivered
+    }
+
     private val autoSyncedUserFiles = ConcurrentHashMap<String, String>()
     private val autoSyncedDataFiles = ConcurrentHashMap<String, String>()
 
@@ -394,6 +430,20 @@ object SyncManager {
                     val reader = client.getInputStream().bufferedReader()
                     val payloadJson = reader.readLine()
                         ?: throw EOFException("انقطع الاتصال قبل اكتمال بيانات المزامنة")
+                    if (payloadJson.startsWith("CALL ")) {
+                        val signal = gson.fromJson(payloadJson.removePrefix("CALL "), CallSignal::class.java)
+                            ?: throw IOException("إشارة مكالمة غير صالحة")
+                        callSignalListeners.forEach { listener ->
+                            try { listener(signal, clientAddress) } catch (listenerError: Throwable) {
+                                Log.w(TAG, "call signal listener failed", listenerError)
+                            }
+                        }
+                        client.getOutputStream().bufferedWriter().use { writer ->
+                            writer.write("CALL_OK\n")
+                            writer.flush()
+                        }
+                        return@use
+                    }
                     val payload = gson.fromJson(payloadJson, SyncPayload::class.java)
                         ?: throw IOException("بيانات المزامنة غير صالحة")
                     val preview = previewPayload(payload)

@@ -22,8 +22,8 @@ android {
         applicationId = "com.masahhisabat.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 28
-        versionName = "1.2.24"
+        versionCode = 29
+        versionName = "1.2.25"
 
         // أجهزة Android الفعلية المستهدفة تعمل بمعماريات ARM؛ استبعاد x86 يزيل نسخ OpenCV غير اللازمة.
         ndk {
@@ -104,4 +104,6 @@ dependencies {
     implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")
     // حزمة OpenCV الرسمية: تُضمّن محلياً في APK ولا تعتمد على خدمات Google وقت التشغيل.
     implementation("org.opencv:opencv:4.9.0")
+    // WebRTC: قناة صوت/فيديو مباشرة، مع تبادل الإشارة داخل الشبكة المحلية.
+    implementation("io.github.webrtc-sdk:android:144.7559.12")
 }

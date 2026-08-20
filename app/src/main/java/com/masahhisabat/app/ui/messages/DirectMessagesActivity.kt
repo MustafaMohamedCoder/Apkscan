@@ -17,7 +17,9 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
+import com.masahhisabat.app.data.CallSignal
 import com.masahhisabat.app.data.DirectMessage
+import com.masahhisabat.app.data.SyncManager
 import com.masahhisabat.app.data.User
 import com.masahhisabat.app.ui.auth.SessionStore
 import com.masahhisabat.app.ui.ThemeHelper
@@ -36,6 +38,7 @@ class DirectMessagesActivity : AppCompatActivity() {
     private var selectedImage: String? = null
     private var currentUser = ""
     private var targetUser = ""
+    private var callCheckInProgress = false
     private val pickerCode = 431
 
     override fun onCreate(state: Bundle?) {
@@ -107,7 +110,11 @@ class DirectMessagesActivity : AppCompatActivity() {
         val formatter = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
         val rows = AppRepository.callLogs().take(30).map {
             val kind = if (it.type == "video") "فيديو" else "صوتية"
-            "${it.caller} ← ${it.callee} | $kind | ${it.status} | ${formatter.format(Date(it.startedAt))}"
+            val minutes = it.durationSeconds / 60L
+            val seconds = it.durationSeconds % 60L
+            val duration = if (it.durationSeconds > 0) " | ${"%02d:%02d".format(minutes, seconds)}" else ""
+            val reason = it.endReason?.takeIf { value -> value.isNotBlank() }?.let { value -> " | $value" }.orEmpty()
+            "${it.caller} ← ${it.callee} | $kind | ${it.status}$duration$reason | ${formatter.format(Date(it.startedAt))}"
         }
         AlertDialog.Builder(this)
             .setTitle("سجل المكالمات")
@@ -121,10 +128,31 @@ class DirectMessagesActivity : AppCompatActivity() {
             Toast.makeText(this, "اختر مستخدمًا أولًا", Toast.LENGTH_SHORT).show()
             return
         }
-        startActivity(Intent(this, com.masahhisabat.app.ui.call.LocalCallActivity::class.java).apply {
-            putExtra(com.masahhisabat.app.ui.call.LocalCallActivity.EXTRA_PEER_USER, targetUser)
-            putExtra(com.masahhisabat.app.ui.call.LocalCallActivity.EXTRA_MEDIA_TYPE, type)
-        })
+        if (callCheckInProgress) return
+        callCheckInProgress = true
+        status.text = "جارٍ التحقق من اتصال $targetUser داخل الشبكة المحلية…"
+        Thread {
+            val peer = SyncManager.discover(1200).firstOrNull { it.name.equals(targetUser, ignoreCase = true) }
+            val address = peer?.address ?: AppRepository.syncDevices().firstOrNull { it.name.equals(targetUser, ignoreCase = true) }?.address
+            val reachable = address != null && SyncManager.sendCallSignal(
+                address,
+                CallSignal(kind = "probe", callId = "probe-${System.currentTimeMillis()}", fromUser = currentUser, toUser = targetUser)
+            )
+            runOnUiThread {
+                callCheckInProgress = false
+                if (!reachable || address == null) {
+                    status.text = "تعذر الوصول إلى $targetUser محليًا. تأكد من اتصال الجهازين بالشبكة نفسها ومن فتح التطبيق."
+                    Toast.makeText(this, "فشل اختبار الاتصال المحلي", Toast.LENGTH_LONG).show()
+                    return@runOnUiThread
+                }
+                status.text = "تم اختبار الاتصال المحلي بنجاح — جارٍ فتح المكالمة"
+                startActivity(Intent(this, com.masahhisabat.app.ui.call.LocalCallActivity::class.java).apply {
+                    putExtra(com.masahhisabat.app.ui.call.LocalCallActivity.EXTRA_PEER_USER, targetUser)
+                    putExtra(com.masahhisabat.app.ui.call.LocalCallActivity.EXTRA_PEER_ADDRESS, address)
+                    putExtra(com.masahhisabat.app.ui.call.LocalCallActivity.EXTRA_MEDIA_TYPE, type)
+                })
+            }
+        }.start()
     }
 
     private fun sendMessage() {

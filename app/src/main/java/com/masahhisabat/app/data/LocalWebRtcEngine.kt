@@ -26,7 +26,8 @@ class LocalWebRtcEngine(
     private val localRenderer: SurfaceViewRenderer?,
     private val remoteRenderer: SurfaceViewRenderer?,
     private val onState: (String) -> Unit,
-    private val onNetworkQuality: (NetworkQuality) -> Unit = {}
+    private val onNetworkQuality: (NetworkQuality) -> Unit = {},
+    private val onCallEnded: (String) -> Unit = {}
 ) {
     private val egl = EglBase.create()
     private val factory: PeerConnectionFactory
@@ -36,6 +37,8 @@ class LocalWebRtcEngine(
     private val localAudio: org.webrtc.AudioTrack
     private val signalListener: (CallSignal, String) -> Unit
     private val streamId = "local-call-$callId"
+    @Volatile private var releasing = false
+    @Volatile private var terminationReported = false
 
     init {
         PeerConnectionFactory.initialize(
@@ -65,6 +68,11 @@ class LocalWebRtcEngine(
                         PeerConnection.PeerConnectionState.CLOSED -> NetworkQuality.POOR
                     }
                 )
+                when (newState) {
+                    PeerConnection.PeerConnectionState.FAILED -> reportTermination("تعذر إنشاء اتصال WebRTC محلي")
+                    PeerConnection.PeerConnectionState.CLOSED -> reportTermination("أغلق الطرف الآخر الاتصال")
+                    else -> Unit
+                }
             }
             override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState) {
                 if (newState == PeerConnection.IceConnectionState.DISCONNECTED) {
@@ -99,6 +107,7 @@ class LocalWebRtcEngine(
                     "offer" -> acceptOffer(signal)
                     "answer" -> setRemote(signal)
                     "candidate" -> signal.candidate?.let { connection.addIceCandidate(org.webrtc.IceCandidate(signal.sdpMid, signal.sdpMLineIndex ?: 0, it)) }
+                    "hangup" -> reportTermination("أنهى الطرف الآخر المكالمة")
                 }
             }
         }
@@ -149,7 +158,14 @@ class LocalWebRtcEngine(
         videoCapturer?.switchCamera(null)
     }
 
+    /** يخطر الطرف الآخر صراحةً قبل تحرير الوسائط؛ لا يعتمد على خادم خارجي. */
+    fun endLocalCall() {
+        sendSignal(CallSignal(kind = "hangup", callId = callId, fromUser = currentUser, toUser = peerUser, mediaType = mediaType))
+        release()
+    }
+
     fun release() {
+        releasing = true
         SyncManager.removeCallSignalListener(signalListener)
         try { videoCapturer?.stopCapture() } catch (_: Throwable) {}
         videoCapturer?.dispose()
@@ -157,6 +173,12 @@ class LocalWebRtcEngine(
         connection.close()
         factory.dispose()
         egl.release()
+    }
+
+    private fun reportTermination(reason: String) {
+        if (releasing || terminationReported) return
+        terminationReported = true
+        onCallEnded(reason)
     }
 
     private fun createCameraCapturer(): CameraVideoCapturer {

@@ -130,6 +130,8 @@ data class CallLog(
     @SerializedName("started_at") val startedAt: Long = System.currentTimeMillis(),
     @SerializedName("ended_at") val endedAt: Long? = null,
     @SerializedName("duration_seconds") val durationSeconds: Long = 0L,
+    /** سبب مفهوم للمستخدم عند إنهاء الاتصال أو فشله. */
+    @SerializedName("end_reason") val endReason: String? = null,
     @SerializedName("peer_address") val peerAddress: String? = null
 )
 

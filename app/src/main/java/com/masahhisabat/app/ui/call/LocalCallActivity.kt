@@ -11,6 +11,9 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.util.Rational
 import android.view.View
 import android.widget.Button
@@ -38,6 +41,7 @@ class LocalCallActivity : Activity() {
     private var muteIndicator: TextView? = null
     private var cameraIndicator: TextView? = null
     private var networkIndicator: TextView? = null
+    private var durationView: TextView? = null
     private var engine: LocalWebRtcEngine? = null
     private var localRenderer: SurfaceViewRenderer? = null
     private var remoteRenderer: SurfaceViewRenderer? = null
@@ -51,6 +55,15 @@ class LocalCallActivity : Activity() {
     private var microphoneEnabled = true
     private var cameraEnabled = true
     private var networkQuality = LocalWebRtcEngine.NetworkQuality.CHECKING
+    private val callTimerHandler = Handler(Looper.getMainLooper())
+    private var callStartedElapsed = 0L
+    private var ending = false
+    private val callTimer = object : Runnable {
+        override fun run() {
+            updateDuration()
+            callTimerHandler.postDelayed(this, 1000L)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -106,6 +119,15 @@ class LocalCallActivity : Activity() {
             contentDescription = "جودة الشبكة: جارٍ القياس"
             visibility = View.GONE
         }
+        durationView = TextView(this).apply {
+            text = "مدة المكالمة: 00:00"
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.rgb(15, 118, 110))
+            setPadding(22, 10, 22, 10)
+            contentDescription = "مدة المكالمة صفر دقيقة وصفر ثانية"
+            visibility = View.GONE
+        }
         if (mediaType == "video") {
             remoteRenderer = SurfaceViewRenderer(this).apply { setBackgroundColor(Color.BLACK) }
             localRenderer = SurfaceViewRenderer(this).apply { setBackgroundColor(Color.DKGRAY) }
@@ -135,7 +157,7 @@ class LocalCallActivity : Activity() {
             text = "تصغير المكالمة"
             setOnClickListener { minimizeCall() }
         }
-        endButton = Button(this).apply { text = "إنهاء المكالمة"; setOnClickListener { finishCall("ended") } }
+        endButton = Button(this).apply { text = "إنهاء المكالمة"; setOnClickListener { finishCall("ended", "أنهى المستخدم المكالمة") } }
         controlsLayout = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             isEnabled = false
@@ -150,6 +172,7 @@ class LocalCallActivity : Activity() {
         root.addView(muteIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(cameraIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(networkIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
+        root.addView(durationView, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         if (mediaType == "video") {
             root.addView(remoteRenderer, LinearLayout.LayoutParams(-1, 520))
             root.addView(localRenderer, LinearLayout.LayoutParams(-1, 220))
@@ -163,13 +186,18 @@ class LocalCallActivity : Activity() {
 
     private fun startCall() {
         if (engine != null) return
+        startedAt = System.currentTimeMillis()
+        callStartedElapsed = SystemClock.elapsedRealtime()
+        startDurationTimer()
         val incoming = intent.getStringExtra(EXTRA_INCOMING_SDP)
         val log = CallLog(
             caller = if (incoming.isNullOrBlank()) currentUser else peerUser,
             callee = if (incoming.isNullOrBlank()) peerUser else currentUser,
             type = mediaType,
             direction = if (incoming.isNullOrBlank()) "outgoing" else "incoming",
-            status = "ringing"
+            status = "ringing",
+            startedAt = startedAt,
+            peerAddress = intent.getStringExtra(EXTRA_PEER_ADDRESS)
         )
         logId = log.id
         AppRepository.addCallLog(log)
@@ -187,12 +215,39 @@ class LocalCallActivity : Activity() {
                     networkQuality = quality
                     updateNetworkIndicator()
                 }
-            }
+            },
+            onCallEnded = { reason -> runOnUiThread { finishCall("failed", reason, notifyPeer = false) } }
         )
         controlsLayout?.isEnabled = true
         statusView?.text = if (incoming.isNullOrBlank()) "جارٍ الاتصال داخل الشبكة المحلية…" else "تم قبول المكالمة، جارٍ فتح الوسائط…"
         if (incoming.isNullOrBlank()) engine?.startOutgoing() else engine?.acceptIncoming(incoming)
         AppRepository.updateCallLog(log.id) { it.copy(status = "accepted") }
+    }
+
+    private fun startDurationTimer() {
+        callTimerHandler.removeCallbacks(callTimer)
+        updateDuration()
+        callTimerHandler.postDelayed(callTimer, 1000L)
+    }
+
+    private fun stopDurationTimer() = callTimerHandler.removeCallbacks(callTimer)
+
+    private fun updateDuration() {
+        if (callStartedElapsed <= 0L) return
+        val seconds = ((SystemClock.elapsedRealtime() - callStartedElapsed) / 1000L).coerceAtLeast(0L)
+        val text = "مدة المكالمة: ${formatDuration(seconds)}"
+        durationView?.apply {
+            this.text = text
+            contentDescription = text
+            visibility = if (engine != null) View.VISIBLE else View.GONE
+        }
+    }
+
+    private fun formatDuration(seconds: Long): String {
+        val hours = seconds / 3600L
+        val minutes = (seconds % 3600L) / 60L
+        val remainder = seconds % 60L
+        return if (hours > 0L) "%02d:%02d:%02d".format(hours, minutes, remainder) else "%02d:%02d".format(minutes, remainder)
     }
 
     private fun toggleMicrophone() {
@@ -329,7 +384,7 @@ class LocalCallActivity : Activity() {
             ACTION_PIP_TOGGLE_MIC -> toggleMicrophone()
             ACTION_PIP_TOGGLE_VIDEO -> toggleCamera()
             ACTION_PIP_RETURN_FULL -> returnToFullCall()
-            ACTION_PIP_END_CALL -> finishCall("ended")
+            ACTION_PIP_END_CALL -> finishCall("ended", "أنهى المستخدم المكالمة من النافذة المصغّرة")
         }
     }
 
@@ -350,21 +405,26 @@ class LocalCallActivity : Activity() {
         updateMuteIndicator()
         updateCameraIndicator()
         updateNetworkIndicator()
+        updateDuration()
         // في وضع PiP يتولى Android السحب وتغيير الحجم، وتبقى الوسائط والمحرك مستمرين.
         if (!compact) {
             window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
         }
     }
 
-    private fun finishCall(status: String) {
+    private fun finishCall(status: String, reason: String = "انتهت المكالمة", notifyPeer: Boolean = true) {
+        if (ending) return
+        ending = true
+        stopDurationTimer()
         val ended = System.currentTimeMillis()
         logId?.let { id ->
             AppRepository.updateCallLog(id) {
-                it.copy(status = status, endedAt = ended, durationSeconds = ((ended - startedAt) / 1000L).coerceAtLeast(0L))
+                it.copy(status = status, endedAt = ended, durationSeconds = ((ended - startedAt) / 1000L).coerceAtLeast(0L), endReason = reason)
             }
         }
-        engine?.release()
+        val activeEngine = engine
         engine = null
+        if (notifyPeer) activeEngine?.endLocalCall() else activeEngine?.release()
         finish()
     }
 
@@ -375,12 +435,21 @@ class LocalCallActivity : Activity() {
     }
 
     override fun onDestroy() {
+        stopDurationTimer()
+        if (!ending && !isChangingConfigurations) {
+            logId?.let { id ->
+                val ended = System.currentTimeMillis()
+                AppRepository.updateCallLog(id) {
+                    it.copy(status = "ended", endedAt = ended, durationSeconds = ((ended - startedAt) / 1000L).coerceAtLeast(0L), endReason = "أُغلقت شاشة المكالمة")
+                }
+            }
+        }
         engine?.release()
         engine = null
         super.onDestroy()
     }
 
-    override fun onBackPressed() { finishCall("ended") }
+    override fun onBackPressed() { finishCall("ended", "أنهى المستخدم المكالمة") }
 
     companion object {
         const val EXTRA_CALL_ID = "call_id"

@@ -34,6 +34,7 @@ class LocalCallActivity : Activity() {
     private var peerUser = "مستخدم"
     private var currentUser = ""
     private var statusView: TextView? = null
+    private var muteIndicator: TextView? = null
     private var engine: LocalWebRtcEngine? = null
     private var localRenderer: SurfaceViewRenderer? = null
     private var remoteRenderer: SurfaceViewRenderer? = null
@@ -72,6 +73,15 @@ class LocalCallActivity : Activity() {
         statusView = TextView(this).apply {
             text = if (intent.hasExtra(EXTRA_INCOMING_SDP)) "مكالمة واردة من $peerUser — اضغط قبول للرد" else "جاهز للاتصال داخل الشبكة"
             textSize = 16f
+        }
+        muteIndicator = TextView(this).apply {
+            text = "الميكروفون مكتوم"
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.rgb(198, 40, 40))
+            setPadding(22, 12, 22, 12)
+            contentDescription = "تنبيه: الميكروفون مكتوم"
+            visibility = View.GONE
         }
         if (mediaType == "video") {
             remoteRenderer = SurfaceViewRenderer(this).apply { setBackgroundColor(Color.BLACK) }
@@ -116,6 +126,7 @@ class LocalCallActivity : Activity() {
         root.addView(title)
         root.addView(peer)
         root.addView(statusView)
+        root.addView(muteIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(accept)
         root.addView(controlsLayout)
         root.addView(minimizeButton)
@@ -155,6 +166,7 @@ class LocalCallActivity : Activity() {
         microphoneEnabled = !(engine?.setMicrophoneEnabled(microphoneEnabled) ?: microphoneEnabled)
         micButton?.text = if (microphoneEnabled) "كتم الميكروفون" else "تشغيل الميكروفون"
         statusView?.text = if (microphoneEnabled) "الميكروفون يعمل" else "الميكروفون مكتوم"
+        updateMuteIndicator()
         updatePictureInPictureActions()
     }
 
@@ -200,14 +212,14 @@ class LocalCallActivity : Activity() {
     }
 
     private fun buildPictureInPictureActions(): List<RemoteAction> {
-        val micTitle = if (microphoneEnabled) "كتم الميكروفون" else "تشغيل الميكروفون"
+        val micTitle = if (microphoneEnabled) "كتم الميكروفون" else "الميكروفون مكتوم — تشغيل"
         val videoTitle = when {
             mediaType != "video" -> "الفيديو غير متاح في المكالمة الصوتية"
             cameraEnabled -> "إيقاف الفيديو"
             else -> "تشغيل الفيديو"
         }
         val micAction = RemoteAction(
-            Icon.createWithResource(this, R.drawable.ic_mic),
+            Icon.createWithResource(this, if (microphoneEnabled) R.drawable.ic_mic else R.drawable.ic_mic_off),
             micTitle,
             micTitle,
             createPipActionIntent(ACTION_PIP_TOGGLE_MIC, 301)
@@ -239,6 +251,11 @@ class LocalCallActivity : Activity() {
         }
     }
 
+    /** شارة حمراء داخل محتوى PiP تمنع الالتباس عندما يكون الصوت المحلي متوقفًا. */
+    private fun updateMuteIndicator() {
+        muteIndicator?.visibility = if (isInPictureInPictureMode && !microphoneEnabled) View.VISIBLE else View.GONE
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         when (intent.action) {
@@ -253,6 +270,7 @@ class LocalCallActivity : Activity() {
         statusView?.visibility = if (compact) View.GONE else View.VISIBLE
         minimizeButton?.visibility = if (compact) View.GONE else View.VISIBLE
         controlsLayout?.visibility = if (compact) View.GONE else View.VISIBLE
+        updateMuteIndicator()
         // في وضع PiP يتولى Android السحب وتغيير الحجم، وتبقى الوسائط والمحرك مستمرين.
         if (!compact) {
             window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE

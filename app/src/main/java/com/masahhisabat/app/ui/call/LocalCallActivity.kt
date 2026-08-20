@@ -28,6 +28,12 @@ class LocalCallActivity : Activity() {
     private var engine: LocalWebRtcEngine? = null
     private var localRenderer: SurfaceViewRenderer? = null
     private var remoteRenderer: SurfaceViewRenderer? = null
+    private var micButton: Button? = null
+    private var cameraButton: Button? = null
+    private var switchCameraButton: Button? = null
+    private var controlsLayout: LinearLayout? = null
+    private var microphoneEnabled = true
+    private var cameraEnabled = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,12 +69,41 @@ class LocalCallActivity : Activity() {
             root.addView(remoteRenderer, LinearLayout.LayoutParams(-1, 520))
             root.addView(localRenderer, LinearLayout.LayoutParams(-1, 220))
         }
-        val accept = Button(this).apply { text = if (intent.hasExtra(EXTRA_INCOMING_SDP)) "قبول المكالمة" else "بدء المكالمة"; setOnClickListener { startCall() } }
+        val accept = Button(this).apply {
+            text = if (intent.hasExtra(EXTRA_INCOMING_SDP)) "قبول المكالمة" else "بدء المكالمة"
+            setOnClickListener {
+                startCall()
+                isEnabled = false
+            }
+        }
+        micButton = Button(this).apply {
+            text = "كتم الصوت"
+            setOnClickListener { toggleMicrophone() }
+        }
+        cameraButton = Button(this).apply {
+            text = "إيقاف الكاميرا"
+            visibility = if (mediaType == "video") View.VISIBLE else View.GONE
+            setOnClickListener { toggleCamera() }
+        }
+        switchCameraButton = Button(this).apply {
+            text = "تبديل الكاميرا"
+            visibility = if (mediaType == "video") View.VISIBLE else View.GONE
+            setOnClickListener { switchCamera() }
+        }
         val end = Button(this).apply { text = "إنهاء المكالمة"; setOnClickListener { finishCall("ended") } }
+        controlsLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            isEnabled = false
+            setPadding(0, 16, 0, 16)
+            addView(micButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(cameraButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(switchCameraButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        }
         root.addView(title)
         root.addView(peer)
         root.addView(statusView)
         root.addView(accept)
+        root.addView(controlsLayout)
         root.addView(end)
         setContentView(root)
     }
@@ -95,9 +130,30 @@ class LocalCallActivity : Activity() {
             remoteRenderer = remoteRenderer,
             onState = { state -> runOnUiThread { statusView?.text = "حالة الاتصال: $state" } }
         )
+        controlsLayout?.isEnabled = true
         statusView?.text = if (incoming.isNullOrBlank()) "جارٍ الاتصال داخل الشبكة المحلية…" else "تم قبول المكالمة، جارٍ فتح الوسائط…"
         if (incoming.isNullOrBlank()) engine?.startOutgoing() else engine?.acceptIncoming(incoming)
         AppRepository.updateCallLog(log.id) { it.copy(status = "accepted") }
+    }
+
+    private fun toggleMicrophone() {
+        microphoneEnabled = !(engine?.setMicrophoneEnabled(microphoneEnabled) ?: microphoneEnabled)
+        micButton?.text = if (microphoneEnabled) "كتم الصوت" else "تشغيل الصوت"
+        statusView?.text = if (microphoneEnabled) "الميكروفون يعمل" else "الميكروفون مكتوم"
+    }
+
+    private fun toggleCamera() {
+        if (mediaType != "video") return
+        cameraEnabled = !(engine?.setCameraEnabled(cameraEnabled) ?: cameraEnabled)
+        cameraButton?.text = if (cameraEnabled) "إيقاف الكاميرا" else "تشغيل الكاميرا"
+        localRenderer?.visibility = if (cameraEnabled) View.VISIBLE else View.INVISIBLE
+        statusView?.text = if (cameraEnabled) "الكاميرا تعمل" else "الكاميرا متوقفة"
+    }
+
+    private fun switchCamera() {
+        if (mediaType != "video") return
+        engine?.switchCamera()
+        statusView?.text = "تم التبديل بين الكاميرا الأمامية والخلفية"
     }
 
     private fun finishCall(status: String) {

@@ -32,6 +32,7 @@ class LocalWebRtcEngine(
     private val connection: PeerConnection
     private val videoCapturer: CameraVideoCapturer?
     private val localVideo: VideoTrack?
+    private val localAudio: org.webrtc.AudioTrack
     private val signalListener: (CallSignal, String) -> Unit
     private val streamId = "local-call-$callId"
 
@@ -55,7 +56,8 @@ class LocalWebRtcEngine(
         }
         connection = requireNotNull(factory.createPeerConnection(rtcConfig, observer))
         val audio = factory.createAudioSource(MediaConstraints())
-        connection.addTrack(factory.createAudioTrack("audio-$callId", audio), listOf(streamId))
+        localAudio = factory.createAudioTrack("audio-$callId", audio)
+        connection.addTrack(localAudio, listOf(streamId))
         if (mediaType == "video") {
             videoCapturer = createCameraCapturer()
             val source = factory.createVideoSource(videoCapturer!!.isScreencast)
@@ -112,6 +114,20 @@ class LocalWebRtcEngine(
     }
 
     private fun sendSignal(signal: CallSignal) { Thread { SyncManager.broadcastCallSignal(signal) }.start() }
+
+    fun setMicrophoneEnabled(enabled: Boolean): Boolean {
+        localAudio.setEnabled(enabled)
+        return localAudio.enabled()
+    }
+
+    fun setCameraEnabled(enabled: Boolean): Boolean {
+        localVideo?.setEnabled(enabled)
+        return localVideo?.enabled() ?: false
+    }
+
+    fun switchCamera() {
+        videoCapturer?.switchCamera(null)
+    }
 
     fun release() {
         SyncManager.removeCallSignalListener(signalListener)

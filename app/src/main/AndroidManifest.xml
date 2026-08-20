@@ -105,6 +105,7 @@
 
         <activity
             android:name=".ui.call.LocalCallActivity"
+            android:resizeableActivity="true"
             android:exported="false"
             android:screenOrientation="portrait"
             android:supportsPictureInPicture="true"

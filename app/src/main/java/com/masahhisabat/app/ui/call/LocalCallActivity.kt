@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.util.Rational
 import android.view.View
 import android.widget.Button
+import android.graphics.Rect
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
@@ -174,10 +175,17 @@ class LocalCallActivity : Activity() {
             statusView?.text = "ابدأ المكالمة أولًا ثم صغّر نافذتها"
             return
         }
-        val params = PictureInPictureParams.Builder()
-            .setAspectRatio(Rational(9, 16))
-            .build()
-        enterPictureInPictureMode(params)
+        val compactRatio = if (mediaType == "video") Rational(16, 9) else Rational(4, 3)
+        val builder = PictureInPictureParams.Builder()
+            // PiP النظامي يسمح بسحب النافذة إلى أي زاوية وتغيير حجمها بإيماءة القرص.
+            .setAspectRatio(compactRatio)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setSeamlessResizeEnabled(true)
+            // يتيح للمستخدم توسيع نافذة المكالمة ثم تصغيرها بحرية دون فرض حجم واحد.
+            builder.setExpandedAspectRatio(compactRatio)
+        }
+        // لا نضع SourceRectHint مصطنعًا؛ فهو كان يقيد موضع البداية ويجعل النافذة تبدو ثابتة.
+        enterPictureInPictureMode(builder.build())
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
@@ -186,6 +194,10 @@ class LocalCallActivity : Activity() {
         statusView?.visibility = if (compact) View.GONE else View.VISIBLE
         minimizeButton?.visibility = if (compact) View.GONE else View.VISIBLE
         controlsLayout?.visibility = if (compact) View.GONE else View.VISIBLE
+        // في وضع PiP يتولى Android السحب وتغيير الحجم، وتبقى الوسائط والمحرك مستمرين.
+        if (!compact) {
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        }
     }
 
     private fun finishCall(status: String) {

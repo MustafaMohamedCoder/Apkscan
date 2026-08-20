@@ -326,6 +326,8 @@ class LocalCallActivity : Activity() {
             .setActions(buildPictureInPictureActions())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             builder.setSeamlessResizeEnabled(true)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             // يتيح للمستخدم توسيع نافذة المكالمة ثم تصغيرها بحرية دون فرض حجم واحد.
             builder.setExpandedAspectRatio(compactRatio)
         }

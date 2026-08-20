@@ -406,7 +406,15 @@ class DirectMessagesActivity : AppCompatActivity() {
                 box.addView(ImageView(itemView.context).apply {
                     layoutParams = LinearLayout.LayoutParams(-1, 220)
                     scaleType = ImageView.ScaleType.CENTER_CROP
-                    setImageURI(Uri.fromFile(File(path)))
+                    runCatching {
+                        setImageURI(androidx.core.content.FileProvider.getUriForFile(
+                            itemView.context,
+                            "${itemView.context.packageName}.fileprovider",
+                            File(path)
+                        ))
+                    }.onFailure {
+                        setImageResource(R.drawable.ic_image_attach)
+                    }
                     contentDescription = "صورة الرسالة"
                     isClickable = true
                     setOnClickListener {

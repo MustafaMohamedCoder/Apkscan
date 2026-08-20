@@ -54,6 +54,7 @@ class DocumentCameraActivity : AppCompatActivity() {
     private var cameraStartRequested = false
     private var cameraPermissionRequestInFlight = false
     private var returningFromAppSettings = false
+    @Volatile private var analysisActive = true
     private val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "document-preview-analyzer").apply { isDaemon = true }
     }
@@ -236,6 +237,7 @@ class DocumentCameraActivity : AppCompatActivity() {
      */
     private fun analyzeGuideBrightness(image: ImageProxy) {
         try {
+            if (!analysisActive || captureInProgress) return
             analyzedFrameCount++
             val now = SystemClock.elapsedRealtime()
             if (analyzedFrameCount % ANALYSIS_EVERY_N_FRAMES != 0 || now - lastAnalysisAt < MIN_ANALYSIS_INTERVAL_MS) {
@@ -301,6 +303,7 @@ class DocumentCameraActivity : AppCompatActivity() {
         val capture = imageCapture ?: return
         if (captureInProgress) return
         captureInProgress = true
+        analysisActive = false
         setCaptureState(true, "يجري حفظ المستند…")
         val file = File(cacheDir, "document_${System.currentTimeMillis()}.jpg")
         val options = ImageCapture.OutputFileOptions.Builder(file).build()
@@ -308,6 +311,7 @@ class DocumentCameraActivity : AppCompatActivity() {
             override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                 if (!file.exists() || file.length() <= 0L) {
                     captureInProgress = false
+                    analysisActive = true
                     setCaptureState(false, "تعذر حفظ الصورة، أعد المحاولة")
                     return
                 }
@@ -316,6 +320,7 @@ class DocumentCameraActivity : AppCompatActivity() {
 
             override fun onError(exception: ImageCaptureException) {
                 captureInProgress = false
+                analysisActive = true
                 setCaptureState(false, "تعذر التقاط المستند، أعد المحاولة")
             }
         })
@@ -362,13 +367,20 @@ class DocumentCameraActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        analysisActive = false
         imageAnalysis?.clearAnalyzer()
         analysisExecutor.shutdownNow()
         super.onDestroy()
     }
 
+    override fun onPause() {
+        analysisActive = false
+        super.onPause()
+    }
+
     override fun onResume() {
         super.onResume()
+        analysisActive = !captureInProgress
         val hasCameraPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         if (returningFromAppSettings) {
             returningFromAppSettings = false
@@ -381,9 +393,9 @@ class DocumentCameraActivity : AppCompatActivity() {
 
     private companion object {
         const val EXTRA_PDF_PAGE_COUNT = "pdf_page_count"
-        const val ANALYSIS_EVERY_N_FRAMES = 3
-        const val MIN_ANALYSIS_INTERVAL_MS = 125L
-        const val LUMA_SAMPLE_STEP = 16
+        const val ANALYSIS_EVERY_N_FRAMES = 4
+        const val MIN_ANALYSIS_INTERVAL_MS = 240L
+        const val LUMA_SAMPLE_STEP = 20
         const val LOW_LIGHT_LUMA_THRESHOLD = 62L
     }
 

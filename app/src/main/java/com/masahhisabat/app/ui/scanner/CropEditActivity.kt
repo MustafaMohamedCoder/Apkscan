@@ -12,6 +12,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import java.io.File
+import java.util.concurrent.Future
 import android.graphics.Paint
 import android.graphics.RectF
 import android.os.Bundle
@@ -69,6 +70,8 @@ class CropEditActivity : AppCompatActivity() {
     private var lastMode = ProcessMode.AUTO
     private var processing = false
     private var filterPreviewInProgress = false
+    private var filterPreviewToken = 0
+    private var filterPreviewJob: Future<*>? = null
     private var previewMode: ProcessMode? = null
     private var pendingGalleryBitmap: Bitmap? = null
     private var edgeDetectionInProgress = false
@@ -161,6 +164,9 @@ class CropEditActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         edgeDetectionToken++
+        filterPreviewToken++
+        filterPreviewJob?.cancel(true)
+        filterPreviewJob = null
         if (::cropView.isInitialized) cropView.clearBitmap()
         if (::originalBmp.isInitialized && !originalBmp.isRecycled) originalBmp.recycle()
         previewBmp?.takeIf { it !== originalBmp && !it.isRecycled }?.recycle()
@@ -243,15 +249,18 @@ class CropEditActivity : AppCompatActivity() {
     }
 
     private fun applyFilterPreview(mode: ProcessMode) {
-        if (filterPreviewInProgress || originalBmp.isRecycled) return
+        if (originalBmp.isRecycled) return
+        val requestToken = ++filterPreviewToken
+        filterPreviewJob?.cancel(true)
         filterPreviewInProgress = true
         setFilterUi(loading = true)
-        ImageProcessor.process(mode, originalBmp, object : ImageProcessor.Callback {
+        filterPreviewJob = ImageProcessor.process(mode, originalBmp, object : ImageProcessor.Callback {
             override fun onDone(bitmap: Bitmap) {
-                if (isFinishing || isDestroyed) {
+                if (isFinishing || isDestroyed || requestToken != filterPreviewToken) {
                     if (!bitmap.isRecycled) bitmap.recycle()
                     return
                 }
+                filterPreviewJob = null
                 filterPreviewInProgress = false
                 setFilterUi(loading = false)
                 previewBmp?.takeIf { it !== originalBmp && !it.isRecycled }?.recycle()
@@ -266,7 +275,8 @@ class CropEditActivity : AppCompatActivity() {
             }
 
             override fun onError() {
-                if (isFinishing || isDestroyed) return
+                if (isFinishing || isDestroyed || requestToken != filterPreviewToken) return
+                filterPreviewJob = null
                 filterPreviewInProgress = false
                 setFilterUi(loading = false)
                 Toast.makeText(this@CropEditActivity, "تعذر تطبيق الفلتر. يمكنك المتابعة بالصورة الأصلية.", Toast.LENGTH_LONG).show()

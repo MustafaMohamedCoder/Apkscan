@@ -2,6 +2,9 @@ package com.masahhisabat.app.image
 
 import android.graphics.Bitmap
 import android.graphics.PointF
+import android.os.SystemClock
+import android.util.Log
+import com.masahhisabat.app.BuildConfig
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
 import org.opencv.core.Core
@@ -22,6 +25,7 @@ import kotlin.math.min
  * المرشحات الرباعية من الحواف، ويقبل النتيجة فقط عند اجتياز فحص هندسي ودرجة ثقة.
  */
 object DocumentEdgeDetector {
+    private const val TAG = "MasahEdges"
     private const val MAX_PROCESS_DIMENSION = 960
     private const val MAX_STRAIGHTEN_DIMENSION = 2200
     private const val FALLBACK_INSET = 0.035f
@@ -123,11 +127,18 @@ object DocumentEdgeDetector {
      * قابلة للقص اليدوي في المحرر.
      */
     fun detectAndStraighten(source: Bitmap): CorrectionResult {
+        val startedAt = SystemClock.elapsedRealtime()
         val detection = detect(source)
         val corrected = if (detection.shouldAutoCorrect) {
             straighten(source, detection.corners)
         } else {
             null
+        }
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                TAG,
+                "detectAndStraighten source=${source.width}x${source.height} confidence=${detection.confidence} corrected=${corrected != null} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}"
+            )
         }
         return CorrectionResult(detection, corrected)
     }

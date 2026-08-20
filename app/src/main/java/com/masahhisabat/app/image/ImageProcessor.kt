@@ -6,7 +6,12 @@ import android.graphics.Matrix
 import android.graphics.PointF
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
+import com.masahhisabat.app.BuildConfig
 import java.io.File
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
 
 /** أوضاع المعالجة */
 enum class ProcessMode(val key: String, val label: String, val description: String) {
@@ -35,36 +40,39 @@ object ImageProcessor {
     /** إعداد متوازن لمرفقات المحادثات: حجم أقل مع وضوح كافٍ للمستندات والصور. */
     const val ATTACHMENT_MAX_DIM = 1280
     const val ATTACHMENT_JPEG_QUALITY = 78
+    private const val TAG = "MasahImage"
+    private const val LUMINANCE_SAMPLE_MAX_DIM = 320
+    private val mainHandler = Handler(Looper.getMainLooper())
+    /** منفذ واحد يمنع تشغيل أكثر من فلتر ثقيل فوق الذاكرة في الوقت نفسه. */
+    private val processingExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "masah-image-processor").apply { isDaemon = true }
+    }
 
     interface Callback {
         fun onDone(bitmap: Bitmap)
         fun onError()
     }
 
-    fun process(mode: ProcessMode, src: Bitmap, callback: Callback) {
-        Thread {
+    fun process(mode: ProcessMode, src: Bitmap, callback: Callback): Future<*> {
+        return processingExecutor.submit {
+            val startedAt = System.nanoTime()
             try {
-                val result = when (mode) {
-                    ProcessMode.ORIGINAL -> src.copy(Bitmap.Config.ARGB_8888, false)
-                    ProcessMode.AUTO -> enhanceAutomatically(src)
-                    ProcessMode.MAGIC_COLOR -> magicColor(src)
-                    ProcessMode.NATURAL -> naturalColor(src)
-                    ProcessMode.WARM_PAPER -> warmPaper(src)
-                    ProcessMode.SOFT_GRAY -> softGray(src)
-                    ProcessMode.BLUE_INK -> blueInk(src)
-                    ProcessMode.DARK_INK -> darkInk(src)
-                    ProcessMode.LOW_LIGHT -> correctLowLight(src)
-                    ProcessMode.DOCUMENT -> documentContrast(src)
-                    ProcessMode.HIGH_CONTRAST -> highContrast(src)
-                    ProcessMode.BW -> toBlackAndWhite(src)
-                    ProcessMode.CLEAN_BW -> toBlackAndWhite(src, thresholdOffset = -8f)
-                    ProcessMode.INK_BW -> toBlackAndWhite(src, thresholdOffset = -28f)
+                val result = processSync(mode, src)
+                if (Thread.currentThread().isInterrupted) {
+                    if (!result.isRecycled) result.recycle()
+                    return@submit
                 }
-                Handler(Looper.getMainLooper()).post { callback.onDone(result) }
-            } catch (e: Throwable) {
-                Handler(Looper.getMainLooper()).post { callback.onError() }
+                if (BuildConfig.DEBUG) {
+                    val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
+                    Log.d(TAG, "filter=${mode.key} source=${src.width}x${src.height} elapsedMs=$elapsedMs")
+                }
+                mainHandler.post { callback.onDone(result) }
+            } catch (_: Throwable) {
+                if (!Thread.currentThread().isInterrupted) {
+                    mainHandler.post { callback.onError() }
+                }
             }
-        }.start()
+        }
     }
 
     fun processSync(mode: ProcessMode, src: Bitmap): Bitmap = when (mode) {
@@ -109,12 +117,27 @@ object ImageProcessor {
      * محلي أقوى، أما المستندات الطبيعية فتستخدم تباينًا محافظًا يحافظ على ألوانها.
      */
     private fun enhanceAutomatically(src: Bitmap): Bitmap {
-        val pixels = IntArray(src.width * src.height)
-        src.getPixels(pixels, 0, src.width, 0, 0, src.width, src.height)
-        var sum = 0L
-        for (pixel in pixels) sum += luminance(pixel).toLong()
-        val mean = sum.toFloat() / pixels.size.coerceAtLeast(1)
+        val mean = estimateMeanLuminance(src)
         return if (mean < 132f) correctLowLight(src) else magicColor(src)
+    }
+
+    /** يقيس الإضاءة من نسخة صغيرة فقط؛ لا حاجة لنسخ كاميرا كاملة لتقرير اختيار الفلتر. */
+    private fun estimateMeanLuminance(src: Bitmap): Float {
+        val largest = maxOf(src.width, src.height).coerceAtLeast(1)
+        val scale = minOf(1f, LUMINANCE_SAMPLE_MAX_DIM.toFloat() / largest)
+        val sampleWidth = (src.width * scale).toInt().coerceAtLeast(1)
+        val sampleHeight = (src.height * scale).toInt().coerceAtLeast(1)
+        val sample = if (sampleWidth == src.width && sampleHeight == src.height) src
+        else Bitmap.createScaledBitmap(src, sampleWidth, sampleHeight, true)
+        return try {
+            val pixels = IntArray(sample.width * sample.height)
+            sample.getPixels(pixels, 0, sample.width, 0, 0, sample.width, sample.height)
+            var sum = 0L
+            for (pixel in pixels) sum += luminance(pixel).toLong()
+            sum.toFloat() / pixels.size.coerceAtLeast(1)
+        } finally {
+            if (sample !== src && !sample.isRecycled) sample.recycle()
+        }
     }
 
     /**
@@ -236,7 +259,10 @@ object ImageProcessor {
             }
         }
 
-        if (count < 24) return bmp
+        if (count < 24) {
+            if (!src.isRecycled) src.recycle()
+            return bmp
+        }
         val avgR = sumR.toFloat() / count
         val avgG = sumG.toFloat() / count
         val avgB = sumB.toFloat() / count
@@ -254,6 +280,7 @@ object ImageProcessor {
             pixels[i] = (0xFF000000.toInt()) or (r shl 16) or (g shl 8) or b
         }
         bmp.setPixels(pixels, 0, w, 0, 0, w, h)
+        if (!src.isRecycled) src.recycle()
         return bmp
     }
 
@@ -316,6 +343,7 @@ object ImageProcessor {
         }
 
         for (y in 0 until h) {
+            ensureNotInterrupted(bmp)
             val tileY = (y * rows / h).coerceAtMost(rows - 1)
             val rowOffset = y * w
             for (x in 0 until w) {
@@ -342,6 +370,13 @@ object ImageProcessor {
     private fun luminance(pixel: Int): Float =
         0.299f * ((pixel shr 16) and 255) + 0.587f * ((pixel shr 8) and 255) + 0.114f * (pixel and 255)
 
+    private fun ensureNotInterrupted(bitmap: Bitmap) {
+        if (Thread.currentThread().isInterrupted) {
+            if (!bitmap.isRecycled) bitmap.recycle()
+            throw InterruptedException("Image processing cancelled")
+        }
+    }
+
     /** تباين عالي */
     private fun highContrast(src: Bitmap): Bitmap {
         val bmp = src.copy(Bitmap.Config.ARGB_8888, true)
@@ -350,6 +385,7 @@ object ImageProcessor {
         val pixels = IntArray(w * h)
         bmp.getPixels(pixels, 0, w, 0, 0, w, h)
         for (i in pixels.indices) {
+            if ((i and 0x3FFF) == 0) ensureNotInterrupted(bmp)
             val px = pixels[i]
             var r = ((px shr 16) and 255).toFloat()
             var g = ((px shr 8) and 255).toFloat()
@@ -384,6 +420,7 @@ object ImageProcessor {
         val sums = LongArray(columns * rows)
         val counts = IntArray(columns * rows)
         for (y in 0 until h) {
+            ensureNotInterrupted(bmp)
             val tileY = (y * rows / h).coerceAtMost(rows - 1)
             val rowOffset = y * w
             for (x in 0 until w) {
@@ -394,6 +431,7 @@ object ImageProcessor {
             }
         }
         for (y in 0 until h) {
+            ensureNotInterrupted(bmp)
             val tileY = (y * rows / h).coerceAtMost(rows - 1)
             val rowOffset = y * w
             for (x in 0 until w) {

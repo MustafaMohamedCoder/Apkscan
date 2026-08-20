@@ -94,13 +94,14 @@ class InvoiceActivity : AppCompatActivity() {
             return
         }
 
-        val bmp = ImageProcessor.loadBitmap(imagePath, 1024)
+        // نسخة واحدة متوازنة للمعاينة والمعالجة وOCR تمنع وجود صورتين كبيرتين في الذاكرة.
+        val bmp = ImageProcessor.loadBitmap(imagePath, 1800)
         imgPreview.setImageBitmap(bmp)
 
         val lastMode = try { ProcessMode.valueOf(AppRepository.lastProcessMode()) } catch (e: Exception) { ProcessMode.AUTO }
         ImageProcessor.process(lastMode, bmp, object : ImageProcessor.Callback {
-            override fun onDone(processed: android.graphics.Bitmap) {
-                imgPreview.setImageBitmap(processed)
+            override fun onDone(bitmap: android.graphics.Bitmap) {
+                imgPreview.setImageBitmap(bitmap)
             }
             override fun onError() {}
         })
@@ -134,9 +135,8 @@ class InvoiceActivity : AppCompatActivity() {
 
         // الاستخراج الذكي
         loadingPanel.visibility = View.VISIBLE
-        val imageBmp = ImageProcessor.loadBitmap(imagePath, 2048)
         Thread {
-            val result = InvoiceExtractor.extract(this, imageBmp)
+            val result = InvoiceExtractor.extract(this, bmp)
             runOnUiThread {
                 loadingPanel.visibility = View.GONE
                 if (result.rawText.isBlank()) {

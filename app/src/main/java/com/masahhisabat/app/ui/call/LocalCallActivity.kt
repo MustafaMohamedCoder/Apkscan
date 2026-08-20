@@ -35,6 +35,7 @@ class LocalCallActivity : Activity() {
     private var currentUser = ""
     private var statusView: TextView? = null
     private var muteIndicator: TextView? = null
+    private var cameraIndicator: TextView? = null
     private var engine: LocalWebRtcEngine? = null
     private var localRenderer: SurfaceViewRenderer? = null
     private var remoteRenderer: SurfaceViewRenderer? = null
@@ -83,11 +84,18 @@ class LocalCallActivity : Activity() {
             contentDescription = "تنبيه: الميكروفون مكتوم"
             visibility = View.GONE
         }
+        cameraIndicator = TextView(this).apply {
+            text = "الكاميرا متوقفة"
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.rgb(217, 119, 6))
+            setPadding(22, 12, 22, 12)
+            contentDescription = "تنبيه: الكاميرا متوقفة"
+            visibility = View.GONE
+        }
         if (mediaType == "video") {
             remoteRenderer = SurfaceViewRenderer(this).apply { setBackgroundColor(Color.BLACK) }
             localRenderer = SurfaceViewRenderer(this).apply { setBackgroundColor(Color.DKGRAY) }
-            root.addView(remoteRenderer, LinearLayout.LayoutParams(-1, 520))
-            root.addView(localRenderer, LinearLayout.LayoutParams(-1, 220))
         }
         val accept = Button(this).apply {
             text = if (intent.hasExtra(EXTRA_INCOMING_SDP)) "قبول المكالمة" else "بدء المكالمة"
@@ -127,6 +135,11 @@ class LocalCallActivity : Activity() {
         root.addView(peer)
         root.addView(statusView)
         root.addView(muteIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
+        root.addView(cameraIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
+        if (mediaType == "video") {
+            root.addView(remoteRenderer, LinearLayout.LayoutParams(-1, 520))
+            root.addView(localRenderer, LinearLayout.LayoutParams(-1, 220))
+        }
         root.addView(accept)
         root.addView(controlsLayout)
         root.addView(minimizeButton)
@@ -176,6 +189,7 @@ class LocalCallActivity : Activity() {
         cameraButton?.text = if (cameraEnabled) "إيقاف الفيديو" else "تشغيل الفيديو"
         localRenderer?.visibility = if (cameraEnabled) View.VISIBLE else View.INVISIBLE
         statusView?.text = if (cameraEnabled) "الفيديو يعمل" else "الفيديو متوقف"
+        updateCameraIndicator()
         updatePictureInPictureActions()
     }
 
@@ -225,7 +239,7 @@ class LocalCallActivity : Activity() {
             createPipActionIntent(ACTION_PIP_TOGGLE_MIC, 301)
         )
         val videoAction = RemoteAction(
-            Icon.createWithResource(this, R.drawable.ic_video_call),
+            Icon.createWithResource(this, if (cameraEnabled) R.drawable.ic_video_call else R.drawable.ic_video_off),
             videoTitle,
             videoTitle,
             createPipActionIntent(ACTION_PIP_TOGGLE_VIDEO, 302)
@@ -256,6 +270,11 @@ class LocalCallActivity : Activity() {
         muteIndicator?.visibility = if (isInPictureInPictureMode && !microphoneEnabled) View.VISIBLE else View.GONE
     }
 
+    /** شارة كهرمانية داخل محتوى PiP توضح أن بث الكاميرا المحلي متوقف. */
+    private fun updateCameraIndicator() {
+        cameraIndicator?.visibility = if (isInPictureInPictureMode && mediaType == "video" && !cameraEnabled) View.VISIBLE else View.GONE
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         when (intent.action) {
@@ -271,6 +290,7 @@ class LocalCallActivity : Activity() {
         minimizeButton?.visibility = if (compact) View.GONE else View.VISIBLE
         controlsLayout?.visibility = if (compact) View.GONE else View.VISIBLE
         updateMuteIndicator()
+        updateCameraIndicator()
         // في وضع PiP يتولى Android السحب وتغيير الحجم، وتبقى الوسائط والمحرك مستمرين.
         if (!compact) {
             window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE

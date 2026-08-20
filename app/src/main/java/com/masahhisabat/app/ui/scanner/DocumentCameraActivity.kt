@@ -2,6 +2,7 @@ package com.masahhisabat.app.ui.scanner
 
 import android.Manifest
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.content.pm.PackageManager
 import android.graphics.Canvas
 import android.graphics.Color
@@ -46,6 +47,8 @@ class DocumentCameraActivity : AppCompatActivity() {
     private lateinit var progress: View
     private lateinit var flashButton: TextView
     private lateinit var pdfSessionLabel: TextView
+    private lateinit var statusDot: View
+    private lateinit var documentFrameOverlay: DocumentFrameOverlay
     private var imageCapture: ImageCapture? = null
     private var imageAnalysis: ImageAnalysis? = null
     private var camera: Camera? = null
@@ -61,6 +64,8 @@ class DocumentCameraActivity : AppCompatActivity() {
     private var analyzedFrameCount = 0
     private var lastAnalysisAt = 0L
     private var lastLightState = -1
+    private var brightLightSamples = 0
+    private var guideReady = false
 
     private val galleryLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) copyGalleryImageAndEdit(uri)
@@ -83,6 +88,8 @@ class DocumentCameraActivity : AppCompatActivity() {
         progress = findViewById(R.id.capture_progress)
         flashButton = findViewById(R.id.btn_flash)
         pdfSessionLabel = findViewById(R.id.pdf_session_label)
+        statusDot = findViewById(R.id.camera_status_dot)
+        documentFrameOverlay = findViewById(R.id.document_frame_overlay)
         val sessionPageCount = intent.getIntExtra(EXTRA_PDF_PAGE_COUNT, 0)
         if (sessionPageCount > 0) {
             pdfSessionLabel.visibility = View.VISIBLE
@@ -222,6 +229,7 @@ class DocumentCameraActivity : AppCompatActivity() {
                 val available = camera?.cameraInfo?.hasFlashUnit() == true
                 flashButton.isEnabled = available
                 flashButton.alpha = if (available) 1f else 0.45f
+                updateGuideState(ready = false, lowLight = false, message = "ثبّت المستند داخل الإطار")
                 setCaptureState(false, "وجّه المستند داخل الإطار ثم التقط الصورة")
             } catch (_: Exception) {
                 cameraStartRequested = false
@@ -274,16 +282,23 @@ class DocumentCameraActivity : AppCompatActivity() {
 
             if (count == 0) return
             val lightState = if ((total / count) < LOW_LIGHT_LUMA_THRESHOLD) 1 else 0
-            if (lightState == lastLightState) return
+            val lowLight = lightState == 1
+            brightLightSamples = if (lowLight) 0 else brightLightSamples + 1
+            val readyNow = !lowLight && brightLightSamples >= MIN_READY_LIGHT_SAMPLES
+            if (lightState == lastLightState && readyNow == guideReady) return
             lastLightState = lightState
 
             runOnUiThread {
                 if (!isFinishing && !isDestroyed && !captureInProgress) {
-                    statusText.text = if (lightState == 1) {
-                        "إضاءة منخفضة — فعّل الفلاش أو قرّب المستند"
-                    } else {
-                        "وجّه المستند داخل الإطار ثم التقط الصورة"
-                    }
+                    updateGuideState(
+                        ready = readyNow,
+                        lowLight = lowLight,
+                        message = when {
+                            lowLight -> "إضاءة منخفضة — فعّل الفلاش أو قرّب المستند"
+                            readyNow -> "إضاءة ثابتة — المستند جاهز للالتقاط"
+                            else -> "إضاءة مناسبة — ثبّت المستند داخل الإطار"
+                        }
+                    )
                 }
             }
         } finally {
@@ -304,6 +319,7 @@ class DocumentCameraActivity : AppCompatActivity() {
         if (captureInProgress) return
         captureInProgress = true
         analysisActive = false
+        updateGuideState(ready = false, lowLight = false, message = "يجري حفظ المستند…")
         setCaptureState(true, "يجري حفظ المستند…")
         val file = File(cacheDir, "document_${System.currentTimeMillis()}.jpg")
         val options = ImageCapture.OutputFileOptions.Builder(file).build()
@@ -354,8 +370,22 @@ class DocumentCameraActivity : AppCompatActivity() {
         startActivity(Intent(this, CropEditActivity::class.java).apply {
             putExtra(CropEditActivity.EXTRA_IMAGE_PATH, path)
             putExtra(CropEditActivity.EXTRA_ACTION, CropEditActivity.ACTION_NEW_INVOICE)
+            putExtra(CropEditActivity.EXTRA_PDF_PAGE_COUNT, PdfSessionManager.pageCount(this@DocumentCameraActivity))
         })
         finish()
+    }
+
+    /** يربط لون الإطار ونقطة الحالة بجاهزية الإضاءة؛ لا يدّعي اكتشاف الورقة قبل الالتقاط. */
+    private fun updateGuideState(ready: Boolean, lowLight: Boolean, message: String) {
+        guideReady = ready
+        val color = when {
+            ready -> Color.parseColor("#2DD4BF")
+            lowLight -> Color.parseColor("#FBBF24")
+            else -> Color.parseColor("#94A3B8")
+        }
+        statusDot.backgroundTintList = ColorStateList.valueOf(color)
+        documentFrameOverlay.setGuideReady(ready)
+        statusText.text = message
     }
 
     private fun setCaptureState(capturing: Boolean, message: String) {
@@ -397,6 +427,7 @@ class DocumentCameraActivity : AppCompatActivity() {
         const val MIN_ANALYSIS_INTERVAL_MS = 240L
         const val LUMA_SAMPLE_STEP = 20
         const val LOW_LIGHT_LUMA_THRESHOLD = 62L
+        const val MIN_READY_LIGHT_SAMPLES = 2
     }
 
     /** طبقة رسم خفيفة توضح مساحة المستند وتُبقي مناطق الكاميرا المحيطة منخفضة التباين. */
@@ -407,7 +438,7 @@ class DocumentCameraActivity : AppCompatActivity() {
     ) : View(context, attrs, defStyleAttr) {
         private val shadePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(118, 0, 0, 0) }
         private val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#2DD4BF")
+            color = Color.parseColor("#94A3B8")
             style = Paint.Style.STROKE
             strokeWidth = context.resources.displayMetrics.density * 2.2f
         }
@@ -418,6 +449,14 @@ class DocumentCameraActivity : AppCompatActivity() {
             strokeCap = Paint.Cap.ROUND
         }
         private val frame = RectF()
+        private var guideReady = false
+
+        fun setGuideReady(ready: Boolean) {
+            if (guideReady == ready) return
+            guideReady = ready
+            framePaint.color = Color.parseColor(if (ready) "#2DD4BF" else "#94A3B8")
+            invalidate()
+        }
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)

@@ -15,6 +15,7 @@
 
     <view
         class="com.masahhisabat.app.ui.scanner.DocumentCameraActivity$DocumentFrameOverlay"
+        android:id="@+id/document_frame_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
@@ -105,6 +106,7 @@
         android:paddingBottom="9dp">
 
         <View
+            android:id="@+id/camera_status_dot"
             android:layout_width="7dp"
             android:layout_height="7dp"
             android:background="@drawable/camera_status_dot" />

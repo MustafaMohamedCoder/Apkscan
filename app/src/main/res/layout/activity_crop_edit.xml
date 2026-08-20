@@ -50,6 +50,16 @@
                 android:text="اقتراح حواف المستند"
                 android:textColor="#8EDFD4"
                 android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/processing_stage_label"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:fontFamily="@font/tajawal_bold"
+                android:text="1 من 3 · تحليل الحواف"
+                android:textColor="#5EEAD4"
+                android:textSize="10sp" />
         </LinearLayout>
     </LinearLayout>
 

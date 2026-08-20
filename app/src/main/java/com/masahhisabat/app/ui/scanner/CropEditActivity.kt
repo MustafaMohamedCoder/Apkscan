@@ -15,6 +15,7 @@ import java.io.File
 import java.util.concurrent.Future
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Environment
 import android.os.VibrationEffect
@@ -23,6 +24,7 @@ import android.provider.MediaStore
 import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -56,6 +58,7 @@ class CropEditActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_IMAGE_PATH = "image_path"
         const val EXTRA_ACTION = "action"
+        const val EXTRA_PDF_PAGE_COUNT = "pdf_page_count"
         const val ACTION_NEW_INVOICE = "new_invoice"
         const val ACTION_ADD_TO_INVOICE = "add_to_invoice"
         private const val REQUEST_SAVE_GALLERY = 319
@@ -67,10 +70,12 @@ class CropEditActivity : AppCompatActivity() {
     private var previewBmp: android.graphics.Bitmap? = null
     private var imagePath: String = ""
     private var action: String = ACTION_NEW_INVOICE
+    private var incomingPdfPageCount = 0
     private var lastMode = ProcessMode.AUTO
     private var processing = false
     private var filterPreviewInProgress = false
     private var filterPreviewToken = 0
+    private var filterGalleryToken = 0
     private var filterPreviewJob: Future<*>? = null
     private var previewMode: ProcessMode? = null
     private var pendingGalleryBitmap: Bitmap? = null
@@ -80,6 +85,7 @@ class CropEditActivity : AppCompatActivity() {
     private lateinit var loadingLabel: TextView
     private lateinit var editorStatus: TextView
     private lateinit var filterModeLabel: TextView
+    private lateinit var processingStageLabel: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppRepository.initAppContext(this)
@@ -89,6 +95,7 @@ class CropEditActivity : AppCompatActivity() {
 
         imagePath = intent.getStringExtra(EXTRA_IMAGE_PATH) ?: ""
         action = intent.getStringExtra(EXTRA_ACTION) ?: ACTION_NEW_INVOICE
+        incomingPdfPageCount = intent.getIntExtra(EXTRA_PDF_PAGE_COUNT, 0).coerceAtLeast(0)
         lastMode = try { ProcessMode.valueOf(AppRepository.lastProcessMode()) } catch (e: Exception) { ProcessMode.AUTO }
 
         if (imagePath.isBlank()) {
@@ -111,7 +118,9 @@ class CropEditActivity : AppCompatActivity() {
         loadingLabel = findViewById(R.id.loading_message)
         editorStatus = findViewById(R.id.editor_status)
         filterModeLabel = findViewById(R.id.filter_mode_label)
+        processingStageLabel = findViewById(R.id.processing_stage_label)
         updateFilterModeLabel()
+        updateProcessingStage(1, "تحليل الحواف")
 
         findViewById<MaterialButton>(R.id.btn_rotate).setOnClickListener {
             val croppedForRotation = cropView.getCroppedBitmap()
@@ -165,6 +174,7 @@ class CropEditActivity : AppCompatActivity() {
     override fun onDestroy() {
         edgeDetectionToken++
         filterPreviewToken++
+        filterGalleryToken++
         filterPreviewJob?.cancel(true)
         filterPreviewJob = null
         if (::cropView.isInitialized) cropView.clearBitmap()
@@ -188,6 +198,7 @@ class CropEditActivity : AppCompatActivity() {
         loadingLabel.setText(R.string.loading)
         loadingPanel.visibility = View.VISIBLE
 
+        updateProcessingStage(2, "تحسين المستند")
         editorStatus.text = "يجري تجهيز المستند للحفظ"
         // نقتطع من الصورة الأصلية حتى لا يتكرر الفلتر عند تطبيقه للحفظ النهائي.
         val cropped = cropView.getCroppedBitmap(originalBmp)
@@ -215,44 +226,124 @@ class CropEditActivity : AppCompatActivity() {
         })
     }
 
-    /** يتيح تبديل الفلاتر مع معاينة حقيقية للصورة قبل الحفظ. */
+    /** يتيح تبديل الفلاتر من معرض معاينات حقيقية وخفيف قبل تطبيقه بالحجم الكامل. */
     private fun showFilterPicker() {
         if (edgeDetectionInProgress || processing || filterPreviewInProgress) return
         val modes = arrayOf(
             ProcessMode.ORIGINAL,
             ProcessMode.AUTO,
             ProcessMode.MAGIC_COLOR,
-            ProcessMode.NATURAL,
-            ProcessMode.WARM_PAPER,
-            ProcessMode.SOFT_GRAY,
-            ProcessMode.BLUE_INK,
-            ProcessMode.DARK_INK,
-            ProcessMode.LOW_LIGHT,
-            ProcessMode.DOCUMENT,
             ProcessMode.HIGH_CONTRAST,
-            ProcessMode.BW,
             ProcessMode.CLEAN_BW,
-            ProcessMode.INK_BW
+            ProcessMode.LOW_LIGHT
         )
-        val checked = modes.indexOf(lastMode).coerceAtLeast(0)
-        MaterialAlertDialogBuilder(this)
+        val galleryToken = ++filterGalleryToken
+        val rendered = mutableListOf<Bitmap>()
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(4), 0, dp(4), 0)
+        }
+        content.addView(TextView(this).apply {
+            text = "معاينات مصغّرة من مستندك. اختر النتيجة الأقرب ثم راجعها بالحجم الكامل قبل الحفظ."
+            setTextColor(Color.parseColor("#64748B"))
+            textSize = 13f
+        })
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(14), 0, dp(4))
+        }
+        val scroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(row)
+        }
+        content.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(180)))
+
+        val tiles = modes.associateWith { mode -> createFilterPreviewTile(mode) }
+        tiles.values.forEach(row::addView)
+        val dialog = MaterialAlertDialogBuilder(this)
             .setTitle(R.string.choose_document_filter)
-            .setSingleChoiceItems(
-                modes.map { "${it.label}\n${it.description}" }.toTypedArray(),
-                checked
-            ) { dialog, which ->
-                dialog.dismiss()
-                applyFilterPreview(modes[which])
-            }
+            .setView(content)
             .setNegativeButton(R.string.cancel, null)
-            .show()
+            .create()
+        tiles.forEach { (mode, tile) ->
+            tile.setOnClickListener {
+                dialog.dismiss()
+                applyFilterPreview(mode)
+            }
+        }
+        dialog.setOnDismissListener {
+            filterGalleryToken++
+            rendered.forEach { bitmap -> if (!bitmap.isRecycled) bitmap.recycle() }
+        }
+        dialog.show()
+
+        Thread {
+            val previewSample = createFilterPreviewSample()
+            try {
+                for (mode in modes) {
+                    if (galleryToken != filterGalleryToken || Thread.currentThread().isInterrupted) break
+                    val result = runCatching { ImageProcessor.processSync(mode, previewSample) }.getOrNull() ?: continue
+                    runOnUiThread {
+                        if (galleryToken != filterGalleryToken || isFinishing || isDestroyed || !dialog.isShowing) {
+                            if (!result.isRecycled) result.recycle()
+                        } else {
+                            rendered += result
+                            (tiles[mode]?.getChildAt(0) as? ImageView)?.setImageBitmap(result)
+                            (tiles[mode]?.getChildAt(1) as? TextView)?.text = mode.label
+                        }
+                    }
+                }
+            } finally {
+                if (!previewSample.isRecycled) previewSample.recycle()
+            }
+        }.apply { name = "filter-preview-gallery"; start() }
     }
+
+    private fun createFilterPreviewTile(mode: ProcessMode): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = android.view.Gravity.CENTER
+        val card = GradientDrawable().apply {
+            cornerRadius = dp(14).toFloat()
+            setColor(Color.parseColor("#F8FAFC"))
+            setStroke(dp(1), if (mode == lastMode) Color.parseColor("#2DD4BF") else Color.parseColor("#D7E1E8"))
+        }
+        background = card
+        val margin = dp(5)
+        layoutParams = LinearLayout.LayoutParams(dp(108), LinearLayout.LayoutParams.MATCH_PARENT).apply {
+            setMargins(margin, 0, margin, 0)
+        }
+        addView(ImageView(this@CropEditActivity).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setBackgroundColor(Color.parseColor("#E7EEF2"))
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(128)))
+        addView(TextView(this@CropEditActivity).apply {
+            text = "يجري التحضير…"
+            gravity = android.view.Gravity.CENTER
+            maxLines = 1
+            setTextColor(Color.parseColor("#0F172A"))
+            textSize = 11f
+            setPadding(dp(4), dp(8), dp(4), dp(8))
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        contentDescription = "فلتر ${mode.label}"
+    }
+
+    private fun createFilterPreviewSample(): Bitmap {
+        val largest = maxOf(originalBmp.width, originalBmp.height).coerceAtLeast(1)
+        val scale = minOf(1f, 300f / largest)
+        val width = (originalBmp.width * scale).toInt().coerceAtLeast(1)
+        val height = (originalBmp.height * scale).toInt().coerceAtLeast(1)
+        val scaled = Bitmap.createScaledBitmap(originalBmp, width, height, true)
+        return if (scaled === originalBmp) originalBmp.copy(Bitmap.Config.ARGB_8888, false) else scaled
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun applyFilterPreview(mode: ProcessMode) {
         if (originalBmp.isRecycled) return
         val requestToken = ++filterPreviewToken
         filterPreviewJob?.cancel(true)
         filterPreviewInProgress = true
+        updateProcessingStage(2, "معاينة ${mode.label}")
         setFilterUi(loading = true)
         filterPreviewJob = ImageProcessor.process(mode, originalBmp, object : ImageProcessor.Callback {
             override fun onDone(bitmap: Bitmap) {
@@ -270,6 +361,7 @@ class CropEditActivity : AppCompatActivity() {
                 lastMode = mode
                 previewMode = mode
                 updateFilterModeLabel()
+                updateProcessingStage(2, "اختر التحسين المناسب")
                 editorStatus.text = "معاينة ${mode.label} — عدّل الإطار أو تابع"
                 Toast.makeText(this@CropEditActivity, getString(R.string.filter_preview_ready, mode.label), Toast.LENGTH_SHORT).show()
             }
@@ -279,6 +371,7 @@ class CropEditActivity : AppCompatActivity() {
                 filterPreviewJob = null
                 filterPreviewInProgress = false
                 setFilterUi(loading = false)
+                updateProcessingStage(2, "اختر التحسين المناسب")
                 Toast.makeText(this@CropEditActivity, "تعذر تطبيق الفلتر. يمكنك المتابعة بالصورة الأصلية.", Toast.LENGTH_LONG).show()
             }
         })
@@ -313,7 +406,19 @@ class CropEditActivity : AppCompatActivity() {
                 ProcessMode.INK_BW -> "حبر شديد الوضوح — مناسب للخطوط والكتابة اليدوية"
                 else -> "${lastMode.label} — ${lastMode.description}"
             }
+            findViewById<MaterialButton>(R.id.btn_filter).text = if (lastMode == ProcessMode.AUTO) {
+                "فلتر"
+            } else {
+                "فلتر: ${lastMode.label}"
+            }
         }
+    }
+
+    /** يبقي مراحل الماسح مرئية في الرأس حتى يفهم المستخدم موضعه قبل الحفظ أو إضافة صفحة جديدة. */
+    private fun updateProcessingStage(step: Int, title: String) {
+        if (!::processingStageLabel.isInitialized) return
+        val session = if (incomingPdfPageCount > 0) " · جلسة PDF: $incomingPdfPageCount صفحات" else ""
+        processingStageLabel.text = "$step من 3 · $title$session"
     }
 
     /** يشغّل الكشف خارج خيط الواجهة ويطبق الإطار فقط إذا بقيت الصورة نفسها نشطة. */
@@ -322,6 +427,7 @@ class CropEditActivity : AppCompatActivity() {
         val bitmap = originalBmp
         val token = ++edgeDetectionToken
         edgeDetectionInProgress = true
+        updateProcessingStage(1, "تحليل الحواف")
         if (::editorStatus.isInitialized) editorStatus.text = "يجري اكتشاف حواف المستند…"
         setEdgeDetectionUi(detecting = true)
 
@@ -340,6 +446,7 @@ class CropEditActivity : AppCompatActivity() {
                 }
                 edgeDetectionInProgress = false
                 setEdgeDetectionUi(detecting = false)
+                updateProcessingStage(2, "اختر التحسين المناسب")
 
                 if (straightened != null) {
                     val oldOriginal = originalBmp
@@ -406,17 +513,22 @@ class CropEditActivity : AppCompatActivity() {
         Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
 
         val existingPages = PdfSessionManager.pageCount(this)
+        updateProcessingStage(3, "المستند جاهز للحفظ")
         val options = mutableListOf(
             getString(R.string.save_gallery),
             getString(R.string.add_to_group),
             getString(R.string.share),
             "استخراج النص محلياً",
             "تصدير كملف PDF${if (existingPages > 0) " ($existingPages صفحات محفوظة)" else ""}",
-            "إضافة صفحة إلى جلسة PDF متعددة الصفحات"
+            "إضافة هذه الصفحة ثم التقاط صفحة أخرى"
         )
         if (existingPages > 0) options += "إلغاء جلسة PDF الحالية"
         MaterialAlertDialogBuilder(ctx)
-            .setTitle(R.string.save_options)
+            .setTitle("المستند جاهز · ${getString(R.string.save_options)}")
+            .setMessage(
+                if (existingPages > 0) "لديك $existingPages صفحات محفوظة في جلسة PDF. أضف هذه الصفحة أو صدّر الملف عند اكتمال المستند."
+                else "احفظ هذه الصفحة، أو أضفها إلى جلسة PDF ثم التقط صفحة أخرى."
+            )
             .setItems(options.toTypedArray()) { _, which ->
                 when (which) {
                     0 -> requestSaveToGallery(bitmap)

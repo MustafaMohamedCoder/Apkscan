@@ -51,6 +51,7 @@ class DocumentCameraActivity : AppCompatActivity() {
     private var torchEnabled = false
     private var captureInProgress = false
     private var cameraStartRequested = false
+    private var cameraPermissionRequestInFlight = false
     private val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "document-preview-analyzer").apply { isDaemon = true }
     }
@@ -63,6 +64,7 @@ class DocumentCameraActivity : AppCompatActivity() {
     }
 
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        setCameraPermissionWaiting(false)
         if (granted) startCamera()
         else showCameraPermissionFallback()
     }
@@ -94,13 +96,36 @@ class DocumentCameraActivity : AppCompatActivity() {
 
     /** يشرح سبب الإذن قبل كل طلب، ولا يحرم المستخدم من خيار المعرض. */
     private fun requestCameraPermission() {
+        if (cameraPermissionRequestInFlight || isFinishing || isDestroyed) return
         AlertDialog.Builder(this)
             .setTitle("قبل فتح الكاميرا")
             .setMessage("يحتاج الماسح إذن الكاميرا لالتقاط المستندات واكتشاف حوافها على جهازك. يمكنك بدلاً من ذلك اختيار صورة محفوظة من المعرض.")
-            .setNegativeButton("اختيار صورة") { _, _ -> showGalleryOnlyState() }
-            .setPositiveButton("متابعة") { _, _ -> permissionLauncher.launch(Manifest.permission.CAMERA) }
-            .setOnCancelListener { showGalleryOnlyState() }
+            .setNegativeButton("اختيار صورة") { _, _ ->
+                setCameraPermissionWaiting(false)
+                showGalleryOnlyState()
+            }
+            .setPositiveButton("متابعة") { _, _ ->
+                setCameraPermissionWaiting(true)
+                permissionLauncher.launch(Manifest.permission.CAMERA)
+            }
+            .setOnCancelListener {
+                setCameraPermissionWaiting(false)
+                showGalleryOnlyState()
+            }
             .show()
+    }
+
+    /** يستخدم طبقة التحميل الموجودة لإيضاح أن النظام ينتظر قرار المستخدم بشأن الكاميرا. */
+    private fun setCameraPermissionWaiting(waiting: Boolean) {
+        cameraPermissionRequestInFlight = waiting
+        progress.visibility = if (waiting) View.VISIBLE else View.GONE
+        if (waiting) {
+            captureButton.isEnabled = false
+            captureButton.alpha = 0.45f
+            flashButton.isEnabled = false
+            flashButton.alpha = 0.45f
+            statusText.text = "بانتظار قرارك بشأن إذن الكاميرا…"
+        }
     }
 
     /** يعرض مساراً آمناً عند الرفض، بما في ذلك الرفض الدائم من إعدادات أندرويد. */
@@ -171,7 +196,7 @@ class DocumentCameraActivity : AppCompatActivity() {
                 val available = camera?.cameraInfo?.hasFlashUnit() == true
                 flashButton.isEnabled = available
                 flashButton.alpha = if (available) 1f else 0.45f
-                statusText.text = "وجّه المستند داخل الإطار ثم التقط الصورة"
+                setCaptureState(false, "وجّه المستند داخل الإطار ثم التقط الصورة")
             } catch (_: Exception) {
                 cameraStartRequested = false
                 showGalleryOnlyState()

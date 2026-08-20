@@ -17,11 +17,13 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Rational
+import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
@@ -65,6 +67,9 @@ class LocalCallActivity : Activity() {
     private var ending = false
     private var answerFeedbackDelivered = false
     private var mediaPermissionDialogVisible = false
+    private var mediaPermissionRequestInFlight = false
+    private var permissionWaitPanel: LinearLayout? = null
+    private var permissionWaitText: TextView? = null
     private val callTimer = object : Runnable {
         override fun run() {
             updateDuration()
@@ -99,6 +104,24 @@ class LocalCallActivity : Activity() {
         statusView = TextView(this).apply {
             text = if (intent.hasExtra(EXTRA_INCOMING_SDP)) "مكالمة واردة من $peerUser — اضغط قبول للرد" else "جاهز للاتصال داخل الشبكة"
             textSize = 16f
+        }
+        permissionWaitPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(20, 18, 20, 18)
+            setBackgroundColor(Color.rgb(8, 95, 100))
+            contentDescription = "مؤشر انتظار قرار إذن الوسائط"
+            visibility = View.GONE
+            addView(ProgressBar(this@LocalCallActivity).apply {
+                isIndeterminate = true
+                contentDescription = "جارٍ الانتظار"
+            }, LinearLayout.LayoutParams(48, 48))
+            permissionWaitText = TextView(this@LocalCallActivity).apply {
+                textSize = 15f
+                setTextColor(Color.WHITE)
+                setPadding(16, 0, 0, 0)
+            }
+            addView(permissionWaitText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         }
         muteIndicator = TextView(this).apply {
             text = "الميكروفون مكتوم"
@@ -175,6 +198,7 @@ class LocalCallActivity : Activity() {
         root.addView(title)
         root.addView(peer)
         root.addView(statusView)
+        root.addView(permissionWaitPanel, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(muteIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(cameraIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(networkIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -520,7 +544,7 @@ class LocalCallActivity : Activity() {
         val needed = requiredMediaPermissions().filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (needed.isEmpty() || mediaPermissionDialogVisible || isFinishing) return
+        if (needed.isEmpty() || mediaPermissionDialogVisible || mediaPermissionRequestInFlight || isFinishing) return
 
         val needsCamera = needed.contains(Manifest.permission.CAMERA)
         val permissionSummary = if (needsCamera) "الميكروفون والكاميرا" else "الميكروفون"
@@ -536,24 +560,41 @@ class LocalCallActivity : Activity() {
             .setMessage("تحتاج هذه المكالمة إذن $permissionSummary. $purpose لن يبدأ الاتصال قبل موافقتك.")
             .setNegativeButton("ليس الآن") { _, _ ->
                 mediaPermissionDialogVisible = false
-                acceptButton?.isEnabled = false
+                setMediaPermissionWaiting(false)
+                acceptButton?.isEnabled = true
                 statusView?.text = "لم يتم طلب إذن $permissionSummary — يمكنك منحه لاحقًا عند المتابعة"
             }
             .setPositiveButton("متابعة") { _, _ ->
                 mediaPermissionDialogVisible = false
+                setMediaPermissionWaiting(true, permissionSummary)
                 ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQUEST_MEDIA)
             }
             .setOnCancelListener {
                 mediaPermissionDialogVisible = false
-                acceptButton?.isEnabled = false
+                setMediaPermissionWaiting(false)
+                acceptButton?.isEnabled = true
                 statusView?.text = "تم إلغاء طلب الإذن — لن تبدأ المكالمة قبل منح الإذن المطلوب"
             }
             .show()
     }
 
+    /** يعرض حالة صريحة بعد فتح نافذة أندرويد حتى يعرف المستخدم أن التطبيق ينتظر قراره. */
+    private fun setMediaPermissionWaiting(waiting: Boolean, permissionSummary: String = "الأذونات المطلوبة") {
+        mediaPermissionRequestInFlight = waiting
+        permissionWaitPanel?.visibility = if (waiting) View.VISIBLE else View.GONE
+        if (waiting) {
+            val message = "بانتظار قرارك بشأن إذن $permissionSummary…"
+            permissionWaitText?.text = message
+            permissionWaitPanel?.contentDescription = message
+            acceptButton?.isEnabled = false
+            statusView?.text = "تم إرسال طلب الإذن — اختر السماح أو الرفض من نافذة النظام"
+        }
+    }
+
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != REQUEST_MEDIA) return
+        setMediaPermissionWaiting(false)
         val granted = hasRequiredMediaPermissions()
         acceptButton?.isEnabled = granted
         statusView?.text = if (granted) {

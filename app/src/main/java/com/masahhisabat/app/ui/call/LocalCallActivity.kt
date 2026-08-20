@@ -140,8 +140,7 @@ class LocalCallActivity : Activity() {
         acceptButton = Button(this).apply {
             text = if (intent.hasExtra(EXTRA_INCOMING_SDP)) "قبول المكالمة" else "بدء المكالمة"
             setOnClickListener {
-                startCall()
-                isEnabled = false
+                if (startCall()) isEnabled = false
             }
         }
         micButton = Button(this).apply {
@@ -189,8 +188,14 @@ class LocalCallActivity : Activity() {
         setContentView(root)
     }
 
-    private fun startCall() {
-        if (engine != null) return
+    private fun startCall(): Boolean {
+        if (engine != null) return true
+        if (!hasRequiredMediaPermissions()) {
+            requestPermissionsIfNeeded()
+            statusView?.text = "يلزم السماح بالميكروفون${if (mediaType == "video") " والكاميرا" else ""} لبدء المكالمة"
+            Toast.makeText(this, "امنح أذونات المكالمة المطلوبة ثم حاول مجددًا", Toast.LENGTH_LONG).show()
+            return false
+        }
         startedAt = System.currentTimeMillis()
         callStartedElapsed = SystemClock.elapsedRealtime()
         startDurationTimer()
@@ -254,6 +259,7 @@ class LocalCallActivity : Activity() {
         statusView?.text = if (incoming.isNullOrBlank()) "جارٍ الاتصال داخل الشبكة المحلية…" else "تم قبول المكالمة، جارٍ فتح الوسائط…"
         if (incoming.isNullOrBlank()) engine?.startOutgoing() else engine?.acceptIncoming(incoming)
         AppRepository.updateCallLog(log.id) { it.copy(status = "accepted") }
+        return true
     }
 
     private fun startDurationTimer() {
@@ -499,10 +505,32 @@ class LocalCallActivity : Activity() {
         finish()
     }
 
+    private fun requiredMediaPermissions(): List<String> = buildList {
+        add(Manifest.permission.RECORD_AUDIO)
+        if (mediaType == "video") add(Manifest.permission.CAMERA)
+    }
+
+    private fun hasRequiredMediaPermissions(): Boolean = requiredMediaPermissions().all {
+        ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+    }
+
     private fun requestPermissionsIfNeeded() {
-        val needed = arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)
-            .filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
+        val needed = requiredMediaPermissions().filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
         if (needed.isNotEmpty()) ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQUEST_MEDIA)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_MEDIA) return
+        val granted = hasRequiredMediaPermissions()
+        acceptButton?.isEnabled = granted
+        statusView?.text = if (granted) {
+            "تم منح أذونات المكالمة — يمكنك البدء"
+        } else {
+            "تعذر بدء المكالمة: يلزم السماح بالميكروفون${if (mediaType == "video") " والكاميرا" else ""}"
+        }
     }
 
     override fun onDestroy() {

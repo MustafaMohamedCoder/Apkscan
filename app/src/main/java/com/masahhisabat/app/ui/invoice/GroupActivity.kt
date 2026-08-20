@@ -284,12 +284,14 @@ class GroupActivity : AppCompatActivity() {
             input.use { stream -> rawFile.outputStream().use { output -> stream.copyTo(output) } }
 
             // معالجة محلية تلقائية: تحسين الإضاءة والتباين، ثم كشف المستند وتصحيح المنظور عند الثقة الكافية.
-            decoded = ImageProcessor.loadBitmap(rawFile.absolutePath, ImageProcessor.ATTACHMENT_MAX_DIM)
-            val correction = ImageProcessor.detectAndCorrectDocument(decoded!!)
-            val geometryBitmap = correction.correctedBitmap ?: decoded
-            if (geometryBitmap !== decoded) corrected = geometryBitmap
-            enhanced = ImageProcessor.processSync(ProcessMode.AUTO, geometryBitmap)
-            val outputBitmap = enhanced ?: geometryBitmap
+            val decodedBitmap = ImageProcessor.loadBitmap(rawFile.absolutePath, ImageProcessor.ATTACHMENT_MAX_DIM)
+            decoded = decodedBitmap
+            val correction = ImageProcessor.detectAndCorrectDocument(decodedBitmap)
+            val geometryBitmap = correction.correctedBitmap ?: decodedBitmap
+            if (geometryBitmap !== decodedBitmap) corrected = geometryBitmap
+            val processedBitmap = ImageProcessor.processSync(ProcessMode.AUTO, geometryBitmap)
+            enhanced = processedBitmap
+            val outputBitmap = processedBitmap
 
             val compressedFile = ImageProcessor.saveTo(
                 outputBitmap,

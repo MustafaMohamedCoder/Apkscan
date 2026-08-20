@@ -849,7 +849,7 @@ class GroupActivity : AppCompatActivity() {
 
         private fun shareItem(item: InvoiceItem) {
             try {
-                val path = item.imagePath ?: item.processedPath
+                val path = AppRepository.availableImagePath(item)
                 if (path != null) {
                     val uri = androidx.core.content.FileProvider.getUriForFile(
                         this@GroupActivity, "${this@GroupActivity.packageName}.fileprovider", java.io.File(path))
@@ -859,7 +859,7 @@ class GroupActivity : AppCompatActivity() {
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     startActivity(Intent.createChooser(intent, getString(R.string.share)))
-                } else if (item.text != null) {
+                } else if (!item.text.isNullOrBlank()) {
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
                         putExtra(Intent.EXTRA_TEXT, item.text)

@@ -79,17 +79,9 @@ class LoginActivity : AppCompatActivity() {
         if (!remembered.isNullOrBlank()) {
             binding.usernameInput.setText(remembered)
             binding.rememberCheck.isChecked = true
-            // الدخول التلقائي فورًا دون انتظار الضغط على الزر
-            val user = AppRepository.users().find {
-                AppRepository.normalizeUsername(it.username) == remembered && it.enabled
-            }
-            if (user != null) {
-                AppRepository.logActivity(ActivityEntry(user.username, getString(R.string.log_login, remembered)))
-                SessionStore.save(this, user)
-                startActivity(Intent(this, MainActivity::class.java))
-                finish()
-                return
-            }
+            // تذكرني يملأ اسم المستخدم فقط؛ لا يُنشئ جلسة دون التحقق من كلمة المرور.
+            // هذا يمنع فتح الأرشيف تلقائيًا إذا أصبح الجهاز متاحًا لشخص آخر.
+            binding.passwordInput.requestFocus()
         }
 
         binding.passwordToggle.setOnClickListener {

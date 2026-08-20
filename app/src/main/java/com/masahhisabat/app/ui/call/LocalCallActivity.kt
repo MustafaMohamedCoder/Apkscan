@@ -2,9 +2,12 @@ package com.masahhisabat.app.ui.call
 
 import android.Manifest
 import android.app.Activity
+import android.app.PictureInPictureParams
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
@@ -31,6 +34,7 @@ class LocalCallActivity : Activity() {
     private var micButton: Button? = null
     private var cameraButton: Button? = null
     private var switchCameraButton: Button? = null
+    private var minimizeButton: Button? = null
     private var controlsLayout: LinearLayout? = null
     private var microphoneEnabled = true
     private var cameraEnabled = true
@@ -90,6 +94,10 @@ class LocalCallActivity : Activity() {
             visibility = if (mediaType == "video") View.VISIBLE else View.GONE
             setOnClickListener { switchCamera() }
         }
+        minimizeButton = Button(this).apply {
+            text = "تصغير المكالمة"
+            setOnClickListener { minimizeCall() }
+        }
         val end = Button(this).apply { text = "إنهاء المكالمة"; setOnClickListener { finishCall("ended") } }
         controlsLayout = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -104,6 +112,7 @@ class LocalCallActivity : Activity() {
         root.addView(statusView)
         root.addView(accept)
         root.addView(controlsLayout)
+        root.addView(minimizeButton)
         root.addView(end)
         setContentView(root)
     }
@@ -154,6 +163,29 @@ class LocalCallActivity : Activity() {
         if (mediaType != "video") return
         engine?.switchCamera()
         statusView?.text = "تم التبديل بين الكاميرا الأمامية والخلفية"
+    }
+
+    private fun minimizeCall() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            statusView?.text = "التصغير غير مدعوم على هذا الإصدار"
+            return
+        }
+        if (engine == null) {
+            statusView?.text = "ابدأ المكالمة أولًا ثم صغّر نافذتها"
+            return
+        }
+        val params = PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(9, 16))
+            .build()
+        enterPictureInPictureMode(params)
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode)
+        val compact = isInPictureInPictureMode
+        statusView?.visibility = if (compact) View.GONE else View.VISIBLE
+        minimizeButton?.visibility = if (compact) View.GONE else View.VISIBLE
+        controlsLayout?.visibility = if (compact) View.GONE else View.VISIBLE
     }
 
     private fun finishCall(status: String) {

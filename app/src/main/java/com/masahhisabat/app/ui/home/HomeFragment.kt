@@ -16,7 +16,7 @@ import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.InvoiceWorkflow
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.invoice.InboxActivity
-import com.masahhisabat.app.ui.messages.DirectMessagesActivity
+import com.masahhisabat.app.ui.messages.DirectMessageUsersActivity
 import com.masahhisabat.app.ui.notifications.NotificationsActivity
 
 /**
@@ -50,7 +50,7 @@ class HomeFragment : Fragment() {
         view.findViewById<MaterialButton>(R.id.btn_open_inbox).setOnClickListener(openInbox)
         val openNotifications = View.OnClickListener { startActivity(Intent(requireContext(), NotificationsActivity::class.java)) }
         view.findViewById<View>(R.id.notifications_card).setOnClickListener(openNotifications)
-        val openMessages = View.OnClickListener { startActivity(Intent(requireContext(), DirectMessagesActivity::class.java)) }
+        val openMessages = View.OnClickListener { startActivity(Intent(requireContext(), DirectMessageUsersActivity::class.java)) }
         view.findViewById<View>(R.id.direct_messages_card).setOnClickListener(openMessages)
 
         refresh(force = true)

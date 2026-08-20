@@ -18,6 +18,7 @@ import com.masahhisabat.app.ui.auth.LockActivity
 import com.masahhisabat.app.ui.auth.SessionStore
 import com.masahhisabat.app.ui.groups.GroupsFragment
 import com.masahhisabat.app.ui.home.HomeFragment
+import com.masahhisabat.app.ui.messages.DirectMessageUsersActivity
 import com.masahhisabat.app.ui.scanner.ScannerFragment
 import com.masahhisabat.app.ui.search.SearchFragment
 import com.masahhisabat.app.ui.settings.SettingsFragment
@@ -67,6 +68,10 @@ class MainActivity : AppCompatActivity() {
                 it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 ThemeHelper.toggleTheme(this)
                 recreate()
+            }
+            findViewById<View>(R.id.floating_messages)?.setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                startActivity(Intent(this, DirectMessageUsersActivity::class.java))
             }
 
             lastTab = savedInstanceState?.getInt("last_tab", 0) ?: 0

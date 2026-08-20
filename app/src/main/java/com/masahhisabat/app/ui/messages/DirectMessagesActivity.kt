@@ -32,6 +32,10 @@ import java.util.Locale
 
 /** محادثات مباشرة محلية بين مستخدمي التطبيق، وتنتقل عبر المزامنة المحلية. */
 class DirectMessagesActivity : AppCompatActivity() {
+    companion object {
+        const val EXTRA_TARGET_USER = "target_user"
+    }
+
     private lateinit var list: RecyclerView
     private lateinit var adapter: MessageAdapter
     private lateinit var recipient: Spinner
@@ -52,30 +56,45 @@ class DirectMessagesActivity : AppCompatActivity() {
         AppRepository.initAppContext(this)
         currentUser = SessionStore.currentUser(this).orEmpty()
         AppRepository.touchPresence(currentUser)
+        val requestedTarget = intent.getStringExtra(EXTRA_TARGET_USER)?.trim().orEmpty()
+        if (requestedTarget.isNotBlank()) targetUser = requestedTarget
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(18, 12, 18, 16); setBackgroundColor(getColor(com.masahhisabat.app.R.color.day_background)) }
         val toolbar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         val back = ImageButton(this).apply { setImageResource(R.drawable.ic_arrow_back); setBackgroundColor(Color.TRANSPARENT); setOnClickListener { finish() }; contentDescription = "رجوع" }
         toolbar.addView(back, LinearLayout.LayoutParams(48, 48))
-        toolbar.addView(TextView(this).apply { text = "رسائل المستخدمين"; textSize = 21f; setTextColor(ThemeHelper.text(this@DirectMessagesActivity)); typeface = resources.getFont(R.font.tajawal_bold) }, LinearLayout.LayoutParams(0, 56, 1f))
-        root.addView(toolbar)
-        recipient = Spinner(this)
-        root.addView(recipient, LinearLayout.LayoutParams(-1, 52))
-        val callBar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        val voiceCall = MaterialButton(this).apply {
-            text = "مكالمة صوتية"
+        toolbar.addView(TextView(this).apply {
+            text = targetUser.ifBlank { "رسائل المستخدمين" }
+            textSize = 21f
+            setTextColor(ThemeHelper.text(this@DirectMessagesActivity))
+            typeface = resources.getFont(R.font.tajawal_bold)
+            maxLines = 1
+        }, LinearLayout.LayoutParams(0, 56, 1f))
+        toolbar.addView(ImageButton(this).apply {
+            setImageResource(R.drawable.ic_call)
+            setColorFilter(ThemeHelper.accent(this@DirectMessagesActivity))
+            setBackgroundColor(Color.TRANSPARENT)
+            contentDescription = "بدء مكالمة صوتية مع ${targetUser.ifBlank { "المستخدم" }}"
             setOnClickListener { openCall("voice") }
-        }
-        val videoCall = MaterialButton(this).apply {
-            text = "مكالمة فيديو"
+        }, LinearLayout.LayoutParams(48, 48))
+        toolbar.addView(ImageButton(this).apply {
+            setImageResource(R.drawable.ic_videocam)
+            setColorFilter(ThemeHelper.accent(this@DirectMessagesActivity))
+            setBackgroundColor(Color.TRANSPARENT)
+            contentDescription = "بدء مكالمة فيديو مع ${targetUser.ifBlank { "المستخدم" }}"
             setOnClickListener { openCall("video") }
+        }, LinearLayout.LayoutParams(48, 48))
+        root.addView(toolbar)
+
+        if (targetUser.isBlank()) {
+            recipient = Spinner(this)
+            root.addView(recipient, LinearLayout.LayoutParams(-1, 52))
         }
-        callBar.addView(voiceCall, LinearLayout.LayoutParams(0, 48, 1f))
-        callBar.addView(videoCall, LinearLayout.LayoutParams(0, 48, 1f))
+        val callBar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         val history = MaterialButton(this).apply {
             text = "سجل المكالمات"
             setOnClickListener { showCallHistory() }
         }
-        callBar.addView(history, LinearLayout.LayoutParams(0, 48, 1f))
+        callBar.addView(history, LinearLayout.LayoutParams(-1, 44))
         root.addView(callBar)
         status = TextView(this).apply { textSize = 13f; setPadding(12, 2, 12, 10) }
         root.addView(status)
@@ -91,14 +110,21 @@ class DirectMessagesActivity : AppCompatActivity() {
         root.addView(composer)
         setContentView(root)
         val users = AppRepository.users().filter { it.username != currentUser && it.enabled }
-        recipient.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, users.map { it.username })
-        recipient.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
-            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) { targetUser = users.getOrNull(position)?.username.orEmpty(); refresh() }
+        if (targetUser.isBlank()) {
+            recipient.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, users.map { it.username })
+            recipient.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    targetUser = users.getOrNull(position)?.username.orEmpty()
+                    refresh()
+                }
+            }
         }
         adapter = MessageAdapter(currentUser)
         list.adapter = adapter
         if (users.isEmpty()) status.text = "لا يوجد مستخدمون آخرون متاحون للمراسلة"
+        else if (targetUser.isBlank()) status.text = "اختر مستخدمًا لبدء المحادثة"
+        else refresh()
     }
 
     override fun onResume() { super.onResume(); if (currentUser.isNotBlank()) { AppRepository.touchPresence(currentUser); refresh() } }

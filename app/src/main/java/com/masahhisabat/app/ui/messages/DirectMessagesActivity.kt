@@ -121,7 +121,8 @@ class DirectMessagesActivity : AppCompatActivity() {
             val duration = if (it.durationSeconds > 0) " | ${"%02d:%02d".format(minutes, seconds)}" else ""
             val reason = it.endReason?.takeIf { value -> value.isNotBlank() }?.let { value -> " | $value" }.orEmpty()
             val latency = it.latencyMs?.let { value -> " | ${value}ms" }.orEmpty()
-            "${it.caller} ← ${it.callee} | $kind | ${it.status}$duration$latency$reason | ${formatter.format(Date(it.startedAt))}"
+            val diagnostic = it.diagnosticLog?.takeIf { value -> value.isNotBlank() }?.let { " | تشخيص محفوظ" }.orEmpty()
+            "${it.caller} ← ${it.callee} | $kind | ${it.status}$duration$latency$reason$diagnostic | ${formatter.format(Date(it.startedAt))}"
         }
         var selectedIndex = 0
         AlertDialog.Builder(this)
@@ -139,11 +140,34 @@ class DirectMessagesActivity : AppCompatActivity() {
                             openCall(log.type)
                         }
                     }
+                    setNeutralButton("التشخيص") { _, _ ->
+                        logs.getOrNull(selectedIndex)?.let(::showCallDiagnostic)
+                    }
                 } else {
                     setPositiveButton("إغلاق", null)
                 }
             }
             .setNegativeButton("إلغاء", null)
+            .show()
+    }
+
+    /** تفاصيل محلية للمراحل التي سبقت فشل الاتصال أو انتهائه، دون إرسالها إلى أي خدمة خارجية. */
+    private fun showCallDiagnostic(log: com.masahhisabat.app.data.CallLog) {
+        val formatter = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
+        val details = buildString {
+            append("المكالمة: ${if (log.type == "video") "فيديو" else "صوت"}\n")
+            append("الحالة: ${log.status}\n")
+            append("الوقت: ${formatter.format(Date(log.startedAt))}\n")
+            log.latencyMs?.let { append("زمن اختبار الوصول: ${it}ms\n") }
+            log.endReason?.takeIf { it.isNotBlank() }?.let { append("سبب الانتهاء: $it\n") }
+            append("\nسجل مراحل الاتصال:\n")
+            append(log.diagnosticLog?.takeIf { it.isNotBlank() }
+                ?: "لا تتوفر تفاصيل لهذا السجل لأنه أُنشئ قبل إضافة التشخيص الموسّع.")
+        }
+        AlertDialog.Builder(this)
+            .setTitle("تشخيص المكالمة المحلية")
+            .setMessage(details)
+            .setPositiveButton("إغلاق", null)
             .show()
     }
 

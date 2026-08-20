@@ -238,7 +238,15 @@ class LocalCallActivity : Activity() {
                     updateNetworkIndicator()
                 }
             },
-            onCallEnded = { reason -> runOnUiThread { finishCall("failed", reason, notifyPeer = false) } }
+            initialLatencyMs = log.latencyMs,
+            onDiagnostic = { entry ->
+                AppRepository.updateCallLog(log.id) { current ->
+                    current.copy(diagnosticLog = appendDiagnostic(current.diagnosticLog, entry))
+                }
+            },
+            onCallEnded = { reason, diagnostics ->
+                runOnUiThread { finishCall("failed", reason, notifyPeer = false, diagnosticLog = diagnostics) }
+            }
         )
         controlsLayout?.isEnabled = true
         statusView?.text = if (incoming.isNullOrBlank()) "جارٍ الاتصال داخل الشبكة المحلية…" else "تم قبول المكالمة، جارٍ فتح الوسائط…"
@@ -434,7 +442,18 @@ class LocalCallActivity : Activity() {
         }
     }
 
-    private fun finishCall(status: String, reason: String = "انتهت المكالمة", notifyPeer: Boolean = true) {
+    private fun appendDiagnostic(current: String?, entry: String): String {
+        return (current.orEmpty().lineSequence().filter { it.isNotBlank() }.toList() + entry)
+            .takeLast(80)
+            .joinToString("\n")
+    }
+
+    private fun finishCall(
+        status: String,
+        reason: String = "انتهت المكالمة",
+        notifyPeer: Boolean = true,
+        diagnosticLog: String? = null
+    ) {
         if (ending) return
         ending = true
         stopDurationTimer()
@@ -442,12 +461,20 @@ class LocalCallActivity : Activity() {
         clearIncomingNotification()
         CallFeedback.playCallEnded(applicationContext)
         val ended = System.currentTimeMillis()
+        val activeEngine = engine
+        val finalDiagnostics = diagnosticLog?.takeIf { it.isNotBlank() }
+            ?: activeEngine?.diagnosticLog()?.takeIf { it.isNotBlank() }
         logId?.let { id ->
             AppRepository.updateCallLog(id) {
-                it.copy(status = status, endedAt = ended, durationSeconds = ((ended - startedAt) / 1000L).coerceAtLeast(0L), endReason = reason)
+                it.copy(
+                    status = status,
+                    endedAt = ended,
+                    durationSeconds = ((ended - startedAt) / 1000L).coerceAtLeast(0L),
+                    endReason = reason,
+                    diagnosticLog = finalDiagnostics ?: it.diagnosticLog
+                )
             }
         }
-        val activeEngine = engine
         engine = null
         if (notifyPeer) activeEngine?.endLocalCall() else activeEngine?.release()
         finish()
@@ -465,8 +492,15 @@ class LocalCallActivity : Activity() {
         if (!ending && !isChangingConfigurations) {
             logId?.let { id ->
                 val ended = System.currentTimeMillis()
+                val diagnostics = engine?.diagnosticLog()?.takeIf { it.isNotBlank() }
                 AppRepository.updateCallLog(id) {
-                    it.copy(status = "ended", endedAt = ended, durationSeconds = ((ended - startedAt) / 1000L).coerceAtLeast(0L), endReason = "أُغلقت شاشة المكالمة")
+                    it.copy(
+                        status = "ended",
+                        endedAt = ended,
+                        durationSeconds = ((ended - startedAt) / 1000L).coerceAtLeast(0L),
+                        endReason = "أُغلقت شاشة المكالمة",
+                        diagnosticLog = diagnostics ?: it.diagnosticLog
+                    )
                 }
             }
         }

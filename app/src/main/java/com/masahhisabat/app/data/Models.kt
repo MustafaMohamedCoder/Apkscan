@@ -134,7 +134,9 @@ data class CallLog(
     @SerializedName("end_reason") val endReason: String? = null,
     /** زمن استجابة اختبار الوصول المحلي قبل بدء المكالمة بالميلي ثانية. */
     @SerializedName("latency_ms") val latencyMs: Long? = null,
-    @SerializedName("peer_address") val peerAddress: String? = null
+    @SerializedName("peer_address") val peerAddress: String? = null,
+    /** تفاصيل مراحل الاتصال والفشل للاستخدام التشخيصي المحلي فقط. */
+    @SerializedName("diagnostic_log") val diagnosticLog: String? = null
 )
 
 /** حالة آخر اتصال معروف بجهاز على الشبكة المحلية. */

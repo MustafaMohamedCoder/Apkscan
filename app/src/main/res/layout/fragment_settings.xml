@@ -315,6 +315,142 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/item_call_ringtone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="80dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/card_surface_settings"
+            android:gravity="center_vertical"
+            android:paddingStart="18dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="12dp">
+
+            <ImageView
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_call"
+                android:contentDescription="نغمات المكالمات" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="16dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="نغمات المكالمات"
+                    android:textSize="16sp"
+                    android:includeFontPadding="false"
+                    android:fontFamily="@font/tajawal_bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="رنين وارد ونغمة انتظار، مع احترام وضع الصوت"
+                    android:textSize="13sp"
+                    android:includeFontPadding="false"
+                    android:fontFamily="@font/tajawal_regular" />
+            </LinearLayout>
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switch_call_ringtone"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="تفعيل نغمات المكالمات" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/item_call_vibration"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="80dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/card_surface_settings"
+            android:gravity="center_vertical"
+            android:paddingStart="18dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="12dp">
+
+            <ImageView
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_call"
+                android:contentDescription="اهتزاز المكالمات" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="16dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="اهتزاز المكالمات"
+                    android:textSize="16sp"
+                    android:includeFontPadding="false"
+                    android:fontFamily="@font/tajawal_bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="تنبيه خفيف عند الرد أو الإغلاق، مع احترام الصامت"
+                    android:textSize="13sp"
+                    android:includeFontPadding="false"
+                    android:fontFamily="@font/tajawal_regular" />
+            </LinearLayout>
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switch_call_vibration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="تفعيل اهتزاز المكالمات" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/item_call_ringtone_picker"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="68dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/card_surface_settings"
+            android:gravity="center_vertical"
+            android:paddingStart="18dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="14dp">
+            <ImageView
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_call"
+                android:contentDescription="اختيار نغمة المكالمة الواردة" />
+            <TextView
+                android:id="@+id/tv_call_ringtone_picker_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="16dp"
+                android:textSize="16sp"
+                android:includeFontPadding="false"
+                android:fontFamily="@font/tajawal_bold" />
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@drawable/ic_close"
+                android:rotation="135"
+                android:contentDescription="اختيار نغمة المكالمة الواردة" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/item_help"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

@@ -27,6 +27,9 @@ object AppRepository {
     private const val TRASH_RETENTION_MS = 30L * 24L * 60L * 60L * 1000L
     private const val TRASH_WARNING_WINDOW_MS = 3L * 24L * 60L * 60L * 1000L
     private const val INVOICE_REMINDERS_ENABLED_KEY = "invoice_reminders_enabled"
+    private const val CALL_RINGTONE_ENABLED_KEY = "call_ringtone_enabled"
+    private const val CALL_VIBRATION_ENABLED_KEY = "call_vibration_enabled"
+    private const val CALL_RINGTONE_URI_KEY = "call_ringtone_uri"
     private const val ENCRYPTED_BACKUP_MAGIC = "MSHB1"
     private const val BACKUP_SALT_BYTES = 16
     private const val BACKUP_IV_BYTES = 12
@@ -841,6 +844,17 @@ object AppRepository {
         prefs.edit().putString("group_filter_mode", mode.takeIf {
             it in setOf("all", "with_documents", "empty", "pinned", "recent_30d")
         } ?: "all").apply()
+    }
+    /** تنبيهات المكالمات تحفظ محليًا على الجهاز ولا تُرسل عبر الشبكة. */
+    fun isCallRingtoneEnabled(): Boolean = prefs.getBoolean(CALL_RINGTONE_ENABLED_KEY, true)
+    fun setCallRingtoneEnabled(enabled: Boolean) = prefs.edit().putBoolean(CALL_RINGTONE_ENABLED_KEY, enabled).apply()
+    fun isCallVibrationEnabled(): Boolean = prefs.getBoolean(CALL_VIBRATION_ENABLED_KEY, true)
+    fun setCallVibrationEnabled(enabled: Boolean) = prefs.edit().putBoolean(CALL_VIBRATION_ENABLED_KEY, enabled).apply()
+    fun callRingtoneUri(): String? = prefs.getString(CALL_RINGTONE_URI_KEY, null)?.takeIf { it.isNotBlank() }
+    fun setCallRingtoneUri(uri: String?) {
+        prefs.edit().apply {
+            if (uri.isNullOrBlank()) remove(CALL_RINGTONE_URI_KEY) else putString(CALL_RINGTONE_URI_KEY, uri)
+        }.apply()
     }
     /** آخر مزامنة بيانات مكتملة، مع استبعاد بدء الخادم والمعاينة والاختبارات. */
     fun lastSuccessfulSync(): SyncEntry? = syncLog().firstOrNull {

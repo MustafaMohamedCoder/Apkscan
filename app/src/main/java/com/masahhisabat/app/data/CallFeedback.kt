@@ -2,7 +2,10 @@ package com.masahhisabat.app.data
 
 import android.content.Context
 import android.media.AudioManager
+import android.media.MediaPlayer
+import android.media.RingtoneManager
 import android.media.ToneGenerator
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -16,6 +19,7 @@ import android.os.Vibrator
 object CallFeedback {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var activeTone: ToneGenerator? = null
+    private var activeRingtone: MediaPlayer? = null
     private var repeatingTone: Runnable? = null
 
     @Synchronized
@@ -25,7 +29,22 @@ object CallFeedback {
 
     @Synchronized
     fun startIncomingRinging(context: Context) {
-        startRepeatingTone(context, ToneGenerator.TONE_SUP_RINGTONE, 1400L)
+        stopTone()
+        if (!AppRepository.isCallRingtoneEnabled() || !isRingerAudible(context)) return
+        val uri = AppRepository.callRingtoneUri()?.let(Uri::parse)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+        try {
+            activeRingtone = MediaPlayer().apply {
+                setAudioStreamType(AudioManager.STREAM_RING)
+                setDataSource(context.applicationContext, uri)
+                isLooping = true
+                prepare()
+                start()
+            }
+        } catch (_: Exception) {
+            // نعود إلى نغمة نظام خفيفة إذا لم يعد URI المختار متاحًا على الجهاز.
+            startRepeatingTone(context, ToneGenerator.TONE_SUP_RINGTONE, 1400L)
+        }
     }
 
     @Synchronized
@@ -35,15 +54,22 @@ object CallFeedback {
         activeTone?.stopTone()
         activeTone?.release()
         activeTone = null
+        activeRingtone?.runCatching {
+            if (isPlaying) stop()
+            reset()
+            release()
+        }
+        activeRingtone = null
     }
 
     fun vibrateAnswered(context: Context) = vibrate(context, 35L)
 
     fun playCallEnded(context: Context) {
-        if (!isRingerAudible(context)) return
-        ToneGenerator(AudioManager.STREAM_RING, TONE_VOLUME).also { tone ->
-            tone.startTone(ToneGenerator.TONE_PROP_NACK, 180)
-            mainHandler.postDelayed({ tone.release() }, 260L)
+        if (AppRepository.isCallRingtoneEnabled() && isRingerAudible(context)) {
+            ToneGenerator(AudioManager.STREAM_RING, TONE_VOLUME).also { tone ->
+                tone.startTone(ToneGenerator.TONE_PROP_NACK, 180)
+                mainHandler.postDelayed({ tone.release() }, 260L)
+            }
         }
         vibrate(context, 28L)
     }
@@ -51,7 +77,7 @@ object CallFeedback {
     @Synchronized
     private fun startRepeatingTone(context: Context, toneType: Int, intervalMs: Long) {
         stopTone()
-        if (!isRingerAudible(context)) return
+        if (!AppRepository.isCallRingtoneEnabled() || !isRingerAudible(context)) return
         activeTone = ToneGenerator(AudioManager.STREAM_RING, TONE_VOLUME)
         repeatingTone = object : Runnable {
             override fun run() {
@@ -82,6 +108,7 @@ object CallFeedback {
     }
 
     private fun shouldVibrate(context: Context): Boolean {
+        if (!AppRepository.isCallVibrationEnabled()) return false
         val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
         return audio.ringerMode != AudioManager.RINGER_MODE_SILENT
     }

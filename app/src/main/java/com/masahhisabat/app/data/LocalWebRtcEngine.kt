@@ -1,6 +1,7 @@
 package com.masahhisabat.app.data
 
 import android.content.Context
+import android.os.SystemClock
 import android.view.View
 import org.webrtc.Camera2Enumerator
 import org.webrtc.CameraVideoCapturer
@@ -27,7 +28,9 @@ class LocalWebRtcEngine(
     private val remoteRenderer: SurfaceViewRenderer?,
     private val onState: (String) -> Unit,
     private val onNetworkQuality: (NetworkQuality) -> Unit = {},
-    private val onCallEnded: (String) -> Unit = {}
+    private val initialLatencyMs: Long? = null,
+    private val onDiagnostic: (String) -> Unit = {},
+    private val onCallEnded: (String, String) -> Unit = { _, _ -> }
 ) {
     private val egl = EglBase.create()
     private val factory: PeerConnectionFactory
@@ -37,8 +40,13 @@ class LocalWebRtcEngine(
     private val localAudio: org.webrtc.AudioTrack
     private val signalListener: (CallSignal, String) -> Unit
     private val streamId = "local-call-$callId"
+    private val diagnosticStartedAt = SystemClock.elapsedRealtime()
+    private val diagnostics = CopyOnWriteArrayList<String>()
     @Volatile private var releasing = false
     @Volatile private var terminationReported = false
+    @Volatile private var latestConnectionState = "NEW"
+    @Volatile private var latestIceState = "NEW"
+    @Volatile private var latestSignalingState = "STABLE"
 
     init {
         PeerConnectionFactory.initialize(
@@ -48,8 +56,15 @@ class LocalWebRtcEngine(
         val rtcConfig = PeerConnection.RTCConfiguration(emptyList()).apply {
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
         }
+        recordDiagnostic("تهيئة", "محرك WebRTC محلي جاهز | الوسائط: ${if (mediaType == "video") "فيديو" else "صوت"}")
+        initialLatencyMs?.let { recordDiagnostic("فحص الشبكة", "اختبار الوصول المحلي نجح خلال ${it}ms") }
         val observer = object : PeerConnection.Observer by EmptyPeerObserver() {
+            override fun onSignalingChange(newState: PeerConnection.SignalingState) {
+                latestSignalingState = newState.name
+                recordDiagnostic("إشارة WebRTC", "الحالة: ${newState.name}")
+            }
             override fun onIceCandidate(candidate: org.webrtc.IceCandidate) {
+                recordDiagnostic("ICE", "تم إنشاء مرشح محلي")
                 sendSignal(CallSignal(kind = "candidate", callId = callId, fromUser = currentUser, toUser = peerUser, candidate = candidate.sdp, sdpMid = candidate.sdpMid, sdpMLineIndex = candidate.sdpMLineIndex, mediaType = mediaType))
             }
             override fun onAddTrack(receiver: RtpReceiver, mediaStreams: Array<out org.webrtc.MediaStream>) {
@@ -57,6 +72,8 @@ class LocalWebRtcEngine(
                 remoteRenderer?.let { track.addSink(it) }
             }
             override fun onConnectionChange(newState: PeerConnection.PeerConnectionState) {
+                latestConnectionState = newState.name
+                recordDiagnostic("اتصال WebRTC", "الحالة: ${newState.name}")
                 onState(newState.name)
                 onNetworkQuality(
                     when (newState) {
@@ -69,17 +86,23 @@ class LocalWebRtcEngine(
                     }
                 )
                 when (newState) {
-                    PeerConnection.PeerConnectionState.FAILED -> reportTermination("تعذر إنشاء اتصال WebRTC محلي")
-                    PeerConnection.PeerConnectionState.CLOSED -> reportTermination("أغلق الطرف الآخر الاتصال")
+                    PeerConnection.PeerConnectionState.FAILED -> reportTermination("تعذر إنشاء اتصال WebRTC محلي", "WEBRTC_CONNECTION_FAILED")
+                    PeerConnection.PeerConnectionState.CLOSED -> reportTermination("أغلق الطرف الآخر الاتصال", "WEBRTC_CONNECTION_CLOSED")
                     else -> Unit
                 }
             }
             override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState) {
+                latestIceState = newState.name
+                recordDiagnostic("ICE", "حالة الاتصال: ${newState.name}")
                 if (newState == PeerConnection.IceConnectionState.DISCONNECTED) {
                     onNetworkQuality(NetworkQuality.UNSTABLE)
                 } else if (newState == PeerConnection.IceConnectionState.FAILED) {
                     onNetworkQuality(NetworkQuality.POOR)
+                    reportTermination("فشل مسار شبكة ICE المحلي", "ICE_CONNECTION_FAILED")
                 }
+            }
+            override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState) {
+                recordDiagnostic("ICE", "جمع المرشحات: ${newState.name}")
             }
         }
         connection = requireNotNull(factory.createPeerConnection(rtcConfig, observer))
@@ -104,10 +127,19 @@ class LocalWebRtcEngine(
         signalListener = { signal, _ ->
             if (signal.callId == callId && signal.fromUser == peerUser && signal.toUser == currentUser) {
                 when (signal.kind) {
-                    "offer" -> acceptOffer(signal)
-                    "answer" -> setRemote(signal)
-                    "candidate" -> signal.candidate?.let { connection.addIceCandidate(org.webrtc.IceCandidate(signal.sdpMid, signal.sdpMLineIndex ?: 0, it)) }
-                    "hangup" -> reportTermination("أنهى الطرف الآخر المكالمة")
+                    "offer" -> {
+                        recordDiagnostic("إشارة محلية", "تم استلام عرض اتصال")
+                        acceptOffer(signal)
+                    }
+                    "answer" -> {
+                        recordDiagnostic("إشارة محلية", "تم استلام رد اتصال")
+                        setRemote(signal)
+                    }
+                    "candidate" -> signal.candidate?.let {
+                        recordDiagnostic("ICE", "تم استلام مرشح من الطرف الآخر")
+                        connection.addIceCandidate(org.webrtc.IceCandidate(signal.sdpMid, signal.sdpMLineIndex ?: 0, it))
+                    }
+                    "hangup" -> reportTermination("أنهى الطرف الآخر المكالمة", "REMOTE_HANGUP")
                 }
             }
         }
@@ -115,34 +147,71 @@ class LocalWebRtcEngine(
     }
 
     fun startOutgoing() {
+        recordDiagnostic("إشارة محلية", "بدء إنشاء عرض اتصال")
         connection.createOffer(object : SdpObserverAdapter() {
             override fun onCreateSuccess(description: SessionDescription) {
-                connection.setLocalDescription(SdpObserverAdapter(), description)
+                recordDiagnostic("إشارة WebRTC", "تم إنشاء عرض الاتصال")
+                connection.setLocalDescription(object : SdpObserverAdapter() {
+                    override fun onSetFailure(error: String?) {
+                        reportTermination("تعذر حفظ عرض الاتصال محليًا", "SET_LOCAL_OFFER_FAILED: ${error.orEmpty()}")
+                    }
+                }, description)
                 sendSignal(CallSignal(kind = "offer", callId = callId, fromUser = currentUser, toUser = peerUser, sdp = description.description, mediaType = mediaType))
+            }
+            override fun onCreateFailure(error: String?) {
+                reportTermination("تعذر إنشاء عرض الاتصال", "CREATE_OFFER_FAILED: ${error.orEmpty()}")
             }
         }, MediaConstraints())
     }
 
     fun acceptIncoming(offerSdp: String) {
+        recordDiagnostic("إشارة محلية", "قبول العرض الوارد")
         setRemote(CallSignal(kind = "offer", callId = callId, fromUser = peerUser, toUser = currentUser, sdp = offerSdp, mediaType = mediaType))
     }
 
     private fun acceptOffer(signal: CallSignal) {
         setRemote(signal)
+        recordDiagnostic("إشارة محلية", "بدء إنشاء رد الاتصال")
         connection.createAnswer(object : SdpObserverAdapter() {
             override fun onCreateSuccess(description: SessionDescription) {
-                connection.setLocalDescription(SdpObserverAdapter(), description)
+                recordDiagnostic("إشارة WebRTC", "تم إنشاء رد الاتصال")
+                connection.setLocalDescription(object : SdpObserverAdapter() {
+                    override fun onSetFailure(error: String?) {
+                        reportTermination("تعذر حفظ رد الاتصال محليًا", "SET_LOCAL_ANSWER_FAILED: ${error.orEmpty()}")
+                    }
+                }, description)
                 sendSignal(CallSignal(kind = "answer", callId = callId, fromUser = currentUser, toUser = peerUser, sdp = description.description, mediaType = mediaType))
+            }
+            override fun onCreateFailure(error: String?) {
+                reportTermination("تعذر إنشاء رد الاتصال", "CREATE_ANSWER_FAILED: ${error.orEmpty()}")
             }
         }, MediaConstraints())
     }
 
     private fun setRemote(signal: CallSignal) {
-        val sdp = signal.sdp ?: return
-        connection.setRemoteDescription(SdpObserverAdapter(), SessionDescription(if (signal.kind == "offer") SessionDescription.Type.OFFER else SessionDescription.Type.ANSWER, sdp))
+        val sdp = signal.sdp ?: run {
+            reportTermination("وصلت إشارة اتصال ناقصة", "REMOTE_SDP_MISSING")
+            return
+        }
+        connection.setRemoteDescription(object : SdpObserverAdapter() {
+            override fun onSetSuccess() {
+                recordDiagnostic("إشارة WebRTC", "تم حفظ وصف الطرف الآخر")
+            }
+            override fun onSetFailure(error: String?) {
+                reportTermination("تعذر معالجة إشارة الطرف الآخر", "SET_REMOTE_DESCRIPTION_FAILED: ${error.orEmpty()}")
+            }
+        }, SessionDescription(if (signal.kind == "offer") SessionDescription.Type.OFFER else SessionDescription.Type.ANSWER, sdp))
     }
 
-    private fun sendSignal(signal: CallSignal) { Thread { SyncManager.broadcastCallSignal(signal) }.start() }
+    private fun sendSignal(signal: CallSignal) {
+        Thread {
+            val delivered = SyncManager.broadcastCallSignal(signal)
+            recordDiagnostic("إشارة محلية", "${signal.kind}: أُرسلت إلى $delivered جهاز")
+            if (delivered == 0 && signal.kind in setOf("offer", "answer")) {
+                reportTermination("تعذر إرسال إشارة المكالمة داخل الشبكة المحلية", "SIGNAL_NOT_DELIVERED")
+            }
+        }.start()
+    }
 
     fun setMicrophoneEnabled(enabled: Boolean): Boolean {
         localAudio.setEnabled(enabled)
@@ -166,6 +235,7 @@ class LocalWebRtcEngine(
 
     fun release() {
         releasing = true
+        recordDiagnostic("إنهاء", "تحرير وسائط المكالمة محليًا")
         SyncManager.removeCallSignalListener(signalListener)
         try { videoCapturer?.stopCapture() } catch (_: Throwable) {}
         videoCapturer?.dispose()
@@ -175,10 +245,20 @@ class LocalWebRtcEngine(
         egl.release()
     }
 
-    private fun reportTermination(reason: String) {
+    fun diagnosticLog(): String = diagnostics.take(80).joinToString("\n")
+
+    private fun recordDiagnostic(stage: String, detail: String) {
+        val elapsed = (SystemClock.elapsedRealtime() - diagnosticStartedAt).coerceAtLeast(0L)
+        val entry = "+${elapsed}ms | $stage | $detail"
+        diagnostics.add(entry)
+        onDiagnostic(entry)
+    }
+
+    private fun reportTermination(reason: String, code: String) {
         if (releasing || terminationReported) return
         terminationReported = true
-        onCallEnded(reason)
+        recordDiagnostic("فشل", "$code | $reason | WebRTC=$latestConnectionState | ICE=$latestIceState | إشارة=$latestSignalingState")
+        onCallEnded(reason, diagnosticLog())
     }
 
     private fun createCameraCapturer(): CameraVideoCapturer {

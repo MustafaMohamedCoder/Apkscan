@@ -3,6 +3,7 @@ package com.masahhisabat.app.ui.settings
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -46,6 +47,7 @@ class SettingsFragment : Fragment() {
         private const val CONTENT_IMPORT_REQUEST = 102
         private const val ENCRYPTED_IMPORT_REQUEST = 103
         private const val ENCRYPTED_EXPORT_REQUEST = 104
+        private const val CALL_RINGTONE_PICKER_REQUEST = 105
     }
 
     private var pendingBackupPassphrase: String? = null
@@ -86,6 +88,7 @@ class SettingsFragment : Fragment() {
         }
         setupAutoTrashPurge(view)
         setupInvoiceReminders(view)
+        setupCallFeedbackSettings(view)
         setupItem(view, R.id.item_help, R.id.tv_help_title, "مركز المساعدة") { showHelpDialog() }
         setupItem(view, R.id.item_export, R.id.tv_export_title, getString(R.string.export_data)) { showExportOptions() }
         setupItem(view, R.id.item_storage, R.id.tv_storage_title, "إدارة التخزين") { showStorageDialog() }
@@ -165,6 +168,55 @@ class SettingsFragment : Fragment() {
             Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
         }
         row.setOnClickListener { toggle.performClick() }
+    }
+
+    /** يتيح التحكم المحلي المستقل في الصوت والاهتزاز واختيار نغمة مكالمة واردة من الجهاز. */
+    private fun setupCallFeedbackSettings(view: View) {
+        val context = requireContext()
+        val ringtoneRow = view.findViewById<LinearLayout>(R.id.item_call_ringtone) ?: return
+        val ringtoneSwitch = ringtoneRow.findViewById<MaterialSwitch>(R.id.switch_call_ringtone)
+        ringtoneSwitch.setOnCheckedChangeListener(null)
+        ringtoneSwitch.isChecked = AppRepository.isCallRingtoneEnabled()
+        ringtoneSwitch.setOnCheckedChangeListener { _, enabled ->
+            AppRepository.setCallRingtoneEnabled(enabled)
+            Toast.makeText(context, if (enabled) "تم تفعيل نغمات المكالمات" else "تم إيقاف نغمات المكالمات", Toast.LENGTH_SHORT).show()
+        }
+        ringtoneRow.setOnClickListener { ringtoneSwitch.performClick() }
+
+        val vibrationRow = view.findViewById<LinearLayout>(R.id.item_call_vibration) ?: return
+        val vibrationSwitch = vibrationRow.findViewById<MaterialSwitch>(R.id.switch_call_vibration)
+        vibrationSwitch.setOnCheckedChangeListener(null)
+        vibrationSwitch.isChecked = AppRepository.isCallVibrationEnabled()
+        vibrationSwitch.setOnCheckedChangeListener { _, enabled ->
+            AppRepository.setCallVibrationEnabled(enabled)
+            Toast.makeText(context, if (enabled) "تم تفعيل اهتزاز المكالمات" else "تم إيقاف اهتزاز المكالمات", Toast.LENGTH_SHORT).show()
+        }
+        vibrationRow.setOnClickListener { vibrationSwitch.performClick() }
+
+        setupItem(view, R.id.item_call_ringtone_picker, R.id.tv_call_ringtone_picker_title, callRingtoneTitle()) {
+            showCallRingtonePicker()
+        }
+    }
+
+    private fun callRingtoneTitle(): String {
+        val context = requireContext()
+        val uri = AppRepository.callRingtoneUri()?.let(Uri::parse)
+        val name = uri?.let {
+            runCatching { RingtoneManager.getRingtone(context, it)?.getTitle(context) }.getOrNull()
+        }?.takeIf { it.isNotBlank() } ?: "نغمة النظام الافتراضية"
+        return "نغمة المكالمة الواردة: $name"
+    }
+
+    private fun showCallRingtonePicker() {
+        val existing = AppRepository.callRingtoneUri()?.let(Uri::parse)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+        startActivityForResult(Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_RINGTONE)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "اختر نغمة المكالمة الواردة")
+            putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, existing)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+        }, CALL_RINGTONE_PICKER_REQUEST)
     }
 
     private fun showAppLockDialog() {
@@ -875,6 +927,15 @@ class SettingsFragment : Fragment() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == CALL_RINGTONE_PICKER_REQUEST) {
+            if (resultCode == Activity.RESULT_OK) {
+                val uri = data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+                AppRepository.setCallRingtoneUri(uri?.toString())
+                view?.findViewById<TextView>(R.id.tv_call_ringtone_picker_title)?.text = callRingtoneTitle()
+                Toast.makeText(requireContext(), "تم حفظ نغمة المكالمة الواردة", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
         if (requestCode == ENCRYPTED_EXPORT_REQUEST) {
             val passphrase = pendingBackupPassphrase
             pendingBackupPassphrase = null

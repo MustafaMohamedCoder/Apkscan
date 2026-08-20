@@ -186,8 +186,12 @@ class InvoiceActivity : AppCompatActivity() {
                 reminderAt = reminderAt
             )
 
-            val groupId = if (action == ACTION_ADD) currentGroupId!!
-            else {
+            val groupId = if (action == ACTION_ADD) {
+                currentGroupId ?: run {
+                    Toast.makeText(this, "تعذر تحديد المجموعة المستهدفة", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+            } else {
                 val g = com.masahhisabat.app.data.Group(name = name)
                 AppRepository.addGroup(g)
                 g.id

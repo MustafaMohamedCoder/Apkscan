@@ -110,16 +110,23 @@ class LocalWebRtcEngine(
         localAudio = factory.createAudioTrack("audio-$callId", audio)
         connection.addTrack(localAudio, listOf(streamId))
         if (mediaType == "video") {
-            videoCapturer = createCameraCapturer()
-            val source = factory.createVideoSource(videoCapturer!!.isScreencast)
-            val textureHelper = SurfaceTextureHelper.create("local-camera", egl.eglBaseContext)
-            videoCapturer.initialize(textureHelper, context, source.capturerObserver)
-            videoCapturer.startCapture(640, 480, 24)
-            localVideo = factory.createVideoTrack("video-$callId", source)
-            localRenderer?.init(egl.eglBaseContext, null)
-            remoteRenderer?.init(egl.eglBaseContext, null)
-            localVideo.addSink(localRenderer)
-            connection.addTrack(localVideo, listOf(streamId))
+            val capturer = createCameraCapturer()
+            if (capturer == null) {
+                videoCapturer = null
+                localVideo = null
+                reportTermination("تعذر الوصول إلى كاميرا الجهاز", "CAMERA_UNAVAILABLE")
+            } else {
+                videoCapturer = capturer
+                val source = factory.createVideoSource(capturer.isScreencast)
+                val textureHelper = SurfaceTextureHelper.create("local-camera", egl.eglBaseContext)
+                capturer.initialize(textureHelper, context, source.capturerObserver)
+                capturer.startCapture(640, 480, 24)
+                localVideo = factory.createVideoTrack("video-$callId", source)
+                localRenderer?.init(egl.eglBaseContext, null)
+                remoteRenderer?.init(egl.eglBaseContext, null)
+                localVideo.addSink(localRenderer)
+                connection.addTrack(localVideo, listOf(streamId))
+            }
         } else {
             videoCapturer = null
             localVideo = null
@@ -261,10 +268,12 @@ class LocalWebRtcEngine(
         onCallEnded(reason, diagnosticLog())
     }
 
-    private fun createCameraCapturer(): CameraVideoCapturer {
+    private fun createCameraCapturer(): CameraVideoCapturer? {
         val enumerator = Camera2Enumerator(context)
-        val name = enumerator.deviceNames.firstOrNull { enumerator.isFrontFacing(it) } ?: enumerator.deviceNames.first()
-        return enumerator.createCapturer(name, null)
+        val name = enumerator.deviceNames.firstOrNull { enumerator.isFrontFacing(it) }
+            ?: enumerator.deviceNames.firstOrNull()
+            ?: return null
+        return runCatching { enumerator.createCapturer(name, null) }.getOrNull()
     }
 
     private open class SdpObserverAdapter : SdpObserver {

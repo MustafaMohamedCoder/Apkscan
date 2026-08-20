@@ -69,7 +69,7 @@ object AppRepository {
     }
 
     private var cachedFilesDir: File? = null
-    fun setFilesDir(context: Context, dir: File) {
+    fun setFilesDir(@Suppress("UNUSED_PARAMETER") context: Context, dir: File) {
         cachedFilesDir = dir
         prefs.edit().putString("app_dir", dir.absolutePath).apply()
     }
@@ -117,7 +117,7 @@ object AppRepository {
     }
 
     fun dataDir(context: Context? = null): File {
-        val c = context ?: appContext ?: throw IllegalStateException()
+        if (context == null && appContext == null) throw IllegalStateException()
         val dir = externalDataDir()
         dir.mkdirs()
         return dir
@@ -794,8 +794,8 @@ object AppRepository {
      */
     fun themeMode(): String {
         val saved = prefs.getString("theme_mode", null)
-        if (saved in setOf("system", "light", "dark")) return saved!!
-        return if (isNightMode()) "dark" else "light"
+        return saved?.takeIf { it == "system" || it == "light" || it == "dark" }
+            ?: if (isNightMode()) "dark" else "light"
     }
     fun setThemeMode(mode: String) {
         val valid = mode.takeIf { it in setOf("system", "light", "dark") } ?: "system"

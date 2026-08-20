@@ -257,7 +257,10 @@ object DocumentEdgeDetector {
 
     private fun sideBalanceScore(points: List<Point>): Float {
         val sides = (0 until 4).map { distance(points[it], points[(it + 1) % 4]) }
-        return ((sides.minOrNull()!! / sides.maxOrNull()!! - 0.18) / 0.62).toFloat().coerceIn(0f, 1f)
+        val shortest = sides.minOrNull() ?: return 0f
+        val longest = sides.maxOrNull() ?: return 0f
+        if (longest <= 0.0) return 0f
+        return ((shortest / longest - 0.18) / 0.62).toFloat().coerceIn(0f, 1f)
     }
 
     private fun distance(first: Point, second: Point): Double = hypot(first.x - second.x, first.y - second.y)

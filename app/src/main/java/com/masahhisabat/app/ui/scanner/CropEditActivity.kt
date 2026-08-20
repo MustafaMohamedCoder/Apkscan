@@ -802,7 +802,7 @@ class CropEditActivity : AppCompatActivity() {
                     Toast.makeText(ctx, "لا توجد نسخة محسنة بعد", Toast.LENGTH_SHORT).show()
                     return@setItems
                 }
-                showCompareOverlay(bitmaps[which]!!)
+                bitmaps[which]?.let(::showCompareOverlay)
             }
             .show()
     }

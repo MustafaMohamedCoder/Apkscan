@@ -196,6 +196,22 @@ class SettingsFragment : Fragment() {
         setupItem(view, R.id.item_call_ringtone_picker, R.id.tv_call_ringtone_picker_title, callRingtoneTitle()) {
             showCallRingtonePicker()
         }
+
+        view.findViewById<LinearLayout>(R.id.item_call_ice_failure_alert)?.let { row ->
+            val toggle = row.findViewById<MaterialSwitch>(R.id.switch_call_ice_failure_alert)
+            toggle.setOnCheckedChangeListener(null)
+            toggle.isChecked = AppRepository.isIceFailureAlertEnabled()
+            toggle.setOnCheckedChangeListener { _, enabled ->
+                AppRepository.setIceFailureAlertEnabled(enabled)
+                val message = if (enabled) {
+                    "تم تفعيل تنبيه تكرار تعذر الاتصال"
+                } else {
+                    "تم إيقاف تنبيه تكرار تعذر الاتصال"
+                }
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            }
+            row.setOnClickListener { toggle.performClick() }
+        }
     }
 
     private fun callRingtoneTitle(): String {

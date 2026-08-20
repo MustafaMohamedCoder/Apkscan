@@ -30,6 +30,9 @@ object AppRepository {
     private const val CALL_RINGTONE_ENABLED_KEY = "call_ringtone_enabled"
     private const val CALL_VIBRATION_ENABLED_KEY = "call_vibration_enabled"
     private const val CALL_RINGTONE_URI_KEY = "call_ringtone_uri"
+    private const val CALL_ICE_FAILURE_ALERT_ENABLED_KEY = "call_ice_failure_alert_enabled"
+    private const val CALL_ICE_FAILURE_TIMESTAMPS_KEY = "call_ice_failure_timestamps"
+    private const val CALL_ICE_FAILURE_ALERT_WINDOW_MS = 15L * 60L * 1000L
     private const val ENCRYPTED_BACKUP_MAGIC = "MSHB1"
     private const val BACKUP_SALT_BYTES = 16
     private const val BACKUP_IV_BYTES = 12
@@ -855,6 +858,25 @@ object AppRepository {
         prefs.edit().apply {
             if (uri.isNullOrBlank()) remove(CALL_RINGTONE_URI_KEY) else putString(CALL_RINGTONE_URI_KEY, uri)
         }.apply()
+    }
+    fun isIceFailureAlertEnabled(): Boolean = prefs.getBoolean(CALL_ICE_FAILURE_ALERT_ENABLED_KEY, true)
+    fun setIceFailureAlertEnabled(enabled: Boolean) {
+        prefs.edit().apply {
+            putBoolean(CALL_ICE_FAILURE_ALERT_ENABLED_KEY, enabled)
+            if (!enabled) remove(CALL_ICE_FAILURE_TIMESTAMPS_KEY)
+        }.apply()
+    }
+
+    /** يعيد true مرة واحدة عند الفشل الثالث خلال 15 دقيقة، ولا يرسل أي سجل خارج الجهاز. */
+    fun recordIceFailureAndShouldAlert(now: Long = System.currentTimeMillis()): Boolean {
+        if (!isIceFailureAlertEnabled()) return false
+        val recent = prefs.getString(CALL_ICE_FAILURE_TIMESTAMPS_KEY, "").orEmpty()
+            .split(',')
+            .mapNotNull { it.toLongOrNull() }
+            .filter { timestamp -> now - timestamp in 0..CALL_ICE_FAILURE_ALERT_WINDOW_MS }
+        val updated = (recent + now).takeLast(10)
+        prefs.edit().putString(CALL_ICE_FAILURE_TIMESTAMPS_KEY, updated.joinToString(",")).apply()
+        return updated.size == 3
     }
     /** آخر مزامنة بيانات مكتملة، مع استبعاد بدء الخادم والمعاينة والاختبارات. */
     fun lastSuccessfulSync(): SyncEntry? = syncLog().firstOrNull {

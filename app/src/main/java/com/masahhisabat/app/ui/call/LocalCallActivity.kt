@@ -22,6 +22,7 @@ import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.masahhisabat.app.R
@@ -29,6 +30,7 @@ import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.CallFeedback
 import com.masahhisabat.app.data.CallLog
 import com.masahhisabat.app.data.LocalWebRtcEngine
+import com.masahhisabat.app.data.NotificationEvent
 import com.masahhisabat.app.ui.auth.SessionStore
 import org.webrtc.SurfaceViewRenderer
 
@@ -474,6 +476,21 @@ class LocalCallActivity : Activity() {
                     diagnosticLog = finalDiagnostics ?: it.diagnosticLog
                 )
             }
+        }
+        val iceFailure = status == "failed" && (
+            reason.contains("ICE", ignoreCase = true) ||
+                finalDiagnostics?.contains("ICE", ignoreCase = true) == true
+            )
+        if (iceFailure && AppRepository.recordIceFailureAndShouldAlert()) {
+            AppRepository.addNotification(
+                NotificationEvent(
+                    title = "تنبيه اتصال محلي",
+                    body = "تكرر تعذر فتح اتصال ICE ثلاث مرات خلال 15 دقيقة. راجع تشخيص المكالمات والشبكة المحلية.",
+                    type = "call_diagnostic",
+                    actor = currentUser
+                )
+            )
+            Toast.makeText(this, "تكرر تعذر الاتصال محليًا — راجع سجل التشخيص", Toast.LENGTH_LONG).show()
         }
         engine = null
         if (notifyPeer) activeEngine?.endLocalCall() else activeEngine?.release()

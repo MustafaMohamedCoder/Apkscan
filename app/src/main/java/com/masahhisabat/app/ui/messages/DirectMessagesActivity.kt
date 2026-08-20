@@ -44,6 +44,8 @@ class DirectMessagesActivity : AppCompatActivity() {
     private var lastCallFailure: String? = null
     private var lastLatencyMs: Long? = null
     private val pickerCode = 431
+    private val diagnosticExportCode = 432
+    private var pendingDiagnosticExport: String? = null
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -113,10 +115,24 @@ class DirectMessagesActivity : AppCompatActivity() {
         list.post { list.scrollToPosition((adapter.itemCount - 1).coerceAtLeast(0)) }
     }
 
-    private fun showCallHistory(failedOnly: Boolean = false) {
+    private data class CallHistoryFilter(
+        val failedOnly: Boolean = false,
+        val user: String? = null,
+        val rangeDays: Int = 0
+    )
+
+    private fun showCallHistory(filter: CallHistoryFilter = CallHistoryFilter()) {
         val formatter = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
-        val allLogs = AppRepository.callLogs().take(30)
-        val logs = if (failedOnly) allLogs.filter(::isFailedCall) else allLogs
+        val rangeStart = if (filter.rangeDays > 0) {
+            System.currentTimeMillis() - filter.rangeDays * 24L * 60L * 60L * 1000L
+        } else {
+            Long.MIN_VALUE
+        }
+        val logs = AppRepository.callLogs()
+            .filter { log -> !filter.failedOnly || isFailedCall(log) }
+            .filter { log -> filter.user == null || log.caller.equals(filter.user, true) || log.callee.equals(filter.user, true) }
+            .filter { log -> log.startedAt >= rangeStart }
+            .take(30)
         val rows = logs.map {
             val kind = if (it.type == "video") "فيديو" else "صوتية"
             val minutes = it.durationSeconds / 60L
@@ -128,13 +144,18 @@ class DirectMessagesActivity : AppCompatActivity() {
             "${it.caller} ← ${it.callee} | $kind | ${it.status}$duration$latency$reason$diagnostic | ${formatter.format(Date(it.startedAt))}"
         }
         var selectedIndex = 0
+        val filterTitle = buildList {
+            if (filter.failedOnly) add("الفاشلة")
+            filter.user?.let { add(it) }
+            if (filter.rangeDays > 0) add("آخر ${filter.rangeDays} يومًا")
+        }.joinToString(" · ")
         AlertDialog.Builder(this)
-            .setTitle(if (failedOnly) "سجل المكالمات — الفاشلة" else "سجل المكالمات")
+            .setTitle(if (filterTitle.isBlank()) "سجل المكالمات" else "سجل المكالمات — $filterTitle")
             .setMessage(
                 when {
-                    rows.isEmpty() && failedOnly -> "لا توجد اتصالات فاشلة ضمن آخر 30 مكالمة."
+                    rows.isEmpty() && filter.failedOnly -> "لا توجد اتصالات فاشلة مطابقة للفلتر الحالي."
                     rows.isEmpty() -> "لا توجد مكالمات مسجلة"
-                    failedOnly -> "يعرض هذا الفلتر الاتصالات التي تعذرت أو فشلت فقط. اختر سجلاً لعرض تشخيصه أو إعادة الاتصال."
+                    filter.failedOnly -> "يعرض هذا الفلتر الاتصالات التي تعذرت أو فشلت فقط. اختر سجلاً لعرض تشخيصه أو إعادة الاتصال."
                     else -> "اختر سجلاً ثم اضغط إعادة الاتصال"
                 }
             )
@@ -156,10 +177,58 @@ class DirectMessagesActivity : AppCompatActivity() {
                 } else {
                     setPositiveButton("إغلاق", null)
                 }
-                setNegativeButton(if (failedOnly) "عرض الكل" else "الفاشلة فقط") { _, _ ->
-                    showCallHistory(!failedOnly)
+                setNegativeButton("فلترة") { _, _ ->
+                    showCallHistoryFilter(filter)
                 }
             }
+            .show()
+    }
+
+    /** فلتر محلي مركب بحسب المستخدم والفترة وحالة الفشل، دون تعديل السجلات نفسها. */
+    private fun showCallHistoryFilter(current: CallHistoryFilter) {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 20, 48, 6)
+        }
+        val userLabel = TextView(this).apply { text = "المستخدم"; textSize = 14f }
+        val users = listOf("كل المستخدمين") + AppRepository.callLogs()
+            .flatMap { listOf(it.caller, it.callee) }
+            .filter { it.isNotBlank() }
+            .distinct()
+        val userSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(this@DirectMessagesActivity, android.R.layout.simple_spinner_dropdown_item, users)
+            setSelection(users.indexOf(current.user ?: "كل المستخدمين").coerceAtLeast(0))
+        }
+        val periodLabel = TextView(this).apply { text = "الفترة"; textSize = 14f; setPadding(0, 18, 0, 0) }
+        val periods = listOf("كل الفترات", "آخر 24 ساعة", "آخر 7 أيام", "آخر 30 يومًا")
+        val periodDays = listOf(0, 1, 7, 30)
+        val periodSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(this@DirectMessagesActivity, android.R.layout.simple_spinner_dropdown_item, periods)
+            setSelection(periodDays.indexOf(current.rangeDays).coerceAtLeast(0))
+        }
+        val failedCheck = CheckBox(this).apply {
+            text = "الاتصالات الفاشلة فقط"
+            isChecked = current.failedOnly
+            setPadding(0, 16, 0, 0)
+        }
+        box.addView(userLabel); box.addView(userSpinner)
+        box.addView(periodLabel); box.addView(periodSpinner); box.addView(failedCheck)
+        AlertDialog.Builder(this)
+            .setTitle("فلترة سجل المكالمات")
+            .setView(box)
+            .setPositiveButton("تطبيق") { _, _ ->
+                val selectedUser = users.getOrNull(userSpinner.selectedItemPosition)
+                    ?.takeUnless { it == "كل المستخدمين" }
+                showCallHistory(
+                    CallHistoryFilter(
+                        failedOnly = failedCheck.isChecked,
+                        user = selectedUser,
+                        rangeDays = periodDays.getOrElse(periodSpinner.selectedItemPosition) { 0 }
+                    )
+                )
+            }
+            .setNegativeButton("إلغاء", null)
+            .setNeutralButton("مسح الفلترة") { _, _ -> showCallHistory() }
             .show()
     }
 
@@ -186,13 +255,24 @@ class DirectMessagesActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("تشخيص المكالمة المحلية")
             .setMessage(details)
-            .setPositiveButton("إغلاق", null)
+            .setPositiveButton("حفظ كنص") { _, _ -> exportCallDiagnostic(details) }
             .setNeutralButton("نسخ السجل") { _, _ ->
                 (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
                     .setPrimaryClip(ClipData.newPlainText("تشخيص مكالمة محلية", details))
                 Toast.makeText(this, "تم نسخ سجل التشخيص محليًا", Toast.LENGTH_SHORT).show()
             }
+            .setNegativeButton("إغلاق", null)
             .show()
+    }
+
+    /** يفتح موفر الملفات في النظام لحفظ ملف نصي محلي؛ لا يُرفع المحتوى إلى الإنترنت أو إلى خادم. */
+    private fun exportCallDiagnostic(details: String) {
+        pendingDiagnosticExport = details
+        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TITLE, "masah-call-diagnostic-${System.currentTimeMillis()}.txt")
+        }, diagnosticExportCode)
     }
 
     private fun openCall(type: String) {
@@ -246,14 +326,26 @@ class DirectMessagesActivity : AppCompatActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != pickerCode || resultCode != Activity.RESULT_OK) return
+        if (resultCode != Activity.RESULT_OK) return
         val uri: Uri = data?.data ?: return
-        runCatching {
-            val temp = File(cacheDir, "direct_${System.currentTimeMillis()}.jpg")
-            contentResolver.openInputStream(uri)?.use { input -> temp.outputStream().use { output -> input.copyTo(output) } }
-            selectedImage = AppRepository.persistAppImage(temp.absolutePath)
-            Toast.makeText(this, "الصورة جاهزة للإرسال", Toast.LENGTH_SHORT).show()
-        }.onFailure { Toast.makeText(this, "تعذر تجهيز الصورة", Toast.LENGTH_SHORT).show() }
+        when (requestCode) {
+            pickerCode -> runCatching {
+                val temp = File(cacheDir, "direct_${System.currentTimeMillis()}.jpg")
+                contentResolver.openInputStream(uri)?.use { input -> temp.outputStream().use { output -> input.copyTo(output) } }
+                selectedImage = AppRepository.persistAppImage(temp.absolutePath)
+                Toast.makeText(this, "الصورة جاهزة للإرسال", Toast.LENGTH_SHORT).show()
+            }.onFailure { Toast.makeText(this, "تعذر تجهيز الصورة", Toast.LENGTH_SHORT).show() }
+            diagnosticExportCode -> {
+                val details = pendingDiagnosticExport ?: return
+                runCatching {
+                    contentResolver.openOutputStream(uri)?.use { output ->
+                        output.write(details.toByteArray(Charsets.UTF_8))
+                    } ?: error("تعذر فتح الملف")
+                    Toast.makeText(this, "تم حفظ سجل التشخيص كنص محليًا", Toast.LENGTH_LONG).show()
+                }.onFailure { Toast.makeText(this, "تعذر حفظ سجل التشخيص", Toast.LENGTH_SHORT).show() }
+                pendingDiagnosticExport = null
+            }
+        }
     }
 
     private class MessageAdapter(private val me: String) : RecyclerView.Adapter<MessageHolder>() {

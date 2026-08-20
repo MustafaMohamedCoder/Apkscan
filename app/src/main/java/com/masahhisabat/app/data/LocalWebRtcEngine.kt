@@ -25,7 +25,8 @@ class LocalWebRtcEngine(
     private val mediaType: String,
     private val localRenderer: SurfaceViewRenderer?,
     private val remoteRenderer: SurfaceViewRenderer?,
-    private val onState: (String) -> Unit
+    private val onState: (String) -> Unit,
+    private val onNetworkQuality: (NetworkQuality) -> Unit = {}
 ) {
     private val egl = EglBase.create()
     private val factory: PeerConnectionFactory
@@ -52,7 +53,26 @@ class LocalWebRtcEngine(
                 val track = receiver.track() as? VideoTrack ?: return
                 remoteRenderer?.let { track.addSink(it) }
             }
-            override fun onConnectionChange(newState: PeerConnection.PeerConnectionState) { onState(newState.name) }
+            override fun onConnectionChange(newState: PeerConnection.PeerConnectionState) {
+                onState(newState.name)
+                onNetworkQuality(
+                    when (newState) {
+                        PeerConnection.PeerConnectionState.CONNECTED -> NetworkQuality.GOOD
+                        PeerConnection.PeerConnectionState.CONNECTING,
+                        PeerConnection.PeerConnectionState.NEW -> NetworkQuality.CHECKING
+                        PeerConnection.PeerConnectionState.DISCONNECTED -> NetworkQuality.UNSTABLE
+                        PeerConnection.PeerConnectionState.FAILED,
+                        PeerConnection.PeerConnectionState.CLOSED -> NetworkQuality.POOR
+                    }
+                )
+            }
+            override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState) {
+                if (newState == PeerConnection.IceConnectionState.DISCONNECTED) {
+                    onNetworkQuality(NetworkQuality.UNSTABLE)
+                } else if (newState == PeerConnection.IceConnectionState.FAILED) {
+                    onNetworkQuality(NetworkQuality.POOR)
+                }
+            }
         }
         connection = requireNotNull(factory.createPeerConnection(rtcConfig, observer))
         val audio = factory.createAudioSource(MediaConstraints())
@@ -166,4 +186,7 @@ class LocalWebRtcEngine(
         override fun onAddTrack(receiver: RtpReceiver, mediaStreams: Array<out org.webrtc.MediaStream>) = Unit
         override fun onConnectionChange(newState: PeerConnection.PeerConnectionState) = Unit
     }
+
+    /** تقدير محافظ للحالة مستند إلى اتصال WebRTC الفعلي، بلا اعتماد على خادم خارجي. */
+    enum class NetworkQuality { CHECKING, GOOD, UNSTABLE, POOR }
 }

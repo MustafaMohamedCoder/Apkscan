@@ -2,6 +2,7 @@ package com.masahhisabat.app.ui.call
 
 import android.Manifest
 import android.app.Activity
+import android.app.ActivityManager
 import android.app.PendingIntent
 import android.app.PictureInPictureParams
 import android.app.RemoteAction
@@ -36,6 +37,7 @@ class LocalCallActivity : Activity() {
     private var statusView: TextView? = null
     private var muteIndicator: TextView? = null
     private var cameraIndicator: TextView? = null
+    private var networkIndicator: TextView? = null
     private var engine: LocalWebRtcEngine? = null
     private var localRenderer: SurfaceViewRenderer? = null
     private var remoteRenderer: SurfaceViewRenderer? = null
@@ -43,9 +45,12 @@ class LocalCallActivity : Activity() {
     private var cameraButton: Button? = null
     private var switchCameraButton: Button? = null
     private var minimizeButton: Button? = null
+    private var acceptButton: Button? = null
+    private var endButton: Button? = null
     private var controlsLayout: LinearLayout? = null
     private var microphoneEnabled = true
     private var cameraEnabled = true
+    private var networkQuality = LocalWebRtcEngine.NetworkQuality.CHECKING
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,11 +98,19 @@ class LocalCallActivity : Activity() {
             contentDescription = "تنبيه: الكاميرا متوقفة"
             visibility = View.GONE
         }
+        networkIndicator = TextView(this).apply {
+            text = "جودة الشبكة: جارٍ القياس"
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            setPadding(22, 10, 22, 10)
+            contentDescription = "جودة الشبكة: جارٍ القياس"
+            visibility = View.GONE
+        }
         if (mediaType == "video") {
             remoteRenderer = SurfaceViewRenderer(this).apply { setBackgroundColor(Color.BLACK) }
             localRenderer = SurfaceViewRenderer(this).apply { setBackgroundColor(Color.DKGRAY) }
         }
-        val accept = Button(this).apply {
+        acceptButton = Button(this).apply {
             text = if (intent.hasExtra(EXTRA_INCOMING_SDP)) "قبول المكالمة" else "بدء المكالمة"
             setOnClickListener {
                 startCall()
@@ -122,7 +135,7 @@ class LocalCallActivity : Activity() {
             text = "تصغير المكالمة"
             setOnClickListener { minimizeCall() }
         }
-        val end = Button(this).apply { text = "إنهاء المكالمة"; setOnClickListener { finishCall("ended") } }
+        endButton = Button(this).apply { text = "إنهاء المكالمة"; setOnClickListener { finishCall("ended") } }
         controlsLayout = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             isEnabled = false
@@ -136,14 +149,15 @@ class LocalCallActivity : Activity() {
         root.addView(statusView)
         root.addView(muteIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(cameraIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
+        root.addView(networkIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         if (mediaType == "video") {
             root.addView(remoteRenderer, LinearLayout.LayoutParams(-1, 520))
             root.addView(localRenderer, LinearLayout.LayoutParams(-1, 220))
         }
-        root.addView(accept)
+        root.addView(acceptButton)
         root.addView(controlsLayout)
         root.addView(minimizeButton)
-        root.addView(end)
+        root.addView(endButton)
         setContentView(root)
     }
 
@@ -167,7 +181,13 @@ class LocalCallActivity : Activity() {
             mediaType = mediaType,
             localRenderer = localRenderer,
             remoteRenderer = remoteRenderer,
-            onState = { state -> runOnUiThread { statusView?.text = "حالة الاتصال: $state" } }
+            onState = { state -> runOnUiThread { statusView?.text = "حالة الاتصال: $state" } },
+            onNetworkQuality = { quality ->
+                runOnUiThread {
+                    networkQuality = quality
+                    updateNetworkIndicator()
+                }
+            }
         )
         controlsLayout?.isEnabled = true
         statusView?.text = if (incoming.isNullOrBlank()) "جارٍ الاتصال داخل الشبكة المحلية…" else "تم قبول المكالمة، جارٍ فتح الوسائط…"
@@ -244,7 +264,19 @@ class LocalCallActivity : Activity() {
             videoTitle,
             createPipActionIntent(ACTION_PIP_TOGGLE_VIDEO, 302)
         ).apply { isEnabled = mediaType == "video" }
-        return listOf(micAction, videoAction)
+        val fullScreenAction = RemoteAction(
+            Icon.createWithResource(this, R.drawable.ic_open_in_full),
+            "فتح المكالمة بالحجم الكامل",
+            "فتح المكالمة بالحجم الكامل",
+            createPipActionIntent(ACTION_PIP_RETURN_FULL, 303)
+        )
+        val endAction = RemoteAction(
+            Icon.createWithResource(this, R.drawable.ic_call_end),
+            "إنهاء المكالمة",
+            "إنهاء المكالمة وإنهاء الوسائط المحلية",
+            createPipActionIntent(ACTION_PIP_END_CALL, 304)
+        )
+        return listOf(micAction, videoAction, fullScreenAction, endAction)
     }
 
     private fun createPipActionIntent(action: String, requestCode: Int): PendingIntent {
@@ -275,12 +307,36 @@ class LocalCallActivity : Activity() {
         cameraIndicator?.visibility = if (isInPictureInPictureMode && mediaType == "video" && !cameraEnabled) View.VISIBLE else View.GONE
     }
 
+    /** يظهر في PiP فقط كي تبقى نافذة المكالمة الكاملة مركزة على الوسائط وأزرارها. */
+    private fun updateNetworkIndicator() {
+        val qualityUi = when (networkQuality) {
+            LocalWebRtcEngine.NetworkQuality.GOOD -> Triple("جودة الشبكة: جيدة", Color.rgb(13, 148, 136), "جودة الشبكة جيدة")
+            LocalWebRtcEngine.NetworkQuality.CHECKING -> Triple("جودة الشبكة: جارٍ القياس", Color.rgb(8, 145, 178), "يجري قياس جودة الشبكة")
+            LocalWebRtcEngine.NetworkQuality.UNSTABLE -> Triple("جودة الشبكة: غير مستقرة", Color.rgb(217, 119, 6), "تنبيه: جودة الشبكة غير مستقرة")
+            LocalWebRtcEngine.NetworkQuality.POOR -> Triple("جودة الشبكة: ضعيفة", Color.rgb(198, 40, 40), "تنبيه: جودة الشبكة ضعيفة")
+        }
+        networkIndicator?.apply {
+            text = qualityUi.first
+            setBackgroundColor(qualityUi.second)
+            contentDescription = qualityUi.third
+            visibility = if (isInPictureInPictureMode && engine != null) View.VISIBLE else View.GONE
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         when (intent.action) {
             ACTION_PIP_TOGGLE_MIC -> toggleMicrophone()
             ACTION_PIP_TOGGLE_VIDEO -> toggleCamera()
+            ACTION_PIP_RETURN_FULL -> returnToFullCall()
+            ACTION_PIP_END_CALL -> finishCall("ended")
         }
+    }
+
+    /** يعيد مهمة المكالمة نفسها إلى المقدمة، فيخرج من PiP دون إنشاء مكالمة أو محرك جديدين. */
+    private fun returnToFullCall() {
+        val manager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+        manager.moveTaskToFront(taskId, ActivityManager.MOVE_TASK_WITH_HOME)
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
@@ -289,8 +345,11 @@ class LocalCallActivity : Activity() {
         statusView?.visibility = if (compact) View.GONE else View.VISIBLE
         minimizeButton?.visibility = if (compact) View.GONE else View.VISIBLE
         controlsLayout?.visibility = if (compact) View.GONE else View.VISIBLE
+        acceptButton?.visibility = if (compact) View.GONE else View.VISIBLE
+        endButton?.visibility = if (compact) View.GONE else View.VISIBLE
         updateMuteIndicator()
         updateCameraIndicator()
+        updateNetworkIndicator()
         // في وضع PiP يتولى Android السحب وتغيير الحجم، وتبقى الوسائط والمحرك مستمرين.
         if (!compact) {
             window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
@@ -332,5 +391,7 @@ class LocalCallActivity : Activity() {
         private const val REQUEST_MEDIA = 903
         private const val ACTION_PIP_TOGGLE_MIC = "com.masahhisabat.app.action.PIP_TOGGLE_MIC"
         private const val ACTION_PIP_TOGGLE_VIDEO = "com.masahhisabat.app.action.PIP_TOGGLE_VIDEO"
+        private const val ACTION_PIP_RETURN_FULL = "com.masahhisabat.app.action.PIP_RETURN_FULL"
+        private const val ACTION_PIP_END_CALL = "com.masahhisabat.app.action.PIP_END_CALL"
     }
 }

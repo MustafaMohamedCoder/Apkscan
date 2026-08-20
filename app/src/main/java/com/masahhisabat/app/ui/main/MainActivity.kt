@@ -2,8 +2,6 @@ package com.masahhisabat.app.ui.main
 
 import android.content.Intent
 import android.os.Bundle
-import android.os.VibrationEffect
-import android.os.Vibrator
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.ImageView
@@ -30,11 +28,11 @@ class MainActivity : AppCompatActivity() {
     private var renderedTab = -1
     private val tabIds = intArrayOf(
         R.id.nav_home, R.id.nav_groups, R.id.nav_scanner,
-        R.id.nav_search, R.id.nav_theme, R.id.nav_settings
+        R.id.nav_search, R.id.nav_settings
     )
     private val labelIds = intArrayOf(
         R.id.nav_home_label, R.id.nav_groups_label, R.id.nav_scanner_label,
-        R.id.nav_search_label, R.id.nav_theme_label, R.id.nav_settings_label
+        R.id.nav_search_label, R.id.nav_settings_label
     )
 
     private val fragments = listOf<Fragment>(
@@ -42,7 +40,6 @@ class MainActivity : AppCompatActivity() {
         GroupsFragment(),
         ScannerFragment(),
         SearchFragment(),
-        PlaceholderFragment(4), // تبويب الوضع النهاري — زر مباشر
         SettingsFragment()
     )
 
@@ -61,22 +58,22 @@ class MainActivity : AppCompatActivity() {
                 val idx = tabIds.indexOf(v.id)
                 if (idx < 0) return@OnClickListener
                 v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                if (idx == 4) {
-                    toggleTheme()
-                } else {
-                    switchTab(idx)
-                }
+                switchTab(idx)
             }
             for (id in tabIds) {
                 findViewById<View>(id)?.setOnClickListener(listeners)
+            }
+            findViewById<View>(R.id.nav_theme)?.setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                ThemeHelper.toggleTheme(this)
+                recreate()
             }
 
             lastTab = savedInstanceState?.getInt("last_tab", 0) ?: 0
             switchTab(lastTab, animate = false)
             applyTheme()
-            // كل الأجهزة تستقبل محليًا، وجلسة mustafa وحدها ترسل ملف المستخدمين تلقائيًا.
+            // تبدأ كل جلسة مزامنة شاملة ثنائية الاتجاه؛ ملف mustafa السلطوي يبقى متاحًا أيضًا للتوافق القديم.
             SyncManager.startAutomaticUserSync(this)
-            // بعد تسجيل الدخول تُدمج المجموعات والفواتير والصور الجديدة تلقائيًا مع الأجهزة القريبة.
             SyncManager.startAutomaticDataSyncAfterLogin(this)
         } catch (e: Exception) {
             try {
@@ -94,7 +91,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (SessionStore.requiresUnlock(this)) startActivity(Intent(this, LockActivity::class.java))
+        if (SessionStore.requiresUnlock(this)) {
+            startActivity(Intent(this, LockActivity::class.java))
+            return
+        }
+        if (SessionStore.currentUser(this) != null) {
+            SyncManager.startAutomaticUserSync(this)
+            SyncManager.startAutomaticDataSyncAfterLogin(this)
+        }
     }
 
     private fun switchTab(index: Int, animate: Boolean = true) {
@@ -156,52 +160,27 @@ class MainActivity : AppCompatActivity() {
         }
         return target
     }
-
-
-
-    private fun toggleTheme() {
-        val v = getSystemService(VIBRATOR_SERVICE) as? Vibrator
-        v?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
-        ThemeHelper.toggleTheme(this)
-        // إعادة إنشاء النشاط بالكامل ليُطبَّق الوضع على كل الشاشات
-        recreate()
-    }
-
     private fun applyTheme() {
         window.decorView.setBackgroundResource(ThemeHelper.backgroundRes())
         findViewById<View>(R.id.fragment_container)?.setBackgroundResource(ThemeHelper.backgroundRes())
         val bar = findViewById<LinearLayout>(R.id.bottom_nav)
         bar?.setBackgroundResource(R.drawable.nav_bar_bg)
         bar?.backgroundTintList = null
-        val isNight = ThemeHelper.isNight(this)
-        findViewById<ImageView>(R.id.nav_theme_icon)?.setImageResource(
-            if (isNight) R.drawable.ic_sun_filled else R.drawable.ic_moon
-        )
-        findViewById<View>(R.id.nav_theme)?.contentDescription = getString(
-            if (isNight) R.string.switch_to_light_theme else R.string.switch_to_dark_theme
-        )
+        val night = ThemeHelper.isNight(this)
+        findViewById<ImageView>(R.id.nav_theme_icon)?.apply {
+            setImageResource(if (night) R.drawable.ic_sun_filled else R.drawable.ic_moon)
+            setColorFilter(ThemeHelper.inactiveLabel(this@MainActivity))
+            contentDescription = if (night) getString(R.string.switch_to_light_theme) else getString(R.string.switch_to_dark_theme)
+        }
+        findViewById<TextView>(R.id.nav_theme_label)?.apply {
+            text = if (night) "نهاري" else "ليلي"
+            setTextColor(ThemeHelper.inactiveLabel(this@MainActivity))
+        }
         switchTab(lastTab, animate = false)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putInt("last_tab", lastTab)
-    }
-}
-
-/** تبويب مؤقت لزر تبديل الوضع (زر مباشر وليس شاشة) */
-class PlaceholderFragment(private val tab: Int) : Fragment(R.layout.fragment_placeholder) {
-    override fun onViewCreated(view: android.view.View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        val title = view.findViewById<TextView>(R.id.ph_title)
-        val icon = view.findViewById<ImageView>(R.id.ph_icon)
-        if (tab == 4) {
-            title?.text = getString(R.string.nav_theme)
-            icon?.setImageResource(
-                if (ThemeHelper.isNight(requireContext())) R.drawable.ic_sun_filled else R.drawable.ic_moon
-            )
-            icon?.setColorFilter(ThemeHelper.text(requireContext()))
-        }
-        title?.setTextColor(ThemeHelper.text(requireContext()))
     }
 }

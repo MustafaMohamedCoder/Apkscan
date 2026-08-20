@@ -68,7 +68,7 @@ object SyncManager {
     private const val AUTO_SYNC_DISCOVERY_TIMEOUT_MS = 1_500L
     private const val AUTO_SYNC_INTERVAL_MS = 30_000L
     private const val AUTO_USER_SYNC_MODE = "mustafa_users_only"
-    private const val AUTO_DATA_SYNC_MODE = "post_login_groups_and_invoices"
+    private const val AUTO_DATA_SYNC_MODE = "automatic_full_app_sync"
     private const val AUTO_DATA_SYNC_ATTEMPTS = 2
     private const val AUTO_DATA_SYNC_RETRY_DELAY_MS = 4_000L
     private const val AUTO_DATA_SYNC_MIN_RESTART_MS = 30_000L
@@ -537,8 +537,8 @@ object SyncManager {
     }
 
     /**
-     * مزامنة تلقائية ثنائية الاتجاه للمجموعات والفواتير بعد تسجيل الدخول.
-     * لا تشمل حسابات المستخدمين؛ إذ تبقى مزامنتها التلقائية محصورة في بروتوكول جهاز mustafa.
+     * مزامنة تلقائية ثنائية الاتجاه لكامل بيانات التطبيق بعد فتح جلسة المستخدم.
+     * تشمل الحسابات والمجموعات والرسائل والمرفقات وسجل السلة، مع دمج غير هدّام.
      */
     private fun syncAutomaticDataWithHost(context: Context, host: String, peerName: String): SyncResult {
         try {
@@ -709,6 +709,9 @@ object SyncManager {
      * تقرأ ملفات JSON الخام فقط؛ وبذلك لا تتضاعف الذاكرة مع المرفقات أثناء كل اكتشاف.
      */
     private fun dataFingerprint(): String = MessageDigest.getInstance("SHA-256").let { digest ->
+        AppRepository.users().sortedBy { AppRepository.normalizeUsername(it.username) }.forEach { user ->
+            digest.update("user:${AppRepository.normalizeUsername(user.username)}:${user.passwordHash}:${user.role.name}:${user.enabled}:${user.createdAt}\n".toByteArray(Charsets.UTF_8))
+        }
         AppRepository.groups().sortedBy { it.id }.forEach { group ->
             digest.update("group:${group.id}:${group.name}:${group.createdAt}\n".toByteArray(Charsets.UTF_8))
             val itemsFile = File(AppRepository.dataDir(), "invoices/${group.id}/items.json")
@@ -993,6 +996,7 @@ object SyncManager {
         return SyncPayload(
             deviceName = AppRepository.currentUserDeviceName(),
             users = AppRepository.users().map { UserPayload(it.username, it.passwordHash, it.role.name, it.enabled) },
+            groups = buildGroupsPayload(),
             items = buildDataItems(),
             trashRecords = AppRepository.trashRecords()
         )
@@ -1000,11 +1004,15 @@ object SyncManager {
 
     private fun buildAutomaticDataPayload(): SyncPayload = SyncPayload(
         deviceName = AppRepository.currentUserDeviceName(),
-        users = emptyList(),
+        users = AppRepository.users().map { UserPayload(it.username, it.passwordHash, it.role.name, it.enabled) },
+        groups = buildGroupsPayload(),
         items = buildDataItems(),
         trashRecords = AppRepository.trashRecords(),
         mode = AUTO_DATA_SYNC_MODE
     )
+
+    private fun buildGroupsPayload(): List<SyncGroupPayload> =
+        AppRepository.groups().map { SyncGroupPayload(it.id, it.name) }
 
     private fun buildDataItems(): List<SyncItemPayload> = buildList {
         for (group in AppRepository.groups()) {
@@ -1068,6 +1076,7 @@ object SyncManager {
     private fun buildMustafaUsersPayload(): SyncPayload = SyncPayload(
         deviceName = AppRepository.currentUserDeviceName(),
         users = AppRepository.users().map { UserPayload(it.username, it.passwordHash, it.role.name, it.enabled) },
+        groups = emptyList(),
         items = emptyList(),
         mode = AUTO_USER_SYNC_MODE,
         sourceUsername = "mustafa"
@@ -1080,9 +1089,9 @@ object SyncManager {
             .toSet()
         val localGroups = AppRepository.groups().associateBy { it.id }
         var newItems = 0
-        var newGroups = 0
+        var newGroups = payload.groups.count { it.id !in localGroups }
         payload.items.groupBy { it.groupId }.forEach { (groupId, items) ->
-            if (groupId !in localGroups) newGroups++
+            if (groupId !in localGroups && payload.groups.none { it.id == groupId }) newGroups++
             val localIds = AppRepository.items(groupId).map { it.id }.toSet()
             newItems += items.count { it.item.id !in localIds }
         }
@@ -1154,7 +1163,15 @@ object SyncManager {
         // المالك المحلي (mustafa الافتراضي) لا يُمس إن لم يُرسل من الطرف الآخر
         AppRepository.saveList("users.json", local)
 
-        // 2) مزامنة المجموعات والعناصر
+        // 2) مزامنة المجموعات والعناصر، بما فيها المجموعات الخالية من الرسائل
+        for (incomingGroup in payload.groups) {
+            if (incomingGroup.id.isBlank() || AppRepository.isGroupTrashed(incomingGroup.id)) continue
+            val localGroup = AppRepository.groups().find { it.id == incomingGroup.id }
+            if (localGroup == null) AppRepository.addGroup(Group(incomingGroup.id, incomingGroup.name))
+            else if (localGroup.name != incomingGroup.name) {
+                recordSyncConflict(payload, "group", incomingGroup.id, "احتُفظ باسم المجموعة المحلي عند اختلاف الاسم بين الجهازين.")
+            }
+        }
         var addedItems = 0
         for (p in payload.items) {
             if (AppRepository.isGroupTrashed(p.groupId) || AppRepository.isItemTrashed(p.groupId, p.item.id)) continue
@@ -1352,6 +1369,7 @@ object SyncManager {
     // ---------- نماذج المزامنة ----------
     data class UserPayload(val username: String, val passwordHash: String, val roleName: String, val enabled: Boolean)
     data class SyncImagePayload(val fileName: String, val data: String)
+    data class SyncGroupPayload(val id: String, val name: String)
     data class SyncItemPayload(
         val groupId: String,
         val groupName: String,
@@ -1362,6 +1380,7 @@ object SyncManager {
     data class SyncPayload(
         val deviceName: String? = null,
         val users: List<UserPayload>,
+        val groups: List<SyncGroupPayload> = emptyList(),
         val items: List<SyncItemPayload>,
         /** nullable للحفاظ على توافق حمولات الإصدارات السابقة. */
         val trashRecords: List<TrashEntry>? = null,

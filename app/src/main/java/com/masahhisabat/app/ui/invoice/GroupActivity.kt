@@ -31,6 +31,7 @@ import com.masahhisabat.app.data.InvoiceItem
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.SessionStore
 import com.masahhisabat.app.image.ImageProcessor
+import com.masahhisabat.app.image.ProcessMode
 import android.os.Build
 import android.graphics.Color
 import android.net.Uri
@@ -262,20 +263,28 @@ class GroupActivity : AppCompatActivity() {
     private fun copyToInternal(uri: Uri): String? {
         var raw: File? = null
         var compressed: File? = null
-        var bitmap: android.graphics.Bitmap? = null
+        var decoded: android.graphics.Bitmap? = null
+        var corrected: android.graphics.Bitmap? = null
+        var enhanced: android.graphics.Bitmap? = null
         var complete = false
         return try {
             val rawFile = File(cacheDir, "attach_raw_${System.currentTimeMillis()}.jpg")
             raw = rawFile
             val input = contentResolver.openInputStream(uri) ?: return null
             input.use { stream -> rawFile.outputStream().use { output -> stream.copyTo(output) } }
-            // فك الصورة بحجم محدود في الخلفية قبل ضغطها، لتجنب ضغط الذاكرة مع صور الكاميرا الكبيرة.
-            val decodedBitmap = ImageProcessor.loadBitmap(rawFile.absolutePath, ImageProcessor.ATTACHMENT_MAX_DIM)
-            bitmap = decodedBitmap
+
+            // معالجة محلية تلقائية: تحسين الإضاءة والتباين، ثم كشف المستند وتصحيح المنظور عند الثقة الكافية.
+            decoded = ImageProcessor.loadBitmap(rawFile.absolutePath, ImageProcessor.ATTACHMENT_MAX_DIM)
+            val correction = ImageProcessor.detectAndCorrectDocument(decoded!!)
+            val geometryBitmap = correction.correctedBitmap ?: decoded
+            if (geometryBitmap !== decoded) corrected = geometryBitmap
+            enhanced = ImageProcessor.processSync(ProcessMode.AUTO, geometryBitmap)
+            val outputBitmap = enhanced ?: geometryBitmap
+
             val compressedFile = ImageProcessor.saveTo(
-                decodedBitmap,
+                outputBitmap,
                 cacheDir,
-                "attach",
+                "attach_processed",
                 quality = ImageProcessor.ATTACHMENT_JPEG_QUALITY
             )
             compressed = compressedFile
@@ -284,7 +293,9 @@ class GroupActivity : AppCompatActivity() {
         } catch (_: Exception) {
             null
         } finally {
-            bitmap?.recycle()
+            listOf(enhanced, corrected, decoded).forEach { bitmap ->
+                if (bitmap != null && !bitmap.isRecycled) bitmap.recycle()
+            }
             raw?.delete()
             if (!complete) compressed?.delete()
         }
@@ -337,8 +348,9 @@ class GroupActivity : AppCompatActivity() {
 
     private fun applyFilter() {
         val q = searchInput.text.toString().trim().lowercase()
-        val visibleItems = if (q.isBlank()) AppRepository.items(groupId)
-        else AppRepository.items(groupId).filter { itemMatches(it, q) }
+        val visibleItems = (if (q.isBlank()) AppRepository.items(groupId)
+        else AppRepository.items(groupId).filter { itemMatches(it, q) })
+            .sortedWith(compareBy<InvoiceItem> { it.createdAt }.thenBy { it.id })
         adapter.submit(visibleItems)
         updateEmptyState(visibleItems.size, q.isNotBlank())
     }

@@ -380,7 +380,11 @@ class DocumentCameraActivity : AppCompatActivity() {
     }
 
     /** طبقة رسم خفيفة توضح مساحة المستند وتُبقي مناطق الكاميرا المحيطة منخفضة التباين. */
-    class DocumentFrameOverlay(context: android.content.Context) : View(context) {
+    class DocumentFrameOverlay @JvmOverloads constructor(
+        context: android.content.Context,
+        attrs: android.util.AttributeSet? = null,
+        defStyleAttr: Int = 0
+    ) : View(context, attrs, defStyleAttr) {
         private val shadePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(118, 0, 0, 0) }
         private val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#2DD4BF")

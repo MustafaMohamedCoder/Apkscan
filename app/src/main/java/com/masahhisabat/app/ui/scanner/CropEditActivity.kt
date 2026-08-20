@@ -702,7 +702,11 @@ class CropEditActivity : AppCompatActivity() {
     /**
      * عرض الاقتصاص مع المقابض القابلة للسحب
      */
-    class CropView(context: Context) : View(context) {
+    class CropView @JvmOverloads constructor(
+        context: Context,
+        attrs: android.util.AttributeSet? = null,
+        defStyleAttr: Int = 0
+    ) : View(context, attrs, defStyleAttr) {
 
         private var bitmap: android.graphics.Bitmap? = null
         private val cropRect = RectF(0.05f, 0.05f, 0.95f, 0.95f)

@@ -65,7 +65,7 @@
                     android:layout_marginStart="6dp"
                     android:src="@drawable/ic_pin"
                     android:visibility="gone"
-                android:contentDescription="تاجر مثبت" />
+                android:contentDescription="فاتورة مثبتة" />
                 <TextView
                     android:id="@+id/group_date"
                     android:layout_width="wrap_content"
@@ -116,6 +116,6 @@
             android:src="@drawable/ic_more"
             android:background="@drawable/group_more_bg"
             android:foreground="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="إجراءات التاجر" />
+            android:contentDescription="إجراءات الفاتورة" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

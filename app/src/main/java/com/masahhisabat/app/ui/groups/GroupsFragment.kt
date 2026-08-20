@@ -272,12 +272,12 @@ class GroupsFragment : Fragment() {
                 container.addView(layout)
             }
         }
-        val name = field("اسم المجموعة", g.name)
-        val phone = field("هاتف التاجر", g.supplierPhone)
+        val name = field("اسم الفاتورة", g.name)
+        val phone = field("هاتف المورد", g.supplierPhone)
         val notes = field("ملاحظات", g.supplierNotes, false)
         MaterialAlertDialogBuilder(ctx)
-            .setTitle("بيانات المجموعة")
-            .setMessage("تُحفظ هذه المعلومات محليًا ضمن أرشيف المجموعة.")
+            .setTitle("بيانات الفاتورة")
+            .setMessage("تُحفظ هذه المعلومات محليًا ضمن أرشيف الفاتورة.")
             .setView(container)
             .setPositiveButton(R.string.save) { _, _ ->
                 try {
@@ -288,9 +288,9 @@ class GroupsFragment : Fragment() {
                         notes.text?.toString()
                     )
                     refresh()
-                    Toast.makeText(ctx, "تم حفظ بيانات المجموعة", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, "تم حفظ بيانات الفاتورة", Toast.LENGTH_SHORT).show()
                 } catch (error: Exception) {
-                    Toast.makeText(ctx, error.message ?: "تعذر حفظ بيانات المجموعة", Toast.LENGTH_LONG).show()
+                    Toast.makeText(ctx, error.message ?: "تعذر حفظ بيانات الفاتورة", Toast.LENGTH_LONG).show()
                 }
             }
             .setNegativeButton(R.string.cancel, null)
@@ -340,7 +340,7 @@ class GroupsFragment : Fragment() {
             val sortMode = AppRepository.groupSortMode()
             val summary = requireView().findViewById<TextView>(R.id.groups_summary)
             val archivedCount = allGroups.count { it.archivedAt != null }
-            summary.text = "${allGroups.size - archivedCount} تاجر نشط · $archivedCount مؤرشف · $totalDocuments فاتورة/طلب"
+            summary.text = "${allGroups.size - archivedCount} فاتورة نشطة · $archivedCount مؤرشفة · $totalDocuments عنصرًا"
             requireView().findViewById<TextView>(R.id.groups_sort_label).text =
                 "${sortLabel(sortMode)} · ${filterLabel(filterMode)}"
 
@@ -486,11 +486,11 @@ class GroupsFragment : Fragment() {
     }
 
     private fun emptyStateMessage(query: String, filterMode: String): String = when {
-        allGroups.isEmpty() -> "لا يوجد تجار بعد. اضغط هنا لإضافة أول تاجر أو مورد."
+        allGroups.isEmpty() -> "لا توجد فواتير بعد. اضغط هنا لإضافة أول فاتورة أو مورد."
         query.isNotBlank() && filterMode != "all" -> "لا توجد نتائج تطابق البحث والتصفية الحالية. جرّب تغيير أحدهما."
         query.isNotBlank() -> "لا توجد مجموعة تطابق «$query». جرّب كلمة أخرى."
         filterMode != "all" -> "لا توجد مجموعات ضمن التصفية الحالية. جرّب تصفية أخرى."
-        else -> "لا يوجد تجار بعد. اضغط هنا لإضافة أول تاجر أو مورد."
+        else -> "لا توجد فواتير بعد. اضغط هنا لإضافة أول فاتورة أو مورد."
     }
 
     private fun logAndToast(e: Exception, tag: String) {
@@ -582,8 +582,8 @@ class GroupsFragment : Fragment() {
             holder.more.setColorFilter(textSec)
             holder.pin.visibility = if (g.id in AppRepository.favoriteGroupIds()) View.VISIBLE else View.GONE
             holder.pin.setColorFilter(ThemeHelper.accent(ctx))
-            holder.itemView.contentDescription = "فتح أرشيف التاجر ${g.name}"
-            holder.more.contentDescription = "إجراءات التاجر ${g.name}"
+            holder.itemView.contentDescription = "فتح أرشيف الفاتورة ${g.name}"
+            holder.more.contentDescription = "إجراءات الفاتورة ${g.name}"
 
             // النقر على البطاقة (أو الاسم) يفتح المجموعة
             holder.itemView.setOnClickListener {
@@ -597,8 +597,8 @@ class GroupsFragment : Fragment() {
                     return@setOnClickListener
                 }
                 val isPinned = g.id in AppRepository.favoriteGroupIds()
-                val archiveAction = if (g.archivedAt == null) "أرشفة التاجر" else "إلغاء الأرشفة"
-                val actions = arrayOf(if (isPinned) "إلغاء التثبيت" else "تثبيت أعلى القائمة", archiveAction, "تعديل بيانات المجموعة", "حذف")
+                val archiveAction = if (g.archivedAt == null) "أرشفة الفاتورة" else "إلغاء الأرشفة"
+                val actions = arrayOf(if (isPinned) "إلغاء التثبيت" else "تثبيت أعلى القائمة", archiveAction, "تعديل بيانات الفاتورة", "حذف")
                 MaterialAlertDialogBuilder(ctx)
                     .setItems(actions) { _, which ->
                         when (which) {

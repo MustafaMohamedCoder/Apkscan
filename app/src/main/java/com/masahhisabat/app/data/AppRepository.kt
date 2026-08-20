@@ -268,7 +268,7 @@ object AppRepository {
     /** تحديث بطاقة التاجر دون تغيير المعرّف أو أرشيف الفواتير والطلبات المرتبط به. */
     fun updateTraderDetails(id: String, name: String, phone: String?, notes: String?) {
         val cleanName = name.trim()
-        require(cleanName.isNotBlank()) { "اسم التاجر مطلوب" }
+        require(cleanName.isNotBlank()) { "اسم الفاتورة مطلوب" }
         saveList("groups.json", groups().map {
             if (it.id == id) it.copy(
                 name = cleanName,

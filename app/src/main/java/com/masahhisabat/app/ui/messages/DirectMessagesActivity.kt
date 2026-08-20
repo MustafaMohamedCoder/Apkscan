@@ -2,6 +2,8 @@ package com.masahhisabat.app.ui.messages
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -111,9 +113,10 @@ class DirectMessagesActivity : AppCompatActivity() {
         list.post { list.scrollToPosition((adapter.itemCount - 1).coerceAtLeast(0)) }
     }
 
-    private fun showCallHistory() {
+    private fun showCallHistory(failedOnly: Boolean = false) {
         val formatter = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
-        val logs = AppRepository.callLogs().take(30)
+        val allLogs = AppRepository.callLogs().take(30)
+        val logs = if (failedOnly) allLogs.filter(::isFailedCall) else allLogs
         val rows = logs.map {
             val kind = if (it.type == "video") "فيديو" else "صوتية"
             val minutes = it.durationSeconds / 60L
@@ -126,8 +129,15 @@ class DirectMessagesActivity : AppCompatActivity() {
         }
         var selectedIndex = 0
         AlertDialog.Builder(this)
-            .setTitle("سجل المكالمات")
-            .setMessage(if (rows.isEmpty()) "لا توجد مكالمات مسجلة" else "اختر سجلاً ثم اضغط إعادة الاتصال")
+            .setTitle(if (failedOnly) "سجل المكالمات — الفاشلة" else "سجل المكالمات")
+            .setMessage(
+                when {
+                    rows.isEmpty() && failedOnly -> "لا توجد اتصالات فاشلة ضمن آخر 30 مكالمة."
+                    rows.isEmpty() -> "لا توجد مكالمات مسجلة"
+                    failedOnly -> "يعرض هذا الفلتر الاتصالات التي تعذرت أو فشلت فقط. اختر سجلاً لعرض تشخيصه أو إعادة الاتصال."
+                    else -> "اختر سجلاً ثم اضغط إعادة الاتصال"
+                }
+            )
             .apply {
                 if (rows.isNotEmpty()) {
                     setSingleChoiceItems(rows.toTypedArray(), 0) { _, which -> selectedIndex = which }
@@ -146,9 +156,18 @@ class DirectMessagesActivity : AppCompatActivity() {
                 } else {
                     setPositiveButton("إغلاق", null)
                 }
+                setNegativeButton(if (failedOnly) "عرض الكل" else "الفاشلة فقط") { _, _ ->
+                    showCallHistory(!failedOnly)
+                }
             }
-            .setNegativeButton("إلغاء", null)
             .show()
+    }
+
+    /** تُعامل السجلات القديمة ذات سبب فشل صريح كسجل فاشل حتى لو حفظت بحالة نهائية عامة. */
+    private fun isFailedCall(log: com.masahhisabat.app.data.CallLog): Boolean {
+        if (log.status.equals("failed", ignoreCase = true)) return true
+        val reason = log.endReason.orEmpty()
+        return reason.contains("فشل") || reason.contains("تعذر")
     }
 
     /** تفاصيل محلية للمراحل التي سبقت فشل الاتصال أو انتهائه، دون إرسالها إلى أي خدمة خارجية. */
@@ -168,6 +187,11 @@ class DirectMessagesActivity : AppCompatActivity() {
             .setTitle("تشخيص المكالمة المحلية")
             .setMessage(details)
             .setPositiveButton("إغلاق", null)
+            .setNeutralButton("نسخ السجل") { _, _ ->
+                (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
+                    .setPrimaryClip(ClipData.newPlainText("تشخيص مكالمة محلية", details))
+                Toast.makeText(this, "تم نسخ سجل التشخيص محليًا", Toast.LENGTH_SHORT).show()
+            }
             .show()
     }
 

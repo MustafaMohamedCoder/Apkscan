@@ -1313,7 +1313,26 @@ object AppRepository {
             val dir = File(dataDir(), "images").also { it.mkdirs() }
             val ext = source.extension.takeIf { it.isNotBlank() }?.let { ".$it" } ?: ".bin"
             val destination = File(dir, "import_${groupId}_${itemId}_$kind$ext".replace(Regex("[^A-Za-z0-9._-]"), "_"))
-            source.inputStream().use { input -> destination.outputStream().use { input.copyTo(it) } }
+            val partial = File(destination.parentFile, "${destination.name}.part")
+            partial.delete()
+            source.inputStream().buffered(64 * 1024).use { input ->
+                partial.outputStream().buffered(64 * 1024).use { output ->
+                    input.copyTo(output, 64 * 1024)
+                    output.flush()
+                }
+            }
+            if (!partial.isFile || partial.length() != source.length()) {
+                partial.delete()
+                return null
+            }
+            if (destination.exists() && !destination.delete()) {
+                partial.delete()
+                return null
+            }
+            if (!partial.renameTo(destination)) {
+                partial.delete()
+                return null
+            }
             destination.absolutePath
         } catch (_: Exception) { null }
     }

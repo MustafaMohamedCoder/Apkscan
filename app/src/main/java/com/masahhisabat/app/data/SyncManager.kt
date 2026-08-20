@@ -1123,14 +1123,27 @@ object SyncManager {
                 .ifBlank { "jpg" }
             val imageDir = File(AppRepository.dataDir(), "images").also { it.mkdirs() }
             val target = File(imageDir, "sync_${itemId}_${label}.${extension}")
+            val partial = File(imageDir, "${target.name}.part")
+            partial.delete()
             Base64InputStream(
                 ByteArrayInputStream(image.data.toByteArray(Charsets.US_ASCII)),
                 Base64.NO_WRAP
             ).use { input ->
-                target.outputStream().use { output -> input.copyTo(output, SYNC_IO_BUFFER_BYTES) }
+                partial.outputStream().buffered(64 * 1024).use { output ->
+                    input.copyTo(output, SYNC_IO_BUFFER_BYTES)
+                    output.flush()
+                }
             }
-            if (!target.isFile || target.length() !in 1..MAX_SYNC_IMAGE_BYTES) {
-                target.delete()
+            if (!partial.isFile || partial.length() !in 1..MAX_SYNC_IMAGE_BYTES) {
+                partial.delete()
+                return null
+            }
+            if (target.exists() && !target.delete()) {
+                partial.delete()
+                return null
+            }
+            if (!partial.renameTo(target)) {
+                partial.delete()
                 return null
             }
             target.absolutePath
@@ -1278,9 +1291,13 @@ object SyncManager {
         for (incoming in payload.notifications.orEmpty()) {
             if (AppRepository.notifications().none { it.id == incoming.id }) AppRepository.addNotification(incoming)
         }
-        for (incoming in payload.presence.orEmpty()) {
-            AppRepository.saveList("presence.json", (AppRepository.presence() + incoming).distinctBy { it.username }
-                .sortedByDescending { it.lastSeenAt }.take(200))
+        val incomingPresence = payload.presence.orEmpty()
+        if (incomingPresence.isNotEmpty()) {
+            val mergedPresence = (AppRepository.presence() + incomingPresence)
+                .distinctBy { it.username }
+                .sortedByDescending { it.lastSeenAt }
+                .take(200)
+            AppRepository.saveList("presence.json", mergedPresence)
         }
         return ApplyResult(addedItems, addedUsers)
     }

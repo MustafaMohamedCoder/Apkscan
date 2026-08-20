@@ -57,7 +57,12 @@ class ScannerFragment : Fragment() {
 
         view.findViewById<FrameLayout>(R.id.btn_camera).setOnClickListener { checkCameraAndOpen() }
         view.findViewById<FrameLayout>(R.id.btn_gallery).setOnClickListener {
-            galleryLauncher.launch("image/*")
+            if (isScannerBusy) return@setOnClickListener
+            try {
+                galleryLauncher.launch("image/*")
+            } catch (_: Exception) {
+                Toast.makeText(requireContext(), "تعذر فتح المعرض على هذا الجهاز", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -177,7 +182,11 @@ class ScannerFragment : Fragment() {
             return
         }
         if (isScannerBusy) return
-        startActivity(Intent(ctx, DocumentCameraActivity::class.java))
+        try {
+            startActivity(Intent(ctx, DocumentCameraActivity::class.java))
+        } catch (_: Exception) {
+            Toast.makeText(ctx, "تعذر فتح الكاميرا — اختر صورة من المعرض", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun setScannerBusy(busy: Boolean, message: String = "") {

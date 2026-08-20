@@ -17,7 +17,6 @@
         android:paddingEnd="@dimen/home_horizontal_padding"
         android:paddingBottom="20dp">
 
-        <!-- لوحة مبسطة: عنوان قصير ثم الإجراء الأهم مباشرة. -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/welcome_banner"
             android:layout_width="match_parent"
@@ -118,10 +117,10 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="6dp"
+                android:layout_weight="1"
                 android:clickable="true"
                 android:focusable="true"
                 android:foreground="?attr/selectableItemBackground"
-                android:layout_weight="1"
                 app:cardCornerRadius="18dp"
                 app:cardElevation="0dp"
                 app:strokeWidth="1dp">
@@ -176,6 +175,9 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
                 android:layout_weight="1"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
                 app:cardCornerRadius="18dp"
                 app:cardElevation="0dp"
                 app:strokeWidth="1dp">
@@ -226,86 +228,6 @@
         </LinearLayout>
 
         <com.google.android.material.card.MaterialCardView
-            android:id="@+id/quick_actions_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            app:cardCornerRadius="18dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="15dp">
-
-                <TextView
-                    android:id="@+id/quick_actions_title"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="@font/tajawal_bold"
-                    android:text="تنقّل سريع"
-                    android:textSize="15sp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:orientation="horizontal">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_quick_inbox"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="7dp"
-                        android:layout_weight="1"
-                        android:drawableStart="@drawable/ic_invoice"
-                        android:drawablePadding="5dp"
-                        android:fontFamily="@font/tajawal_bold"
-                        android:text="الوارد"
-                        android:textColor="@color/primary"
-                        android:textSize="11sp"
-                        app:cornerRadius="14dp"
-                        app:strokeColor="@color/primary"
-                        app:strokeWidth="1dp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_quick_group"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="7dp"
-                        android:layout_weight="1"
-                        android:drawableStart="@drawable/ic_groups_filled"
-                        android:drawablePadding="7dp"
-                        android:fontFamily="@font/tajawal_bold"
-                        android:text="مجموعات"
-                        android:textColor="@color/primary"
-                        android:textSize="12sp"
-                        app:cornerRadius="14dp"
-                        app:strokeColor="@color/primary"
-                        app:strokeWidth="1dp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_quick_search"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="7dp"
-                        android:layout_weight="1"
-                        android:drawableStart="@drawable/ic_search"
-                        android:drawablePadding="7dp"
-                        android:fontFamily="@font/tajawal_bold"
-                        android:text="بحث"
-                        android:textColor="@color/primary"
-                        android:textSize="12sp"
-                        app:cornerRadius="14dp"
-                        app:strokeColor="@color/primary"
-                        app:strokeWidth="1dp" />
-                </LinearLayout>
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <com.google.android.material.card.MaterialCardView
             android:id="@+id/inbox_card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -347,241 +269,30 @@
                         android:textSize="13sp" />
                 </LinearLayout>
 
+                <TextView
+                    android:id="@+id/new_invoices_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="@drawable/badge_bg"
+                    android:fontFamily="@font/tajawal_bold"
+                    android:gravity="center"
+                    android:minWidth="54dp"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="5dp"
+                    android:textColor="@color/primary"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_open_inbox"
-                    android:layout_width="wrap_content"
-                    android:layout_height="42dp"
-                    android:fontFamily="@font/tajawal_bold"
-                    android:text="عرض"
-                    android:textSize="13sp"
-                    app:cornerRadius="13dp" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/continue_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            app:cardCornerRadius="18dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="15dp">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:id="@+id/continue_title"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:fontFamily="@font/tajawal_bold"
-                        android:text="آخر عمل"
-                        android:textSize="15sp" />
-
-                    <TextView
-                        android:id="@+id/continue_detail"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="3dp"
-                        android:fontFamily="@font/tajawal_regular"
-                        android:textSize="13sp" />
-                </LinearLayout>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_continue_work"
                     android:layout_width="wrap_content"
                     android:layout_height="42dp"
                     android:fontFamily="@font/tajawal_bold"
                     android:text="فتح"
                     android:textSize="13sp"
                     app:cornerRadius="13dp" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/today_tasks_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            app:cardCornerRadius="18dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="15dp">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:id="@+id/today_tasks_title"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:fontFamily="@font/tajawal_bold"
-                        android:text="مهام اليوم"
-                        android:textSize="15sp" />
-
-                    <TextView
-                        android:id="@+id/today_tasks_summary"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="3dp"
-                        android:fontFamily="@font/tajawal_regular"
-                        android:textSize="13sp" />
-                </LinearLayout>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_today_tasks"
-                    android:layout_width="wrap_content"
-                    android:layout_height="42dp"
-                    android:fontFamily="@font/tajawal_bold"
-                    android:text="عرض"
-                    android:textSize="13sp"
-                    app:cornerRadius="13dp" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/sync_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            app:cardCornerRadius="18dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="15dp">
-
-                <ImageView
-                    android:layout_width="34dp"
-                    android:layout_height="34dp"
-                    android:contentDescription="المزامنة المحلية"
-                    android:padding="6dp"
-                    android:src="@drawable/ic_sync"
-                    app:tint="@color/primary" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:id="@+id/sync_title"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:fontFamily="@font/tajawal_bold"
-                        android:text="المزامنة المحلية"
-                        android:textSize="15sp" />
-
-                    <TextView
-                        android:id="@+id/sync_status"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:fontFamily="@font/tajawal_regular"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_quick_sync"
-                    android:layout_width="wrap_content"
-                    android:layout_height="42dp"
-                    android:fontFamily="@font/tajawal_bold"
-                    android:text="إعداد"
-                    android:textSize="13sp"
-                    app:cornerRadius="13dp" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/recent_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            app:cardCornerRadius="18dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="15dp">
-
-                <LinearLayout
-                    android:id="@+id/recent_header"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical">
-
-                    <TextView
-                        android:id="@+id/recent_title"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:fontFamily="@font/tajawal_bold"
-                        android:text="@string/recent_operations"
-                        android:textSize="15sp" />
-
-                    <ImageView
-                        android:id="@+id/recent_toggle"
-                        android:layout_width="38dp"
-                        android:layout_height="38dp"
-                        android:background="@drawable/circle_primary"
-                        android:contentDescription="عرض أو إخفاء آخر العمليات"
-                        android:padding="8dp"
-                        android:src="@drawable/ic_chevron_down" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/recent_panel"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
-
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/recent_list"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:visibility="gone" />
-
-                    <TextView
-                        android:id="@+id/recent_empty"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:background="@drawable/empty_state_panel"
-                        android:gravity="center"
-                        android:padding="20dp"
-                        android:text="@string/no_operations"
-                        android:textSize="13sp" />
-                </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </LinearLayout>

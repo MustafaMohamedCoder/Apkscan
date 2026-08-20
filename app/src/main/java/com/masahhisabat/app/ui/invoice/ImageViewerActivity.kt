@@ -1,6 +1,7 @@
 package com.masahhisabat.app.ui.invoice
 
 import android.graphics.Color
+import android.os.Build
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.text.SpannableString
@@ -57,6 +58,18 @@ class ImageViewerActivity : AppCompatActivity() {
         window.decorView.setBackgroundColor(Color.BLACK)
         window.statusBarColor = Color.BLACK
         if (window.navigationBarColor == Color.TRANSPARENT) window.navigationBarColor = Color.BLACK
+        // عارض غامر: إخفاء أشرطة النظام أثناء مشاهدة الصورة مع إبقاء عناصر العارض نفسها.
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        } else {
+            View.SYSTEM_UI_FLAG_FULLSCREEN
+        }
 
         groupId = intent.getStringExtra("group_id") ?: ""
         startIndex = intent.getIntExtra("image_index", 0)

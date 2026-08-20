@@ -111,13 +111,13 @@ class GroupsFragment : Fragment() {
         view.setBackgroundResource(ThemeHelper.backgroundRes())
         view.findViewById<View>(R.id.groups_root).setBackgroundResource(ThemeHelper.backgroundRes())
         view.findViewById<TextView>(R.id.title).apply {
-            this.text = "التجار والموردون"
+            this.text = "المجموعات"
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 26f)
             typeface = resources.getFont(R.font.tajawal_bold)
             setTextColor(text)
         }
         view.findViewById<TextView>(R.id.subtitle)?.apply {
-            this.text = "أرشيف فواتير وطلبات المحل حسب كل تاجر"
+            this.text = "أرشيف الفواتير والطلبات داخل المجموعات"
             typeface = resources.getFont(R.font.tajawal_medium)
             setTextColor(ThemeHelper.textSecondary(requireContext()))
         }
@@ -156,7 +156,7 @@ class GroupsFragment : Fragment() {
             setPadding(padding, 0, padding, 0)
         }
         val inputLayout = TextInputLayout(ctx).apply {
-            hint = "اسم التاجر أو المورد"
+            hint = "اسم المجموعة"
             boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
             setBoxStrokeColor(ThemeHelper.accent(ctx))
             layoutParams = LinearLayout.LayoutParams(
@@ -170,7 +170,7 @@ class GroupsFragment : Fragment() {
             setHintTextColor(ThemeHelper.inputHint(ctx))
             setSingleLine(true)
             imeOptions = EditorInfo.IME_ACTION_DONE
-            contentDescription = "حقل اسم التاجر"
+            contentDescription = "حقل اسم المجموعة"
         }
         inputLayout.addView(input)
         container.addView(inputLayout)
@@ -191,11 +191,11 @@ class GroupsFragment : Fragment() {
                 container.addView(layout)
             }
         }
-        val phone = optionalField("هاتف التاجر (اختياري)")
-        val notes = optionalField("ملاحظات عن التاجر أو الطلبات (اختياري)")
+        val phone = optionalField("هاتف المورد (اختياري)")
+        val notes = optionalField("ملاحظات المجموعة (اختياري)")
         val dialog = MaterialAlertDialogBuilder(ctx)
-            .setTitle("تاجر أو مورد جديد")
-            .setMessage("أنشئ أرشيفًا مستقلًا لفواتير وطلبات هذا التاجر.")
+            .setTitle("مجموعة جديدة")
+            .setMessage("أنشئ مجموعة مستقلة لفواتير وطلبات المحل.")
             .setView(container)
             .setPositiveButton("✓ تأكيد", null)
             .setNegativeButton(R.string.cancel, null)
@@ -207,7 +207,7 @@ class GroupsFragment : Fragment() {
             if (creating) return
             val name = input.text?.toString()?.trim().orEmpty()
             if (name.isBlank()) {
-                inputLayout.error = "اكتب اسم التاجر أولًا"
+                inputLayout.error = "اكتب اسم المجموعة أولًا"
                 input.requestFocus()
                 return
             }
@@ -222,11 +222,11 @@ class GroupsFragment : Fragment() {
                 AppRepository.logActivity(ActivityEntry(user, getString(R.string.log_create_group, user, name)))
                 dialog.dismiss()
                 refresh()
-                Toast.makeText(ctx, "تمت إضافة التاجر: $name", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, "تمت إضافة المجموعة: $name", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 creating = false
-                inputLayout.error = "تعذر حفظ بيانات التاجر، حاول مرة أخرى"
-                logAndToast(e, "حفظ بيانات التاجر")
+                inputLayout.error = "تعذر حفظ بيانات المجموعة، حاول مرة أخرى"
+                logAndToast(e, "حفظ بيانات المجموعة")
             }
         }
 
@@ -272,12 +272,12 @@ class GroupsFragment : Fragment() {
                 container.addView(layout)
             }
         }
-        val name = field("اسم التاجر أو المورد", g.name)
+        val name = field("اسم المجموعة", g.name)
         val phone = field("هاتف التاجر", g.supplierPhone)
         val notes = field("ملاحظات", g.supplierNotes, false)
         MaterialAlertDialogBuilder(ctx)
-            .setTitle("بيانات التاجر")
-            .setMessage("تُحفظ هذه المعلومات محليًا ضمن أرشيف فواتير وطلبات التاجر.")
+            .setTitle("بيانات المجموعة")
+            .setMessage("تُحفظ هذه المعلومات محليًا ضمن أرشيف المجموعة.")
             .setView(container)
             .setPositiveButton(R.string.save) { _, _ ->
                 try {
@@ -288,9 +288,9 @@ class GroupsFragment : Fragment() {
                         notes.text?.toString()
                     )
                     refresh()
-                    Toast.makeText(ctx, "تم حفظ بيانات التاجر", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, "تم حفظ بيانات المجموعة", Toast.LENGTH_SHORT).show()
                 } catch (error: Exception) {
-                    Toast.makeText(ctx, error.message ?: "تعذر حفظ بيانات التاجر", Toast.LENGTH_LONG).show()
+                    Toast.makeText(ctx, error.message ?: "تعذر حفظ بيانات المجموعة", Toast.LENGTH_LONG).show()
                 }
             }
             .setNegativeButton(R.string.cancel, null)
@@ -598,7 +598,7 @@ class GroupsFragment : Fragment() {
                 }
                 val isPinned = g.id in AppRepository.favoriteGroupIds()
                 val archiveAction = if (g.archivedAt == null) "أرشفة التاجر" else "إلغاء الأرشفة"
-                val actions = arrayOf(if (isPinned) "إلغاء التثبيت" else "تثبيت أعلى القائمة", archiveAction, "تعديل بيانات التاجر", "حذف")
+                val actions = arrayOf(if (isPinned) "إلغاء التثبيت" else "تثبيت أعلى القائمة", archiveAction, "تعديل بيانات المجموعة", "حذف")
                 MaterialAlertDialogBuilder(ctx)
                     .setItems(actions) { _, which ->
                         when (which) {

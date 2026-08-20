@@ -2,11 +2,14 @@ package com.masahhisabat.app.ui.invoice
 
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.animation.ValueAnimator
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.LinearInterpolator
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -37,6 +40,7 @@ class InboxActivity : AppCompatActivity() {
         binding.list.layoutManager = LinearLayoutManager(this)
         adapter = InboxAdapter(::openGroup, ::chooseStatus)
         binding.list.adapter = adapter
+        binding.refresh.setOnClickListener { refresh(animated = true, fromUser = true) }
         bindFilters()
         refresh()
     }
@@ -52,10 +56,15 @@ class InboxActivity : AppCompatActivity() {
             binding.filterReview to InvoiceWorkflow.IN_REVIEW,
             binding.filterCompleted to InvoiceWorkflow.COMPLETED,
             binding.filterPaid to InvoiceWorkflow.PAID
-        ).forEach { (button, status) -> button.setOnClickListener { selectedStatus = status; refresh() } }
+        ).forEach { (button, status) -> button.setOnClickListener {
+            if (selectedStatus != status) {
+                selectedStatus = status
+                refresh(animated = true)
+            }
+        } }
     }
 
-    private fun refresh() {
+    private fun refresh(animated: Boolean = false, fromUser: Boolean = false) {
         val items = AppRepository.invoiceWorkItems().filter { (_, item) -> item.status == selectedStatus }
         binding.empty.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
         binding.list.visibility = if (items.isEmpty()) View.GONE else View.VISIBLE
@@ -65,8 +74,40 @@ class InboxActivity : AppCompatActivity() {
             InvoiceWorkflow.COMPLETED -> "${items.size} فواتير مكتملة بانتظار الإقفال"
             else -> "${items.size} فواتير مدفوعة محفوظة للرجوع إليها"
         }
-        adapter.submit(items)
+        adapter.submit(items, animated && motionEnabled())
         updateFilterStyles()
+        if (animated && motionEnabled()) animateRefresh(items.isEmpty(), fromUser)
+    }
+
+    /** حركات قصيرة لا تعمل إذا عطّل المستخدم حركة النظام من إعدادات الوصول. */
+    private fun motionEnabled(): Boolean = ValueAnimator.areAnimatorsEnabled()
+
+    private fun animateRefresh(isEmpty: Boolean, fromUser: Boolean) {
+        if (fromUser) {
+            binding.refresh.isEnabled = false
+            binding.refresh.rotation = 0f
+            binding.refresh.animate()
+                .rotationBy(360f)
+                .setDuration(420L)
+                .setInterpolator(LinearInterpolator())
+                .withEndAction {
+                    binding.refresh.rotation = 0f
+                    binding.refresh.isEnabled = true
+                }
+                .start()
+        }
+
+        binding.summary.animate().cancel()
+        binding.summary.alpha = 0.55f
+        binding.summary.scaleX = 0.985f
+        binding.summary.scaleY = 0.985f
+        binding.summary.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(180L).start()
+
+        val target = if (isEmpty) binding.empty else binding.list
+        target.animate().cancel()
+        target.alpha = 0f
+        target.translationY = 12f
+        target.animate().alpha(1f).translationY(0f).setDuration(220L).start()
     }
 
     private fun updateFilterStyles() {
@@ -94,7 +135,7 @@ class InboxActivity : AppCompatActivity() {
                 InvoiceWorkflow.updateStatus(this, group.id, item.id, InvoiceWorkflow.statuses[which])
                 AppRepository.logActivity(com.masahhisabat.app.data.ActivityEntry("local", "حدّث حالة فاتورة لدى ${group.name}"))
                 dialog.dismiss()
-                refresh()
+                refresh(animated = true)
             }
             .setNegativeButton("إلغاء", null)
             .show()
@@ -113,7 +154,25 @@ class InboxActivity : AppCompatActivity() {
         private val onStatus: (Group, InvoiceItem) -> Unit
     ) : RecyclerView.Adapter<InboxAdapter.Holder>() {
         private var rows: List<Pair<Group, InvoiceItem>> = emptyList()
-        fun submit(newRows: List<Pair<Group, InvoiceItem>>) { rows = newRows; notifyDataSetChanged() }
+        fun submit(newRows: List<Pair<Group, InvoiceItem>>, animate: Boolean) {
+            if (!animate) {
+                rows = newRows
+                notifyDataSetChanged()
+                return
+            }
+            val previousRows = rows
+            val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+                override fun getOldListSize() = previousRows.size
+                override fun getNewListSize() = newRows.size
+                override fun areItemsTheSame(oldPosition: Int, newPosition: Int): Boolean =
+                    previousRows[oldPosition].first.id == newRows[newPosition].first.id &&
+                        previousRows[oldPosition].second.id == newRows[newPosition].second.id
+                override fun areContentsTheSame(oldPosition: Int, newPosition: Int): Boolean =
+                    previousRows[oldPosition] == newRows[newPosition]
+            })
+            rows = newRows
+            diff.dispatchUpdatesTo(this)
+        }
         class Holder(val binding: ItemInboxInvoiceBinding) : RecyclerView.ViewHolder(binding.root)
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = Holder(ItemInboxInvoiceBinding.inflate(LayoutInflater.from(parent.context), parent, false))
         override fun onBindViewHolder(holder: Holder, position: Int) {

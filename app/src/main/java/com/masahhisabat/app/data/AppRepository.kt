@@ -310,8 +310,8 @@ object AppRepository {
      */
     fun persistAppImage(sourcePath: String): String? {
         return try {
-            // لا نعيد مسارًا داخليًا على أنه دائم: الصور الداخلية تُحذف عند إزالة التطبيق.
-            if (!isUsingExternalStorage()) return null
+            // التخزين الخارجي هو الخيار المفضل، لكن يجب ألا يفشل الإرسال عند عدم توفره.
+            // نستخدم مجلد البيانات الداخلي كبديل آمن بدل إسقاط الصورة بصمت.
             val src = java.io.File(sourcePath).canonicalFile
             if (!src.isFile || src.length() <= 0L) return null
             val destDir = File(dataDir(), "images")

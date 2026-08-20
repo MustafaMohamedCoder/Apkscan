@@ -157,21 +157,19 @@ class ZoomableImageView @JvmOverloads constructor(
             MotionEvent.ACTION_DOWN -> {
                 start.set(event.x, event.y)
                 movedBeyondTouchSlop = false
-                if (!isZoomed) {
-                    // يسمح للـ ViewPager باعتراض السحب أحادي الإصبع، مع بقاء الصورة مستقبلة للنقر المزدوج والتكبير.
-                    val now = System.currentTimeMillis()
-                    if (now - lastTapTime < doubleTapThreshold) {
-                        // نقرة مزدوجة: تكبير/تصغير
-                        if (isZoomed) {
-                            smoothScaleTo(minScale)
-                        } else {
-                            smoothScaleTo(minScale * 2.5f, x, y)
-                        }
-                        lastTapTime = 0
-                        return true
+                // الضغط المزدوج يعمل في الحالتين: تكبير عند العرض الطبيعي وتصغير عند التكبير.
+                val now = System.currentTimeMillis()
+                if (now - lastTapTime < doubleTapThreshold) {
+                    if (isZoomed) {
+                        smoothScaleTo(minScale, x, event.y)
+                    } else {
+                        smoothScaleTo(minScale * 2.5f, x, event.y)
                     }
-                    lastTapTime = now
+                    lastTapTime = 0
+                    movedBeyondTouchSlop = false
+                    return true
                 }
+                lastTapTime = now
                 mode = Mode.DRAG
                 last.set(event.x, event.y)
                 if (isZoomed) parent?.requestDisallowInterceptTouchEvent(true)

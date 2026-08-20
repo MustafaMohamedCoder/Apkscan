@@ -39,6 +39,8 @@ class DirectMessagesActivity : AppCompatActivity() {
     private var currentUser = ""
     private var targetUser = ""
     private var callCheckInProgress = false
+    private var lastCallFailure: String? = null
+    private var lastLatencyMs: Long? = null
     private val pickerCode = 431
 
     override fun onCreate(state: Bundle?) {
@@ -100,7 +102,10 @@ class DirectMessagesActivity : AppCompatActivity() {
     private fun refresh() {
         if (!::adapter.isInitialized || targetUser.isBlank()) return
         val online = AppRepository.isUserOnline(targetUser)
-        status.text = if (online) "●  متصل الآن" else "○  غير متصل الآن"
+        val presence = if (online) "●  متصل الآن" else "○  غير متصل الآن"
+        val latency = lastLatencyMs?.let { " | زمن الاستجابة: ${it}ms" }.orEmpty()
+        val failure = lastCallFailure?.let { "\nآخر فشل اتصال: $it" }.orEmpty()
+        status.text = "$presence$latency$failure"
         status.setTextColor(if (online) Color.rgb(35, 160, 85) else ThemeHelper.textSecondary(this))
         adapter.submit(AppRepository.directConversation(currentUser, targetUser))
         list.post { list.scrollToPosition((adapter.itemCount - 1).coerceAtLeast(0)) }
@@ -108,18 +113,37 @@ class DirectMessagesActivity : AppCompatActivity() {
 
     private fun showCallHistory() {
         val formatter = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
-        val rows = AppRepository.callLogs().take(30).map {
+        val logs = AppRepository.callLogs().take(30)
+        val rows = logs.map {
             val kind = if (it.type == "video") "فيديو" else "صوتية"
             val minutes = it.durationSeconds / 60L
             val seconds = it.durationSeconds % 60L
             val duration = if (it.durationSeconds > 0) " | ${"%02d:%02d".format(minutes, seconds)}" else ""
             val reason = it.endReason?.takeIf { value -> value.isNotBlank() }?.let { value -> " | $value" }.orEmpty()
-            "${it.caller} ← ${it.callee} | $kind | ${it.status}$duration$reason | ${formatter.format(Date(it.startedAt))}"
+            val latency = it.latencyMs?.let { value -> " | ${value}ms" }.orEmpty()
+            "${it.caller} ← ${it.callee} | $kind | ${it.status}$duration$latency$reason | ${formatter.format(Date(it.startedAt))}"
         }
+        var selectedIndex = 0
         AlertDialog.Builder(this)
             .setTitle("سجل المكالمات")
-            .setMessage(if (rows.isEmpty()) "لا توجد مكالمات مسجلة" else rows.joinToString("\\n"))
-            .setPositiveButton("إغلاق", null)
+            .setMessage(if (rows.isEmpty()) "لا توجد مكالمات مسجلة" else "اختر سجلاً ثم اضغط إعادة الاتصال")
+            .apply {
+                if (rows.isNotEmpty()) {
+                    setSingleChoiceItems(rows.toTypedArray(), 0) { _, which -> selectedIndex = which }
+                    setPositiveButton("إعادة الاتصال") { _, _ ->
+                        logs.getOrNull(selectedIndex)?.let { log ->
+                            targetUser = if (log.caller.equals(currentUser, ignoreCase = true)) log.callee else log.caller
+                            lastCallFailure = null
+                            lastLatencyMs = null
+                            refresh()
+                            openCall(log.type)
+                        }
+                    }
+                } else {
+                    setPositiveButton("إغلاق", null)
+                }
+            }
+            .setNegativeButton("إلغاء", null)
             .show()
     }
 
@@ -130,26 +154,33 @@ class DirectMessagesActivity : AppCompatActivity() {
         }
         if (callCheckInProgress) return
         callCheckInProgress = true
+        lastCallFailure = null
+        lastLatencyMs = null
         status.text = "جارٍ التحقق من اتصال $targetUser داخل الشبكة المحلية…"
         Thread {
             val peer = SyncManager.discover(1200).firstOrNull { it.name.equals(targetUser, ignoreCase = true) }
             val address = peer?.address ?: AppRepository.syncDevices().firstOrNull { it.name.equals(targetUser, ignoreCase = true) }?.address
+            val probeStartedAt = android.os.SystemClock.elapsedRealtime()
             val reachable = address != null && SyncManager.sendCallSignal(
                 address,
                 CallSignal(kind = "probe", callId = "probe-${System.currentTimeMillis()}", fromUser = currentUser, toUser = targetUser)
             )
+            val latencyMs = (android.os.SystemClock.elapsedRealtime() - probeStartedAt).coerceAtLeast(0L)
             runOnUiThread {
                 callCheckInProgress = false
                 if (!reachable || address == null) {
-                    status.text = "تعذر الوصول إلى $targetUser محليًا. تأكد من اتصال الجهازين بالشبكة نفسها ومن فتح التطبيق."
+                    lastCallFailure = "تعذر الوصول محليًا. تأكد من اتصال الجهازين بالشبكة نفسها ومن فتح التطبيق."
+                    refresh()
                     Toast.makeText(this, "فشل اختبار الاتصال المحلي", Toast.LENGTH_LONG).show()
                     return@runOnUiThread
                 }
-                status.text = "تم اختبار الاتصال المحلي بنجاح — جارٍ فتح المكالمة"
+                lastLatencyMs = latencyMs
+                status.text = "تم اختبار الاتصال المحلي بنجاح | زمن الاستجابة: ${latencyMs}ms — جارٍ فتح المكالمة"
                 startActivity(Intent(this, com.masahhisabat.app.ui.call.LocalCallActivity::class.java).apply {
                     putExtra(com.masahhisabat.app.ui.call.LocalCallActivity.EXTRA_PEER_USER, targetUser)
                     putExtra(com.masahhisabat.app.ui.call.LocalCallActivity.EXTRA_PEER_ADDRESS, address)
                     putExtra(com.masahhisabat.app.ui.call.LocalCallActivity.EXTRA_MEDIA_TYPE, type)
+                    putExtra(com.masahhisabat.app.ui.call.LocalCallActivity.EXTRA_NETWORK_LATENCY_MS, latencyMs)
                 })
             }
         }.start()

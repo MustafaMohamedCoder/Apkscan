@@ -3,6 +3,7 @@ package com.masahhisabat.app.ui.call
 import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.PictureInPictureParams
 import android.app.RemoteAction
@@ -25,6 +26,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
+import com.masahhisabat.app.data.CallFeedback
 import com.masahhisabat.app.data.CallLog
 import com.masahhisabat.app.data.LocalWebRtcEngine
 import com.masahhisabat.app.ui.auth.SessionStore
@@ -58,6 +60,7 @@ class LocalCallActivity : Activity() {
     private val callTimerHandler = Handler(Looper.getMainLooper())
     private var callStartedElapsed = 0L
     private var ending = false
+    private var answerFeedbackDelivered = false
     private val callTimer = object : Runnable {
         override fun run() {
             updateDuration()
@@ -190,6 +193,12 @@ class LocalCallActivity : Activity() {
         callStartedElapsed = SystemClock.elapsedRealtime()
         startDurationTimer()
         val incoming = intent.getStringExtra(EXTRA_INCOMING_SDP)
+        if (incoming.isNullOrBlank()) {
+            CallFeedback.startOutgoingWaiting(applicationContext)
+        } else {
+            CallFeedback.stopTone()
+            clearIncomingNotification()
+        }
         val log = CallLog(
             caller = if (incoming.isNullOrBlank()) currentUser else peerUser,
             callee = if (incoming.isNullOrBlank()) peerUser else currentUser,
@@ -197,6 +206,7 @@ class LocalCallActivity : Activity() {
             direction = if (incoming.isNullOrBlank()) "outgoing" else "incoming",
             status = "ringing",
             startedAt = startedAt,
+            latencyMs = intent.getLongExtra(EXTRA_NETWORK_LATENCY_MS, -1L).takeIf { it >= 0L },
             peerAddress = intent.getStringExtra(EXTRA_PEER_ADDRESS)
         )
         logId = log.id
@@ -209,7 +219,19 @@ class LocalCallActivity : Activity() {
             mediaType = mediaType,
             localRenderer = localRenderer,
             remoteRenderer = remoteRenderer,
-            onState = { state -> runOnUiThread { statusView?.text = "حالة الاتصال: $state" } },
+            onState = { state -> runOnUiThread {
+                statusView?.text = "حالة الاتصال: $state"
+                when (state) {
+                    "CONNECTED" -> {
+                        CallFeedback.stopTone()
+                        if (!answerFeedbackDelivered) {
+                            answerFeedbackDelivered = true
+                            CallFeedback.vibrateAnswered(applicationContext)
+                        }
+                    }
+                    "FAILED", "CLOSED" -> CallFeedback.stopTone()
+                }
+            } },
             onNetworkQuality = { quality ->
                 runOnUiThread {
                     networkQuality = quality
@@ -416,6 +438,9 @@ class LocalCallActivity : Activity() {
         if (ending) return
         ending = true
         stopDurationTimer()
+        CallFeedback.stopTone()
+        clearIncomingNotification()
+        CallFeedback.playCallEnded(applicationContext)
         val ended = System.currentTimeMillis()
         logId?.let { id ->
             AppRepository.updateCallLog(id) {
@@ -436,6 +461,7 @@ class LocalCallActivity : Activity() {
 
     override fun onDestroy() {
         stopDurationTimer()
+        CallFeedback.stopTone()
         if (!ending && !isChangingConfigurations) {
             logId?.let { id ->
                 val ended = System.currentTimeMillis()
@@ -451,11 +477,18 @@ class LocalCallActivity : Activity() {
 
     override fun onBackPressed() { finishCall("ended", "أنهى المستخدم المكالمة") }
 
+    private fun clearIncomingNotification() {
+        intent.getStringExtra(EXTRA_CALL_ID)?.let { callId ->
+            getSystemService(NotificationManager::class.java).cancel(callId.hashCode())
+        }
+    }
+
     companion object {
         const val EXTRA_CALL_ID = "call_id"
         const val EXTRA_PEER_USER = "peer_user"
         const val EXTRA_PEER_ADDRESS = "peer_address"
         const val EXTRA_MEDIA_TYPE = "media_type"
+        const val EXTRA_NETWORK_LATENCY_MS = "network_latency_ms"
         const val EXTRA_INCOMING_SDP = "incoming_sdp"
         private const val REQUEST_MEDIA = 903
         private const val ACTION_PIP_TOGGLE_MIC = "com.masahhisabat.app.action.PIP_TOGGLE_MIC"

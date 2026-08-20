@@ -132,6 +132,8 @@ data class CallLog(
     @SerializedName("duration_seconds") val durationSeconds: Long = 0L,
     /** سبب مفهوم للمستخدم عند إنهاء الاتصال أو فشله. */
     @SerializedName("end_reason") val endReason: String? = null,
+    /** زمن استجابة اختبار الوصول المحلي قبل بدء المكالمة بالميلي ثانية. */
+    @SerializedName("latency_ms") val latencyMs: Long? = null,
     @SerializedName("peer_address") val peerAddress: String? = null
 )
 

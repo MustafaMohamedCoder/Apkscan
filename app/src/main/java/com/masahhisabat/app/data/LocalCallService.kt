@@ -31,12 +31,14 @@ class LocalCallService : Service() {
 
     override fun onDestroy() {
         SyncManager.removeCallSignalListener(signalListener)
+        CallFeedback.stopTone()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun showIncomingCall(signal: CallSignal, address: String) {
+        CallFeedback.startIncomingRinging(applicationContext)
         val intent = Intent(this, LocalCallActivity::class.java).apply {
             putExtra(LocalCallActivity.EXTRA_CALL_ID, signal.callId)
             putExtra(LocalCallActivity.EXTRA_PEER_USER, signal.fromUser)

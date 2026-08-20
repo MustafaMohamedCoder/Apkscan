@@ -38,6 +38,7 @@ class LocalWebRtcEngine(
     private val videoCapturer: CameraVideoCapturer?
     private val localVideo: VideoTrack?
     private val localAudio: org.webrtc.AudioTrack
+    private var audioSource: org.webrtc.AudioSource? = null
     private val signalListener: (CallSignal, String) -> Unit
     private val streamId = "local-call-$callId"
     private val diagnosticStartedAt = SystemClock.elapsedRealtime()
@@ -107,6 +108,7 @@ class LocalWebRtcEngine(
         }
         connection = requireNotNull(factory.createPeerConnection(rtcConfig, observer))
         val audio = factory.createAudioSource(MediaConstraints())
+        audioSource = audio
         localAudio = factory.createAudioTrack("audio-$callId", audio)
         connection.addTrack(localAudio, listOf(streamId))
         if (mediaType == "video") {
@@ -241,15 +243,19 @@ class LocalWebRtcEngine(
     }
 
     fun release() {
+        if (releasing) return
         releasing = true
         recordDiagnostic("إنهاء", "تحرير وسائط المكالمة محليًا")
         SyncManager.removeCallSignalListener(signalListener)
         try { videoCapturer?.stopCapture() } catch (_: Throwable) {}
-        videoCapturer?.dispose()
-        localVideo?.dispose()
-        connection.close()
-        factory.dispose()
-        egl.release()
+        runCatching { videoCapturer?.dispose() }
+        runCatching { localVideo?.dispose() }
+        runCatching { localAudio.dispose() }
+        runCatching { audioSource?.dispose() }
+        runCatching { connection.close() }
+        runCatching { connection.dispose() }
+        runCatching { factory.dispose() }
+        runCatching { egl.release() }
     }
 
     fun diagnosticLog(): String = diagnostics.take(80).joinToString("\n")

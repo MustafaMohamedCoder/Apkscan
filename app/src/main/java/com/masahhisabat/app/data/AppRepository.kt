@@ -127,34 +127,9 @@ object AppRepository {
         // ترقية تلقائية: إذا كان المجلد الخارجي الجديد فارغًا والمجلد الداخلي القديم يحوي بيانات
         // (من تثبيت سابق)، نرحّلها تلقائيًا حتى لا يفقد المستخدم بياناته
         migrateOldInternalDataIfNeeded()
-        // ترقية كلمة المرور: أي مستخدم بكلمة مرور SHA-256 القديمة تُعاد ترميزها بالنمط القابل للفك (v2)
-        // حتى يمكن عرض كلمات المرور كما هي وكتابة تشفير جديد قابل للفك
-        // لا نرقّي كلمات المرور القديمة هنا: الهاش القديم SHA-256 ليس كلمة المرور نفسها،
-        // والترقية هنا ستجعل الدخول بـ "0" مستحيلًا. الترقية تتم عند أول تسجيل دخول ناجح
-        // في authenticate() فقط.
-        // إصلاح إضافي: في النسخ السابقة كانت الترقية الخاطئة تخزّن encodePlain(الهاش القديم)
-        // فتصبح كلمة المرور فكها = سلاسل هكس بدلاً من الكلمة الفعلية، فيتعذّر الدخول نهائيًا.
-        // أي مستخدم بصيغة v2 لكن فكّها لا يتطابق مع أي مقارنة قياسية (أي غير صالحة) تُحذف كلمة مروره
-        // وتُعاد إليه القدرة على الدخول بكلمة المرور الافتراضية «0».
-        try {
-            // إصلاح كلمات المرور «الخاطئة»: في النسخ السابقة كانت الترقية التلقائية تحفظ
-            // encodePlain(الهاش القديم SHA-256) بدل كلمة المرور الفعلية، فيصبح فكّ كلمة
-            // المرور = سلسلة هكس طويلة وليس كلمة فعلية. نتعرف على ذلك بأن فكّها يساوي
-            // الهاش القديم SHA-256 (64 حرفًا هكسيًا) أو أن فكّها لا يصمد ككلمة مرور طبيعية.
-            val fixed = usersInternal().map { u ->
-                val decoded = HashUtil.decodePlain(u.passwordHash)
-                val isBadV2 = decoded != null && decoded.isNotBlank() &&
-                    (decoded.length == 64 && decoded.all { it in "0123456789abcdef" }) &&
-                    decoded == HashUtil.hash(decoded.removeSuffix(""))  // ببساطة: فكّها هاش هكسي كامل
-                if (isBadV2) {
-                    if (u.role == Role.ADMIN) u.copy(passwordHash = HashUtil.encodePlain("0"))
-                    else u.copy(passwordHash = HashUtil.encodePlain(u.username))
-                } else u
-            }
-            if (fixed.zip(usersInternal()).any { (a, b) -> a.passwordHash != b.passwordHash }) {
-                saveList("users.json", fixed)
-            }
-        } catch (_: Exception) { }
+        // لا نغيّر كلمات المرور تلقائيًا عند بدء التطبيق. الهاش التالف أو غير القابل
+        // للفك يحتاج إعادة ضبط صريحة من إدارة المستخدمين بعد تحقق إداري، وليس تخمينًا.
+        // هذا يمنع إعادة تعيين كلمات مرور المستخدمين بصمت عند كل تشغيل أو مزامنة.
         // ضمان وجود حساب مدير صالح يمكن الدخول إليه: إذا كان هناك مستخدمون لكن لا أحد منهم
         // يمكن الدخول إليه، ننشئ mustafa بكلمة «0» إذا لم يوجد (كلمته v2 قابلة للعرض).
         if (usersInternal().isEmpty()) {
@@ -216,18 +191,8 @@ object AppRepository {
         if (HashUtil.isDecodable(user.passwordHash) && HashUtil.decodePlain(user.passwordHash) == password) {
             return user
         }
-        // fallback مضمون: كلمات المرور v2 «الخاطئة» من النسخ السابقة (فكّها سلسلة هكس وليس كلمة فعلية)
-        // إذا فشلت المقارنة وكان فكّ كلمة المستخدم سلسلة هكس من 64 حرفًا، نعيد ضبطها تلقائيًا:
-        // ADMIN ← كلمة «0»، والبقية ← اسم المستخدم، ثم نعيد المحاولة.
-        val decoded = HashUtil.decodePlain(user.passwordHash)
-        val isBadV2 = decoded != null && decoded.length == 64 && decoded.all { it in "0123456789abcdef" }
-        if (isBadV2) {
-            val fixed = HashUtil.encodePlain(if (user.role == Role.ADMIN) "0" else user.username)
-            changePassword(user.username, fixed)
-            return users().find { sameUsername(it.username, normalized) && it.enabled }?.takeIf {
-                HashUtil.decodePlain(it.passwordHash) == (if (it.role == Role.ADMIN) "0" else it.username)
-            }
-        }
+        // لا يجوز إصلاح Hash تالف أثناء محاولة الدخول؛ وإلا قد تُقبل أي كلمة مرور.
+        // تُعاد null، ويجب تنفيذ إعادة ضبط صريحة من إدارة المستخدمين بعد تحقق إداري.
         return null
     }
 

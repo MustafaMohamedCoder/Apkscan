@@ -216,7 +216,7 @@ object ImageProcessor {
 
     private fun applyColorTone(source: Bitmap, redScale: Float, greenScale: Float, blueScale: Float): Bitmap {
         val bmp = source.copy(Bitmap.Config.ARGB_8888, true)
-        if (!source.isRecycled) source.recycle()
+        // لا نحرر المصدر هنا؛ ملكية Bitmap تعود إلى المستدعي وقد يحتاجه لخطوة لاحقة.
         val pixels = IntArray(bmp.width * bmp.height)
         bmp.getPixels(pixels, 0, bmp.width, 0, 0, bmp.width, bmp.height)
         for (index in pixels.indices) {
@@ -260,7 +260,6 @@ object ImageProcessor {
         }
 
         if (count < 24) {
-            if (!src.isRecycled) src.recycle()
             return bmp
         }
         val avgR = sumR.toFloat() / count
@@ -280,7 +279,6 @@ object ImageProcessor {
             pixels[i] = (0xFF000000.toInt()) or (r shl 16) or (g shl 8) or b
         }
         bmp.setPixels(pixels, 0, w, 0, 0, w, h)
-        if (!src.isRecycled) src.recycle()
         return bmp
     }
 

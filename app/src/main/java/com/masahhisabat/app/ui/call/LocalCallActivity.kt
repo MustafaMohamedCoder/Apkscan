@@ -11,11 +11,13 @@ import android.app.RemoteAction
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Rational
 import android.view.Gravity
 import android.view.View
@@ -68,6 +70,7 @@ class LocalCallActivity : Activity() {
     private var answerFeedbackDelivered = false
     private var mediaPermissionDialogVisible = false
     private var mediaPermissionRequestInFlight = false
+    private var returningFromAppSettings = false
     private var permissionWaitPanel: LinearLayout? = null
     private var permissionWaitText: TextView? = null
     private val callTimer = object : Runnable {
@@ -85,6 +88,20 @@ class LocalCallActivity : Activity() {
         startedAt = System.currentTimeMillis()
         render()
         requestPermissionsIfNeeded()
+    }
+
+    /** لا يستأنف الاتصال تلقائيًا بعد الإعدادات؛ يوضح فقط نتيجة اختيار المستخدم ويترك البدء بيده. */
+    override fun onResume() {
+        super.onResume()
+        if (!returningFromAppSettings) return
+        returningFromAppSettings = false
+        val granted = hasRequiredMediaPermissions()
+        acceptButton?.isEnabled = true
+        statusView?.text = if (granted) {
+            "تم تفعيل أذونات المكالمة من الإعدادات — اضغط لبدء الاتصال"
+        } else {
+            "لم تُفعّل كل الأذونات بعد — يمكنك فتح الإعدادات مجددًا أو المحاولة لاحقًا"
+        }
     }
 
     private fun render() {
@@ -597,10 +614,44 @@ class LocalCallActivity : Activity() {
         setMediaPermissionWaiting(false)
         val granted = hasRequiredMediaPermissions()
         acceptButton?.isEnabled = granted
-        statusView?.text = if (granted) {
-            "تم منح أذونات المكالمة — يمكنك البدء"
+        if (granted) {
+            statusView?.text = "تم منح أذونات المكالمة — يمكنك البدء"
         } else {
-            "تعذر بدء المكالمة: يلزم السماح بالميكروفون${if (mediaType == "video") " والكاميرا" else ""}"
+            showMediaPermissionFallback()
+        }
+    }
+
+    /** يبقي مسار الإعدادات متاحًا بعد أي رفض، حتى لو كان أندرويد يسمح بإعادة الطلب. */
+    private fun showMediaPermissionFallback() {
+        val permissionSummary = if (mediaType == "video") "الميكروفون والكاميرا" else "الميكروفون"
+        val canRequestAgain = requiredMediaPermissions().any { shouldShowRequestPermissionRationale(it) }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("يلزم إذن $permissionSummary للمكالمة")
+            .setMessage("تم رفض الإذن. افتح إعدادات التطبيق واسمح بـ $permissionSummary لتشغيل المكالمة محليًا، ولن يبدأ الاتصال تلقائيًا عند الرجوع.")
+            .setNegativeButton("ليس الآن") { _, _ ->
+                acceptButton?.isEnabled = true
+                statusView?.text = "يمكنك منح إذن $permissionSummary من الإعدادات عند الحاجة"
+            }
+            .setPositiveButton("فتح الإعدادات") { _, _ -> openAppSettings() }
+
+        if (canRequestAgain) {
+            dialog.setNeutralButton("إعادة طلب الإذن") { _, _ -> requestPermissionsIfNeeded() }
+        }
+        dialog.show()
+    }
+
+    private fun openAppSettings() {
+        setMediaPermissionWaiting(false)
+        returningFromAppSettings = true
+        try {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", packageName, null)
+            })
+        } catch (_: Exception) {
+            returningFromAppSettings = false
+            acceptButton?.isEnabled = true
+            statusView?.text = "تعذر فتح إعدادات التطبيق — يمكنك تعديل الأذونات من إعدادات الجهاز"
+            Toast.makeText(this, "تعذر فتح إعدادات التطبيق", Toast.LENGTH_LONG).show()
         }
     }
 

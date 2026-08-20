@@ -135,16 +135,16 @@ class DocumentCameraActivity : AppCompatActivity() {
             .setTitle("يلزم إذن الكاميرا للمسح")
             .setMessage(
                 if (canRequestAgain) {
-                    "لم يتم السماح باستخدام الكاميرا. يمكنك إعادة طلب الإذن أو اختيار صورة من المعرض بدلاً من ذلك."
+                    "لم يتم السماح باستخدام الكاميرا. يمكنك فتح إعدادات التطبيق لتفعيلها يدويًا، أو إعادة طلب الإذن، أو اختيار صورة من المعرض."
                 } else {
                     "تم منع إذن الكاميرا. افتح إعدادات التطبيق واسمح بالكاميرا لتصوير المستندات، أو اختر صورة من المعرض."
                 }
             )
             .setNegativeButton("اختيار صورة") { _, _ -> showGalleryOnlyState() }
-            .setNeutralButton("إلغاء") { _, _ -> showGalleryOnlyState() }
-            .setPositiveButton(if (canRequestAgain) "إعادة المحاولة" else "فتح الإعدادات") { _, _ ->
-                if (canRequestAgain) requestCameraPermission() else openAppSettings()
+            .setNeutralButton(if (canRequestAgain) "إعادة طلب الإذن" else "إلغاء") { _, _ ->
+                if (canRequestAgain) requestCameraPermission() else showGalleryOnlyState()
             }
+            .setPositiveButton("فتح الإعدادات") { _, _ -> openAppSettings() }
             .show()
     }
 

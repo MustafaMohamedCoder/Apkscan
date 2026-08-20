@@ -2,7 +2,10 @@ package com.masahhisabat.app.ui.call
 
 import android.Manifest
 import android.app.Activity
+import android.app.PendingIntent
 import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
@@ -11,10 +14,12 @@ import android.util.Rational
 import android.view.View
 import android.widget.Button
 import android.graphics.Rect
+import android.graphics.drawable.Icon
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.CallLog
 import com.masahhisabat.app.data.LocalWebRtcEngine
@@ -82,11 +87,11 @@ class LocalCallActivity : Activity() {
             }
         }
         micButton = Button(this).apply {
-            text = "كتم الصوت"
+            text = "كتم الميكروفون"
             setOnClickListener { toggleMicrophone() }
         }
         cameraButton = Button(this).apply {
-            text = "إيقاف الكاميرا"
+            text = "إيقاف الفيديو"
             visibility = if (mediaType == "video") View.VISIBLE else View.GONE
             setOnClickListener { toggleCamera() }
         }
@@ -148,16 +153,18 @@ class LocalCallActivity : Activity() {
 
     private fun toggleMicrophone() {
         microphoneEnabled = !(engine?.setMicrophoneEnabled(microphoneEnabled) ?: microphoneEnabled)
-        micButton?.text = if (microphoneEnabled) "كتم الصوت" else "تشغيل الصوت"
+        micButton?.text = if (microphoneEnabled) "كتم الميكروفون" else "تشغيل الميكروفون"
         statusView?.text = if (microphoneEnabled) "الميكروفون يعمل" else "الميكروفون مكتوم"
+        updatePictureInPictureActions()
     }
 
     private fun toggleCamera() {
         if (mediaType != "video") return
         cameraEnabled = !(engine?.setCameraEnabled(cameraEnabled) ?: cameraEnabled)
-        cameraButton?.text = if (cameraEnabled) "إيقاف الكاميرا" else "تشغيل الكاميرا"
+        cameraButton?.text = if (cameraEnabled) "إيقاف الفيديو" else "تشغيل الفيديو"
         localRenderer?.visibility = if (cameraEnabled) View.VISIBLE else View.INVISIBLE
-        statusView?.text = if (cameraEnabled) "الكاميرا تعمل" else "الكاميرا متوقفة"
+        statusView?.text = if (cameraEnabled) "الفيديو يعمل" else "الفيديو متوقف"
+        updatePictureInPictureActions()
     }
 
     private fun switchCamera() {
@@ -175,17 +182,69 @@ class LocalCallActivity : Activity() {
             statusView?.text = "ابدأ المكالمة أولًا ثم صغّر نافذتها"
             return
         }
+        enterPictureInPictureMode(buildPictureInPictureParams())
+    }
+
+    private fun buildPictureInPictureParams(): PictureInPictureParams {
         val compactRatio = if (mediaType == "video") Rational(16, 9) else Rational(4, 3)
         val builder = PictureInPictureParams.Builder()
             // PiP النظامي يسمح بسحب النافذة إلى أي زاوية وتغيير حجمها بإيماءة القرص.
             .setAspectRatio(compactRatio)
+            .setActions(buildPictureInPictureActions())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             builder.setSeamlessResizeEnabled(true)
             // يتيح للمستخدم توسيع نافذة المكالمة ثم تصغيرها بحرية دون فرض حجم واحد.
             builder.setExpandedAspectRatio(compactRatio)
         }
-        // لا نضع SourceRectHint مصطنعًا؛ فهو كان يقيد موضع البداية ويجعل النافذة تبدو ثابتة.
-        enterPictureInPictureMode(builder.build())
+        return builder.build()
+    }
+
+    private fun buildPictureInPictureActions(): List<RemoteAction> {
+        val micTitle = if (microphoneEnabled) "كتم الميكروفون" else "تشغيل الميكروفون"
+        val videoTitle = when {
+            mediaType != "video" -> "الفيديو غير متاح في المكالمة الصوتية"
+            cameraEnabled -> "إيقاف الفيديو"
+            else -> "تشغيل الفيديو"
+        }
+        val micAction = RemoteAction(
+            Icon.createWithResource(this, R.drawable.ic_mic),
+            micTitle,
+            micTitle,
+            createPipActionIntent(ACTION_PIP_TOGGLE_MIC, 301)
+        )
+        val videoAction = RemoteAction(
+            Icon.createWithResource(this, R.drawable.ic_video_call),
+            videoTitle,
+            videoTitle,
+            createPipActionIntent(ACTION_PIP_TOGGLE_VIDEO, 302)
+        ).apply { isEnabled = mediaType == "video" }
+        return listOf(micAction, videoAction)
+    }
+
+    private fun createPipActionIntent(action: String, requestCode: Int): PendingIntent {
+        val intent = Intent(this, LocalCallActivity::class.java)
+            .setAction(action)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        return PendingIntent.getActivity(
+            this,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    private fun updatePictureInPictureActions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && isInPictureInPictureMode) {
+            setPictureInPictureParams(buildPictureInPictureParams())
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        when (intent.action) {
+            ACTION_PIP_TOGGLE_MIC -> toggleMicrophone()
+            ACTION_PIP_TOGGLE_VIDEO -> toggleCamera()
+        }
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
@@ -233,5 +292,7 @@ class LocalCallActivity : Activity() {
         const val EXTRA_MEDIA_TYPE = "media_type"
         const val EXTRA_INCOMING_SDP = "incoming_sdp"
         private const val REQUEST_MEDIA = 903
+        private const val ACTION_PIP_TOGGLE_MIC = "com.masahhisabat.app.action.PIP_TOGGLE_MIC"
+        private const val ACTION_PIP_TOGGLE_VIDEO = "com.masahhisabat.app.action.PIP_TOGGLE_VIDEO"
     }
 }

@@ -161,6 +161,7 @@ class GroupActivity : AppCompatActivity() {
             // النسخ إلى Documents والكتابة إلى JSON عمليتان قد تكونان بطيئتين؛ تنفذان بعيدًا عن الواجهة.
             Thread {
                 val error = try {
+                    val user = SessionStore.currentUser(ctx) ?: "مستخدم"
                     if (textAttachment != null) {
                         val permanentPath = AppRepository.persistAppImage(textAttachment)
                             ?: throw IllegalStateException("تعذر حفظ الصورة بشكل دائم. فعّل إذن الوصول إلى الملفات ثم أعد المحاولة.")
@@ -168,14 +169,17 @@ class GroupActivity : AppCompatActivity() {
                             type = "image",
                             imagePath = permanentPath,
                             processedPath = null,
-                            text = text.ifBlank { null }
+                            text = text.ifBlank { null },
+                            sender = user
                         ))
-                        val user = SessionStore.currentUser(ctx) ?: "?"
-                        AppRepository.logActivity(ActivityEntry(user, "أضاف $user صورة${if (text.isNotBlank()) " ونصًا" else ""} في $groupName"))
+                        runCatching {
+                            AppRepository.logActivity(ActivityEntry(user, "أضاف $user صورة${if (text.isNotBlank()) " ونصًا" else ""} في $groupName"))
+                        }
                     } else {
-                        AppRepository.addItem(groupId, InvoiceItem(type = "text", text = text))
-                        val user = SessionStore.currentUser(ctx) ?: "?"
-                        AppRepository.logActivity(ActivityEntry(user, "أضاف $user نصًا يدويًا في $groupName"))
+                        AppRepository.addItem(groupId, InvoiceItem(type = "text", text = text, sender = user))
+                        runCatching {
+                            AppRepository.logActivity(ActivityEntry(user, "أضاف $user نصًا يدويًا في $groupName"))
+                        }
                     }
                     null
                 } catch (e: Exception) {
@@ -196,6 +200,11 @@ class GroupActivity : AppCompatActivity() {
                         draftHandler.removeCallbacks(saveDraftTask)
                         AppRepository.clearMessageDraft(groupId)
                         hideSoftKeyboard(etMessage)
+                        // قد يخفي فلتر بحث محفوظ الرسالة الجديدة فورًا؛ نمسحه بعد إرسال ناجح حتى تظهر للمستخدم.
+                        if (searchInput.text.toString().trim().isNotBlank()) {
+                            searchInput.setText("")
+                            Snackbar.make(recycler, "تمت إضافة الرسالة وعرض أحدث محتوى المجموعة", Snackbar.LENGTH_SHORT).show()
+                        }
                         refresh()
                         scrollToLatestMessage()
                         Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()

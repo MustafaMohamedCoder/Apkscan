@@ -39,6 +39,8 @@ object AppRepository {
     private const val BACKUP_KDF_ITERATIONS = 120_000
 
     private var appContext: Context? = null
+    /** يمنع كتابة متزامنة من الإرسال المحلي والمزامنة من استبدال ملف رسائل المجموعة. */
+    private val groupItemsWriteLock = Any()
     private val prefs: SharedPreferences by lazy {
         val ctx = appContext
             ?: throw IllegalStateException("AppRepository must be initialized with appContext first")
@@ -389,18 +391,24 @@ object AppRepository {
         } catch (e: Exception) { false }
     }
 
-    fun addItem(groupId: String, item: InvoiceItem) {
+    fun addItem(groupId: String, item: InvoiceItem) = synchronized(groupItemsWriteLock) {
         val dir = File(dataDir(), "invoices/$groupId")
         dir.mkdirs()
-        val list = items(groupId).toMutableList().also { it.add(0, item) }
+        val list = items(groupId).toMutableList().also { current ->
+            if (current.none { it.id == item.id }) current.add(0, item)
+        }
         writeTextAtomically(File(dir, "items.json"), gson.toJson(list))
-        val groupName = groups().firstOrNull { it.id == groupId }?.name ?: "مجموعة"
-        addNotification(NotificationEvent(
-            title = "رسالة جديدة في $groupName",
-            body = item.text?.takeIf { it.isNotBlank() } ?: if (item.imagePath != null) "تمت إضافة صورة إلى المجموعة" else "تمت إضافة رسالة جديدة",
-            type = "group_message",
-            actor = item.sender
-        ))
+
+        // الإشعار تحسين إضافي فقط؛ لا يجوز لفشله أن يحوّل رسالة محفوظة إلى «إرسال فاشل» في الواجهة.
+        runCatching {
+            val groupName = groups().firstOrNull { it.id == groupId }?.name ?: "مجموعة"
+            addNotification(NotificationEvent(
+                title = "رسالة جديدة في $groupName",
+                body = item.text?.takeIf { it.isNotBlank() } ?: if (item.imagePath != null) "تمت إضافة صورة إلى المجموعة" else "تمت إضافة رسالة جديدة",
+                type = "group_message",
+                actor = item.sender
+            ))
+        }
     }
 
     fun updateItem(groupId: String, item: InvoiceItem) {

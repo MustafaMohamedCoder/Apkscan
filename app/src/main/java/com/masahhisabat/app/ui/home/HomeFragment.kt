@@ -16,6 +16,8 @@ import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.InvoiceWorkflow
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.invoice.InboxActivity
+import com.masahhisabat.app.ui.messages.DirectMessagesActivity
+import com.masahhisabat.app.ui.notifications.NotificationsActivity
 
 /**
  * بداية مبسطة للاستخدام اليومي: المسح أولًا، ثم نظرة سريعة وصندوق الوارد.
@@ -46,6 +48,10 @@ class HomeFragment : Fragment() {
         view.findViewById<TextView>(R.id.invoices_label).setOnClickListener(openInbox)
         view.findViewById<View>(R.id.inbox_card).setOnClickListener(openInbox)
         view.findViewById<MaterialButton>(R.id.btn_open_inbox).setOnClickListener(openInbox)
+        val openNotifications = View.OnClickListener { startActivity(Intent(requireContext(), NotificationsActivity::class.java)) }
+        view.findViewById<View>(R.id.notifications_card).setOnClickListener(openNotifications)
+        val openMessages = View.OnClickListener { startActivity(Intent(requireContext(), DirectMessagesActivity::class.java)) }
+        view.findViewById<View>(R.id.direct_messages_card).setOnClickListener(openMessages)
 
         refresh(force = true)
     }
@@ -72,7 +78,7 @@ class HomeFragment : Fragment() {
         view.setBackgroundResource(ThemeHelper.backgroundRes())
         view.findViewById<View>(R.id.home_root).setBackgroundResource(ThemeHelper.backgroundRes())
 
-        listOf(R.id.card_groups, R.id.card_invoices, R.id.inbox_card).forEach { id ->
+        listOf(R.id.card_groups, R.id.card_invoices, R.id.inbox_card, R.id.notifications_card, R.id.direct_messages_card).forEach { id ->
             view.findViewById<MaterialCardView>(id).apply {
                 setCardBackgroundColor(ThemeHelper.surface(context))
                 strokeColor = ThemeHelper.cardStroke(context)
@@ -91,7 +97,7 @@ class HomeFragment : Fragment() {
         view.findViewById<TextView>(R.id.subtitle).setTextColor(heroSecondary)
         view.findViewById<android.widget.ImageView>(R.id.welcome_badge).setColorFilter(heroTitle)
 
-        listOf(R.id.home_overview_title, R.id.inbox_title).forEach { id ->
+        listOf(R.id.home_overview_title, R.id.inbox_title, R.id.notifications_summary, R.id.direct_messages_summary).forEach { id ->
             view.findViewById<TextView>(id).setTextColor(text)
         }
         listOf(R.id.groups_label, R.id.invoices_label, R.id.inbox_summary).forEach { id ->
@@ -113,6 +119,8 @@ class HomeFragment : Fragment() {
         try {
             root.findViewById<TextView>(R.id.invoices_count).text = AppRepository.totalInvoiceCount().toString()
             root.findViewById<TextView>(R.id.groups_count).text = AppRepository.groups().size.toString()
+            root.findViewById<TextView>(R.id.notifications_summary).text = if (AppRepository.unreadNotificationCount() > 0) "${AppRepository.unreadNotificationCount()} إشعارات جديدة" else "لا توجد إشعارات جديدة"
+            root.findViewById<TextView>(R.id.direct_messages_summary).text = if (AppRepository.directMessages().isNotEmpty()) "${AppRepository.directMessages().size} رسالة محفوظة" else "إرسال نصوص وصور"
             val workflow = AppRepository.invoiceWorkItems(includePaid = false)
             val newCount = workflow.count { (_, item) -> item.status == InvoiceWorkflow.NEW }
             val reviewCount = workflow.count { (_, item) -> item.status == InvoiceWorkflow.IN_REVIEW }

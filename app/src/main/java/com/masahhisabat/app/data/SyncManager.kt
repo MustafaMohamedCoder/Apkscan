@@ -729,16 +729,22 @@ object SyncManager {
                 digest.update('\n'.code.toByte())
             }
         }
-        val trashFile = File(AppRepository.dataDir(), "trash.json")
-        if (trashFile.isFile) {
-            FileInputStream(trashFile).use { input ->
-                val buffer = ByteArray(32 * 1024)
-                while (true) {
-                    val read = input.read(buffer)
-                    if (read < 0) break
-                    digest.update(buffer, 0, read)
+        listOf("trash.json", "direct_messages.json", "notifications.json", "presence.json").forEach { fileName ->
+            val file = File(AppRepository.dataDir(), fileName)
+            digest.update("file:$fileName:".toByteArray(Charsets.UTF_8))
+            if (file.isFile) {
+                FileInputStream(file).use { input ->
+                    val buffer = ByteArray(32 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        digest.update(buffer, 0, read)
+                    }
                 }
+            } else {
+                digest.update("missing".toByteArray(Charsets.UTF_8))
             }
+            digest.update('\n'.code.toByte())
         }
         digest.digest().joinToString("") { "%02x".format(it) }
     }
@@ -998,7 +1004,10 @@ object SyncManager {
             users = AppRepository.users().map { UserPayload(it.username, it.passwordHash, it.role.name, it.enabled) },
             groups = buildGroupsPayload(),
             items = buildDataItems(),
-            trashRecords = AppRepository.trashRecords()
+            trashRecords = AppRepository.trashRecords(),
+            directMessages = buildDirectMessagePayloads(),
+            notifications = AppRepository.notifications().take(100),
+            presence = AppRepository.presence()
         )
     }
 
@@ -1008,12 +1017,19 @@ object SyncManager {
         groups = buildGroupsPayload(),
         items = buildDataItems(),
         trashRecords = AppRepository.trashRecords(),
+        directMessages = buildDirectMessagePayloads(),
+        notifications = AppRepository.notifications().take(100),
+        presence = AppRepository.presence(),
         mode = AUTO_DATA_SYNC_MODE
     )
 
     private fun buildGroupsPayload(): List<SyncGroupPayload> =
         AppRepository.groups().map { SyncGroupPayload(it.id, it.name) }
 
+    private fun buildDirectMessagePayloads(): List<SyncDirectMessagePayload> =
+        AppRepository.directMessages().takeLast(2_000).map { message ->
+            SyncDirectMessagePayload(message, encodeImageForSync(message.imagePath))
+        }
     private fun buildDataItems(): List<SyncItemPayload> = buildList {
         for (group in AppRepository.groups()) {
             for (item in AppRepository.items(group.id)) {
@@ -1204,6 +1220,18 @@ object SyncManager {
                 )
             }
         }
+        for (incoming in payload.directMessages.orEmpty()) {
+            if (AppRepository.directMessages().any { it.id == incoming.message.id }) continue
+            val imagePath = restoreImageFromSync(incoming.message.id, "direct", incoming.image)
+            AppRepository.addDirectMessage(incoming.message.copy(imagePath = imagePath))
+        }
+        for (incoming in payload.notifications.orEmpty()) {
+            if (AppRepository.notifications().none { it.id == incoming.id }) AppRepository.addNotification(incoming)
+        }
+        for (incoming in payload.presence.orEmpty()) {
+            AppRepository.saveList("presence.json", (AppRepository.presence() + incoming).distinctBy { it.username }
+                .sortedByDescending { it.lastSeenAt }.take(200))
+        }
         return ApplyResult(addedItems, addedUsers)
     }
 
@@ -1377,6 +1405,10 @@ object SyncManager {
         val image: SyncImagePayload? = null,
         val processedImage: SyncImagePayload? = null
     )
+    data class SyncDirectMessagePayload(
+        val message: DirectMessage,
+        val image: SyncImagePayload? = null
+    )
     data class SyncPayload(
         val deviceName: String? = null,
         val users: List<UserPayload>,
@@ -1384,6 +1416,9 @@ object SyncManager {
         val items: List<SyncItemPayload>,
         /** nullable للحفاظ على توافق حمولات الإصدارات السابقة. */
         val trashRecords: List<TrashEntry>? = null,
+        val directMessages: List<SyncDirectMessagePayload>? = null,
+        val notifications: List<NotificationEvent>? = null,
+        val presence: List<UserPresence>? = null,
         val mode: String? = null,
         val sourceUsername: String? = null
     ) {

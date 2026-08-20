@@ -80,6 +80,34 @@ data class ActivityEntry(
     @SerializedName("at") val at: Long = System.currentTimeMillis()
 )
 
+/** رسالة مباشرة بين مستخدمين، تعمل محلياً وتنتقل عبر مزامنة الشبكة المحلية. */
+data class DirectMessage(
+    val id: String = generateId(),
+    @SerializedName("from_user") val fromUser: String,
+    @SerializedName("to_user") val toUser: String,
+    val text: String? = null,
+    @SerializedName("image_path") val imagePath: String? = null,
+    @SerializedName("created_at") val createdAt: Long = System.currentTimeMillis(),
+    val seen: Boolean = false
+)
+
+/** إشعار نشاط قابل للقراءة محلياً، مثل إنشاء مجموعة أو وصول رسالة. */
+data class NotificationEvent(
+    val id: String = generateId(),
+    val title: String,
+    val body: String,
+    val type: String = "activity",
+    @SerializedName("actor") val actor: String? = null,
+    @SerializedName("created_at") val createdAt: Long = System.currentTimeMillis(),
+    val read: Boolean = false
+)
+
+/** آخر نبضة اتصال مع مستخدم على الشبكة المحلية. */
+data class UserPresence(
+    val username: String,
+    @SerializedName("last_seen_at") val lastSeenAt: Long = System.currentTimeMillis()
+)
+
 /** سجل مزامنة */
 data class SyncEntry(
     val action: String,

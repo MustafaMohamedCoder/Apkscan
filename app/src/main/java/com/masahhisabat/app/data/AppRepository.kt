@@ -388,6 +388,13 @@ object AppRepository {
         dir.mkdirs()
         val list = items(groupId).toMutableList().also { it.add(0, item) }
         writeTextAtomically(File(dir, "items.json"), gson.toJson(list))
+        val groupName = groups().firstOrNull { it.id == groupId }?.name ?: "مجموعة"
+        addNotification(NotificationEvent(
+            title = "رسالة جديدة في $groupName",
+            body = item.text?.takeIf { it.isNotBlank() } ?: if (item.imagePath != null) "تمت إضافة صورة إلى المجموعة" else "تمت إضافة رسالة جديدة",
+            type = "group_message",
+            actor = item.sender
+        ))
     }
 
     fun updateItem(groupId: String, item: InvoiceItem) {
@@ -881,6 +888,29 @@ object AppRepository {
     // ---------- دوال قراءة محددة النوع ----------
     fun users(): List<User> = loadList("users.json", User::class.java)
     fun groups(): List<Group> = loadList("groups.json", Group::class.java)
+    fun directMessages(): List<DirectMessage> = loadList("direct_messages.json", DirectMessage::class.java)
+        .sortedBy { it.createdAt }
+    fun directConversation(first: String, second: String): List<DirectMessage> = directMessages()
+        .filter { (it.fromUser == first && it.toUser == second) || (it.fromUser == second && it.toUser == first) }
+        .sortedBy { it.createdAt }
+    fun addDirectMessage(message: DirectMessage) {
+        saveList("direct_messages.json", (directMessages() + message).distinctBy { it.id }.sortedBy { it.createdAt }.takeLast(2_000))
+        logActivity(ActivityEntry(message.fromUser, "أرسل رسالة مباشرة إلى ${message.toUser}"))
+    }
+    fun notifications(): List<NotificationEvent> = loadList("notifications.json", NotificationEvent::class.java)
+        .sortedByDescending { it.createdAt }
+    fun unreadNotificationCount(): Int = notifications().count { !it.read }
+    fun addNotification(event: NotificationEvent) {
+        saveList("notifications.json", (notifications() + event).distinctBy { it.id }.sortedByDescending { it.createdAt }.take(500))
+    }
+    fun markNotificationsRead() = saveList("notifications.json", notifications().map { it.copy(read = true) })
+    fun presence(): List<UserPresence> = loadList("presence.json", UserPresence::class.java)
+    fun touchPresence(username: String) {
+        val updated = presence().filterNot { it.username == username } + UserPresence(username)
+        saveList("presence.json", updated.sortedByDescending { it.lastSeenAt }.take(200))
+    }
+    fun isUserOnline(username: String, now: Long = System.currentTimeMillis()): Boolean =
+        presence().firstOrNull { it.username == username }?.let { now - it.lastSeenAt <= 90_000L } == true
     fun activityLog(): List<ActivityEntry> = loadList("activity.json", ActivityEntry::class.java)
     fun syncLog(): List<SyncEntry> = loadList("synclog.json", SyncEntry::class.java)
     fun syncDevices(): List<SyncDeviceStatus> = loadList("sync_devices.json", SyncDeviceStatus::class.java)

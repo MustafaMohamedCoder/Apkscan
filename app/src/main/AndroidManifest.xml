@@ -85,6 +85,13 @@
         <activity android:name=".ui.team.TeamActivity"
             android:exported="false" />
 
+        <activity android:name=".ui.messages.DirectMessagesActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity android:name=".ui.notifications.NotificationsActivity"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

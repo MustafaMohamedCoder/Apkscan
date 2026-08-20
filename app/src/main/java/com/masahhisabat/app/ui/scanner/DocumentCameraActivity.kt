@@ -52,6 +52,7 @@ class DocumentCameraActivity : AppCompatActivity() {
     private var captureInProgress = false
     private var cameraStartRequested = false
     private var cameraPermissionRequestInFlight = false
+    private var returningFromAppSettings = false
     private val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "document-preview-analyzer").apply { isDaemon = true }
     }
@@ -157,9 +158,26 @@ class DocumentCameraActivity : AppCompatActivity() {
     }
 
     private fun openAppSettings() {
+        returningFromAppSettings = true
         startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = Uri.fromParts("package", packageName, null)
         })
+    }
+
+    /** تأكيد بصري قصير بعد العودة من الإعدادات؛ لا يلتقط صورة ولا يفتح المحرر تلقائيًا. */
+    private fun showCameraPermissionGrantedFeedback() {
+        val message = "✓ تم تفعيل إذن الكاميرا — الكاميرا جاهزة للمسح"
+        statusText.apply {
+            text = message
+            alpha = 0f
+            translationY = resources.displayMetrics.density * 10f
+            animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(220L)
+                .start()
+        }
+        Toast.makeText(this, "تم تفعيل إذن الكاميرا بنجاح", Toast.LENGTH_SHORT).show()
     }
 
     private fun startCamera() {
@@ -344,7 +362,12 @@ class DocumentCameraActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED && camera == null) {
+        val hasCameraPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        if (returningFromAppSettings) {
+            returningFromAppSettings = false
+            if (hasCameraPermission) showCameraPermissionGrantedFeedback() else showGalleryOnlyState()
+        }
+        if (hasCameraPermission && camera == null) {
             startCamera()
         }
     }

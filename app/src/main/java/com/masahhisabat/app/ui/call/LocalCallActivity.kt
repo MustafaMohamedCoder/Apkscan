@@ -97,11 +97,28 @@ class LocalCallActivity : Activity() {
         returningFromAppSettings = false
         val granted = hasRequiredMediaPermissions()
         acceptButton?.isEnabled = true
-        statusView?.text = if (granted) {
-            "تم تفعيل أذونات المكالمة من الإعدادات — اضغط لبدء الاتصال"
+        if (granted) {
+            showMediaPermissionsGrantedFeedback()
         } else {
-            "لم تُفعّل كل الأذونات بعد — يمكنك فتح الإعدادات مجددًا أو المحاولة لاحقًا"
+            statusView?.text = "لم تُفعّل كل الأذونات بعد — يمكنك فتح الإعدادات مجددًا أو المحاولة لاحقًا"
         }
+    }
+
+    /** تأكيد بصري قصير بعد الإعدادات؛ لا يستدعي محرك WebRTC ولا يبدأ الاتصال تلقائيًا. */
+    private fun showMediaPermissionsGrantedFeedback() {
+        val permissionSummary = if (mediaType == "video") "الميكروفون والكاميرا" else "الميكروفون"
+        val message = "✓ تم تفعيل إذن $permissionSummary — اضغط لبدء الاتصال"
+        statusView?.apply {
+            text = message
+            alpha = 0f
+            translationY = resources.displayMetrics.density * 10f
+            animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(220L)
+                .start()
+        }
+        Toast.makeText(this, "تم تفعيل الصلاحيات بنجاح", Toast.LENGTH_SHORT).show()
     }
 
     private fun render() {

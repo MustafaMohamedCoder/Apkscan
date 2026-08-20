@@ -11,6 +11,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -561,6 +562,16 @@ class GroupActivity : AppCompatActivity() {
 
             // لون الفقاعة: تمييز متباين عند الاختيار، وإيقاع واضح/هادئ بين الرسائل المتجاورة.
             val itemSelected = isSelecting && item.id in selected
+            val currentUser = SessionStore.currentUser(ctx)
+            val isOutgoing = item.sender?.takeIf { it.isNotBlank() } == currentUser
+            val bubbleParams = bubble.layoutParams as? android.widget.FrameLayout.LayoutParams
+            bubbleParams?.apply {
+                gravity = if (isOutgoing) Gravity.END else Gravity.START
+                val safeGap = (42f * ctx.resources.displayMetrics.density).toInt()
+                marginStart = if (isOutgoing) 0 else safeGap
+                marginEnd = if (isOutgoing) safeGap else 0
+                bubble.layoutParams = this
+            }
             val isNight = (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
             if (itemSelected) {
                 bubble.background = GradientDrawable().apply {

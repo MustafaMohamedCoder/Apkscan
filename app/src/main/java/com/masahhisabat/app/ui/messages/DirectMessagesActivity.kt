@@ -40,6 +40,7 @@ class DirectMessagesActivity : AppCompatActivity() {
     private lateinit var adapter: MessageAdapter
     private lateinit var recipient: Spinner
     private lateinit var status: TextView
+    private lateinit var headerPresence: TextView
     private lateinit var input: EditText
     private var selectedImage: String? = null
     private var currentUser = ""
@@ -62,13 +63,24 @@ class DirectMessagesActivity : AppCompatActivity() {
         val toolbar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         val back = ImageButton(this).apply { setImageResource(R.drawable.ic_arrow_back); setBackgroundColor(Color.TRANSPARENT); setOnClickListener { finish() }; contentDescription = "رجوع" }
         toolbar.addView(back, LinearLayout.LayoutParams(48, 48))
-        toolbar.addView(TextView(this).apply {
+        val titleBlock = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        titleBlock.addView(TextView(this).apply {
             text = targetUser.ifBlank { "رسائل المستخدمين" }
-            textSize = 21f
+            textSize = 20f
             setTextColor(ThemeHelper.text(this@DirectMessagesActivity))
             typeface = resources.getFont(R.font.tajawal_bold)
             maxLines = 1
-        }, LinearLayout.LayoutParams(0, 56, 1f))
+        })
+        headerPresence = TextView(this).apply {
+            text = if (targetUser.isBlank()) "اختر محادثة" else "جارٍ فحص الحضور…"
+            textSize = 11f
+            setPadding(0, 2, 0, 0)
+        }
+        titleBlock.addView(headerPresence)
+        toolbar.addView(titleBlock, LinearLayout.LayoutParams(0, 60, 1f))
         toolbar.addView(ImageButton(this).apply {
             setImageResource(R.drawable.ic_call)
             setColorFilter(ThemeHelper.accent(this@DirectMessagesActivity))
@@ -137,6 +149,8 @@ class DirectMessagesActivity : AppCompatActivity() {
         val failure = lastCallFailure?.let { "\nآخر فشل اتصال: $it" }.orEmpty()
         status.text = "$presence$latency$failure"
         status.setTextColor(if (online) Color.rgb(35, 160, 85) else ThemeHelper.textSecondary(this))
+        headerPresence.text = if (online) "● متصل الآن" else "○ غير متصل الآن"
+        headerPresence.setTextColor(if (online) Color.rgb(35, 160, 85) else ThemeHelper.textSecondary(this))
         adapter.submit(AppRepository.directConversation(currentUser, targetUser))
         list.post { list.scrollToPosition((adapter.itemCount - 1).coerceAtLeast(0)) }
     }
@@ -388,7 +402,30 @@ class DirectMessagesActivity : AppCompatActivity() {
             val who = TextView(itemView.context).apply { text = if (message.fromUser == me) "أنت" else message.fromUser; textSize = 12f; setTextColor(ThemeHelper.accent(itemView.context)) }
             box.addView(who)
             message.text?.let { box.addView(TextView(itemView.context).apply { text = it; textSize = 16f; setTextColor(ThemeHelper.text(itemView.context)); setPadding(0, 5, 0, 5) }) }
-            message.imagePath?.let { path -> box.addView(ImageView(itemView.context).apply { layoutParams = LinearLayout.LayoutParams(-1, 180); scaleType = ImageView.ScaleType.CENTER_CROP; setImageURI(Uri.fromFile(File(path))); contentDescription = "صورة الرسالة" }) }
+            message.imagePath?.let { path ->
+                box.addView(ImageView(itemView.context).apply {
+                    layoutParams = LinearLayout.LayoutParams(-1, 220)
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    setImageURI(Uri.fromFile(File(path)))
+                    contentDescription = "صورة الرسالة"
+                    isClickable = true
+                    setOnClickListener {
+                        runCatching {
+                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                itemView.context,
+                                "${itemView.context.packageName}.fileprovider",
+                                File(path)
+                            )
+                            itemView.context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(uri, "image/jpeg")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            })
+                        }.onFailure {
+                            Toast.makeText(itemView.context, "تعذر فتح الصورة بالحجم الكامل", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                })
+            }
             box.addView(TextView(itemView.context).apply { text = SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.getDefault()).format(Date(message.createdAt)); textSize = 11f; setTextColor(ThemeHelper.textSecondary(itemView.context)) })
             card.removeAllViews(); card.addView(box)
         }

@@ -45,6 +45,7 @@ class DocumentCameraActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var progress: View
     private lateinit var flashButton: TextView
+    private lateinit var pdfSessionLabel: TextView
     private var imageCapture: ImageCapture? = null
     private var imageAnalysis: ImageAnalysis? = null
     private var camera: Camera? = null
@@ -80,6 +81,12 @@ class DocumentCameraActivity : AppCompatActivity() {
         statusText = findViewById(R.id.camera_status_text)
         progress = findViewById(R.id.capture_progress)
         flashButton = findViewById(R.id.btn_flash)
+        pdfSessionLabel = findViewById(R.id.pdf_session_label)
+        val sessionPageCount = intent.getIntExtra(EXTRA_PDF_PAGE_COUNT, 0)
+        if (sessionPageCount > 0) {
+            pdfSessionLabel.visibility = View.VISIBLE
+            pdfSessionLabel.text = "جلسة PDF · أضيفت $sessionPageCount صفحات · الصفحة التالية"
+        }
 
         findViewById<View>(R.id.btn_close_camera).setOnClickListener { finish() }
         captureButton.setOnClickListener { captureDocument() }
@@ -373,6 +380,7 @@ class DocumentCameraActivity : AppCompatActivity() {
     }
 
     private companion object {
+        const val EXTRA_PDF_PAGE_COUNT = "pdf_page_count"
         const val ANALYSIS_EVERY_N_FRAMES = 3
         const val MIN_ANALYSIS_INTERVAL_MS = 125L
         const val LUMA_SAMPLE_STEP = 16

@@ -441,7 +441,9 @@ class CropEditActivity : AppCompatActivity() {
                         .setTitle("جلسة PDF متعددة الصفحات")
                         .setMessage("أضيفت الصفحة $count. التقط الصفحة التالية ثم اختر تصدير PDF عند اكتمال المستند.")
                         .setPositiveButton("التقاط صفحة أخرى") { _, _ ->
-                            startActivity(Intent(this, DocumentCameraActivity::class.java))
+                            startActivity(Intent(this, DocumentCameraActivity::class.java).apply {
+                                putExtra("pdf_page_count", count)
+                            })
                             finish()
                         }
                         .setNegativeButton(R.string.close) { _, _ -> finish() }

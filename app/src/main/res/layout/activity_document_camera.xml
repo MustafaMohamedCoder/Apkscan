@@ -62,6 +62,16 @@
                 android:text="كشف الحواف محليًا"
                 android:textColor="#B7D9D5"
                 android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/pdf_session_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:fontFamily="@font/tajawal_bold"
+                android:textColor="#5EEAD4"
+                android:textSize="10sp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <TextView

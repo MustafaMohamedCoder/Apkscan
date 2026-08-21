@@ -34,6 +34,7 @@ object LocalCallRecoveryPolicy {
         val startsRecoveryWindow: Boolean = false,
         val cancelsRecoveryWindow: Boolean = false,
         val allowsManualRetry: Boolean = false,
+        val allowsFreshCall: Boolean = false,
         val isTerminal: Boolean = false
     )
 
@@ -44,8 +45,9 @@ object LocalCallRecoveryPolicy {
             Event.USER_ENDED -> Decision(state = State.TERMINATED, cancelsRecoveryWindow = true, isTerminal = true)
             Event.TERMINAL_FAILURE -> Decision(
                 state = State.TERMINATED,
-                userMessage = "تعذر استعادة الاتصال المحلي. أنهِ المكالمة ثم أعد الاتصال بعد التحقق من الشبكة.",
+                userMessage = "تعذر استعادة الاتصال المحلي. أنهِ الجلسة الفاشلة ثم ابدأ اتصالًا جديدًا بعد التحقق من الشبكة.",
                 cancelsRecoveryWindow = true,
+                allowsFreshCall = true,
                 isTerminal = true
             )
             Event.CONNECTION_CONNECTED -> when (current) {

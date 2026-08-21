@@ -64,7 +64,12 @@ class LocalCallActivity : Activity() {
     private var acceptButton: Button? = null
     private var endButton: Button? = null
     private var retryConnectionButton: Button? = null
+    private var freshCallButton: Button? = null
     private var recoveryRetryAvailable = false
+    private var freshCallAvailable = false
+    private var freshCallLaunching = false
+    private var terminalFailureReason: String? = null
+    private var terminalFailureDiagnostics: String? = null
     private var controlsLayout: LinearLayout? = null
     private var microphoneEnabled = true
     private var cameraEnabled = true
@@ -151,6 +156,12 @@ class LocalCallActivity : Activity() {
             text = "إعادة محاولة الاتصال"
             visibility = View.GONE
             setOnClickListener { retryLocalConnection() }
+        }
+        freshCallButton = Button(this).apply {
+            text = "إنهاء وبدء اتصال جديد"
+            contentDescription = "إنهاء المكالمة الفاشلة وبدء اتصال محلي جديد"
+            visibility = View.GONE
+            setOnClickListener { endAndStartFreshLocalCall() }
         }
         permissionWaitPanel = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -253,6 +264,7 @@ class LocalCallActivity : Activity() {
         root.addView(peer)
         root.addView(statusView)
         root.addView(retryConnectionButton)
+        root.addView(freshCallButton)
         root.addView(permissionWaitPanel, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(muteIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(cameraIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -340,7 +352,12 @@ class LocalCallActivity : Activity() {
             onCallEnded = { reason, diagnostics ->
                 runOnUiThread {
                     if (isFinishing || isDestroyed || ending) return@runOnUiThread
-                    finishCall("failed", reason, notifyPeer = false, diagnosticLog = diagnostics)
+                    if (freshCallAvailable) {
+                        terminalFailureReason = reason
+                        terminalFailureDiagnostics = diagnostics
+                    } else {
+                        finishCall("failed", reason, notifyPeer = false, diagnosticLog = diagnostics)
+                    }
                 }
             }
         )
@@ -406,7 +423,14 @@ class LocalCallActivity : Activity() {
         if (isFinishing || isDestroyed || ending) return
         decision.userMessage?.let { statusView?.text = it }
         recoveryRetryAvailable = decision.allowsManualRetry
-        retryConnectionButton?.visibility = if (recoveryRetryAvailable && !isInPictureInPictureMode) View.VISIBLE else View.GONE
+        freshCallAvailable = decision.allowsFreshCall
+        retryConnectionButton?.visibility = if (recoveryRetryAvailable && !freshCallAvailable && !isInPictureInPictureMode) View.VISIBLE else View.GONE
+        freshCallButton?.visibility = if (freshCallAvailable && !isInPictureInPictureMode) View.VISIBLE else View.GONE
+        if (freshCallAvailable) {
+            acceptButton?.isEnabled = false
+            controlsLayout?.isEnabled = false
+            minimizeButton?.isEnabled = false
+        }
         if (decision.startsRecoveryWindow || decision.allowsManualRetry) {
             networkQuality = LocalWebRtcEngine.NetworkQuality.UNSTABLE
             updateNetworkIndicator()
@@ -420,6 +444,30 @@ class LocalCallActivity : Activity() {
         } else {
             statusView?.text = "لا توجد محاولة استعادة معلقة. استمر في المكالمة أو أنشئ مكالمة جديدة."
         }
+    }
+
+    /** يبدأ سجلًا ومحركًا جديدين بعد تحرير الجلسة التي فشلت نهائيًا. */
+    private fun endAndStartFreshLocalCall() {
+        if (!freshCallAvailable || freshCallLaunching || ending) return
+        freshCallLaunching = true
+        freshCallAvailable = false
+        recoveryRetryAvailable = false
+        freshCallButton?.visibility = View.GONE
+        retryConnectionButton?.visibility = View.GONE
+
+        val freshIntent = Intent(this, LocalCallActivity::class.java)
+            .putExtra(EXTRA_PEER_USER, peerUser)
+            .putExtra(EXTRA_PEER_ADDRESS, intent.getStringExtra(EXTRA_PEER_ADDRESS))
+            .putExtra(EXTRA_MEDIA_TYPE, mediaType)
+            .putExtra(EXTRA_NETWORK_LATENCY_MS, intent.getLongExtra(EXTRA_NETWORK_LATENCY_MS, -1L))
+
+        val reason = terminalFailureReason ?: "تعذر استعادة الاتصال المحلي"
+        finishCall(
+            status = "failed",
+            reason = "$reason — اختار المستخدم بدء اتصال جديد",
+            diagnosticLog = terminalFailureDiagnostics
+        )
+        startActivity(freshIntent)
     }
 
     private fun minimizeCall() {
@@ -553,7 +601,8 @@ class LocalCallActivity : Activity() {
         statusView?.visibility = if (compact) View.GONE else View.VISIBLE
         minimizeButton?.visibility = if (compact) View.GONE else View.VISIBLE
         controlsLayout?.visibility = if (compact) View.GONE else View.VISIBLE
-        retryConnectionButton?.visibility = if (!compact && recoveryRetryAvailable) View.VISIBLE else View.GONE
+        retryConnectionButton?.visibility = if (!compact && recoveryRetryAvailable && !freshCallAvailable) View.VISIBLE else View.GONE
+        freshCallButton?.visibility = if (!compact && freshCallAvailable) View.VISIBLE else View.GONE
         acceptButton?.visibility = if (compact) View.GONE else View.VISIBLE
         endButton?.visibility = if (compact) View.GONE else View.VISIBLE
         updateMuteIndicator()

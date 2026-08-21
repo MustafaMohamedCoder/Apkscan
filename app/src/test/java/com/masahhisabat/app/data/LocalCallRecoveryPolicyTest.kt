@@ -73,4 +73,17 @@ class LocalCallRecoveryPolicyTest {
         assertEquals(LocalCallRecoveryPolicy.State.TERMINATED, lateConnected.state)
         assertFalse(lateConnected.startsRecoveryWindow)
     }
+
+    @Test
+    fun terminalNetworkFailureOffersFreshCallOnlyAfterEndingTheOldSession() {
+        val decision = LocalCallRecoveryPolicy.transition(
+            LocalCallRecoveryPolicy.State.RETRY_AVAILABLE,
+            LocalCallRecoveryPolicy.Event.TERMINAL_FAILURE
+        )
+
+        assertEquals(LocalCallRecoveryPolicy.State.TERMINATED, decision.state)
+        assertTrue(decision.cancelsRecoveryWindow)
+        assertTrue(decision.isTerminal)
+        assertTrue(decision.allowsFreshCall)
+    }
 }

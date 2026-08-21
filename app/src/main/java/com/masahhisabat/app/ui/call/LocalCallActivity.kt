@@ -36,6 +36,7 @@ import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.CallFeedback
 import com.masahhisabat.app.data.CallLog
+import com.masahhisabat.app.data.LocalCallRecoveryPolicy
 import com.masahhisabat.app.data.LocalWebRtcEngine
 import com.masahhisabat.app.data.NotificationEvent
 import com.masahhisabat.app.ui.auth.SessionStore
@@ -62,6 +63,8 @@ class LocalCallActivity : Activity() {
     private var minimizeButton: Button? = null
     private var acceptButton: Button? = null
     private var endButton: Button? = null
+    private var retryConnectionButton: Button? = null
+    private var recoveryRetryAvailable = false
     private var controlsLayout: LinearLayout? = null
     private var microphoneEnabled = true
     private var cameraEnabled = true
@@ -143,6 +146,11 @@ class LocalCallActivity : Activity() {
         statusView = TextView(this).apply {
             text = if (intent.hasExtra(EXTRA_INCOMING_SDP)) "مكالمة واردة من $peerUser — اضغط قبول للرد" else "جاهز للاتصال داخل الشبكة"
             textSize = 16f
+        }
+        retryConnectionButton = Button(this).apply {
+            text = "إعادة محاولة الاتصال"
+            visibility = View.GONE
+            setOnClickListener { retryLocalConnection() }
         }
         permissionWaitPanel = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -244,6 +252,7 @@ class LocalCallActivity : Activity() {
         root.addView(title)
         root.addView(peer)
         root.addView(statusView)
+        root.addView(retryConnectionButton)
         root.addView(permissionWaitPanel, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(muteIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(cameraIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -319,6 +328,9 @@ class LocalCallActivity : Activity() {
                     updateNetworkIndicator()
                 }
             },
+            onRecoveryState = { decision ->
+                runOnUiThread { applyRecoveryUi(decision) }
+            },
             initialLatencyMs = log.latencyMs,
             onDiagnostic = { entry ->
                 AppRepository.updateCallLog(log.id) { current ->
@@ -387,6 +399,27 @@ class LocalCallActivity : Activity() {
         if (mediaType != "video") return
         engine?.switchCamera()
         statusView?.text = "تم التبديل بين الكاميرا الأمامية والخلفية"
+    }
+
+    /** يشرح للمستخدم النافذة الزمنية للاستعادة ولا يعرض إعادة المحاولة إلا بعد المهلة. */
+    private fun applyRecoveryUi(decision: LocalCallRecoveryPolicy.Decision) {
+        if (isFinishing || isDestroyed || ending) return
+        decision.userMessage?.let { statusView?.text = it }
+        recoveryRetryAvailable = decision.allowsManualRetry
+        retryConnectionButton?.visibility = if (recoveryRetryAvailable && !isInPictureInPictureMode) View.VISIBLE else View.GONE
+        if (decision.startsRecoveryWindow || decision.allowsManualRetry) {
+            networkQuality = LocalWebRtcEngine.NetworkQuality.UNSTABLE
+            updateNetworkIndicator()
+        }
+    }
+
+    private fun retryLocalConnection() {
+        if (engine?.retryLocalConnection() == true) {
+            recoveryRetryAvailable = false
+            retryConnectionButton?.visibility = View.GONE
+        } else {
+            statusView?.text = "لا توجد محاولة استعادة معلقة. استمر في المكالمة أو أنشئ مكالمة جديدة."
+        }
     }
 
     private fun minimizeCall() {
@@ -491,7 +524,7 @@ class LocalCallActivity : Activity() {
             text = qualityUi.first
             setBackgroundColor(qualityUi.second)
             contentDescription = qualityUi.third
-            visibility = if (isInPictureInPictureMode && engine != null) View.VISIBLE else View.GONE
+            visibility = if (engine != null && (isInPictureInPictureMode || networkQuality != LocalWebRtcEngine.NetworkQuality.GOOD)) View.VISIBLE else View.GONE
         }
     }
 
@@ -520,6 +553,7 @@ class LocalCallActivity : Activity() {
         statusView?.visibility = if (compact) View.GONE else View.VISIBLE
         minimizeButton?.visibility = if (compact) View.GONE else View.VISIBLE
         controlsLayout?.visibility = if (compact) View.GONE else View.VISIBLE
+        retryConnectionButton?.visibility = if (!compact && recoveryRetryAvailable) View.VISIBLE else View.GONE
         acceptButton?.visibility = if (compact) View.GONE else View.VISIBLE
         endButton?.visibility = if (compact) View.GONE else View.VISIBLE
         updateMuteIndicator()

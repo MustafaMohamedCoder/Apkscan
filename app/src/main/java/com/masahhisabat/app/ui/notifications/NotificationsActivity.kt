@@ -8,11 +8,13 @@ import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.card.MaterialCardView
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.NotificationEvent
 import com.masahhisabat.app.ui.ThemeHelper
+import com.masahhisabat.app.ui.common.LocalContentRefreshState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -22,6 +24,8 @@ class NotificationsActivity : AppCompatActivity() {
     private lateinit var adapter: NotificationAdapter
     private lateinit var unreadLabel: TextView
     private lateinit var markAllRead: Button
+    private lateinit var contentRefresh: SwipeRefreshLayout
+    private val refreshState = LocalContentRefreshState()
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         AppRepository.initAppContext(this)
@@ -33,18 +37,42 @@ class NotificationsActivity : AppCompatActivity() {
         root.addView(toolbar)
         val summary = TextView(this).apply { text = "آخر المجموعات والرسائل المضافة تظهر هنا تلقائيًا"; textSize = 14f; setTextColor(ThemeHelper.textSecondary(this@NotificationsActivity)); setPadding(8, 4, 8, 14) }
         root.addView(summary)
+        contentRefresh = SwipeRefreshLayout(this).apply {
+            setColorSchemeColors(ThemeHelper.accent(this@NotificationsActivity))
+            setOnRefreshListener { refreshFromSwipeGesture() }
+        }
         val list = RecyclerView(this).apply { layoutManager = LinearLayoutManager(this@NotificationsActivity); setPadding(2, 4, 2, 12); clipToPadding = false }
-        adapter = NotificationAdapter(); list.adapter = adapter; root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
+        adapter = NotificationAdapter()
+        list.adapter = adapter
+        contentRefresh.addView(list)
+        root.addView(contentRefresh, LinearLayout.LayoutParams(-1, 0, 1f))
         val clear = Button(this).apply { markAllRead = this; text = "تمييز الكل كمقروء"; setOnClickListener { AppRepository.markNotificationsRead(); refresh() } }
         root.addView(clear, LinearLayout.LayoutParams(-1, 50))
-        setContentView(root); refresh()
+        setContentView(root)
+        // فتح المركز يعني أن المستخدم رأى التنبيهات؛ توحّد الشارة والرأس والقائمة من نفس المصدر.
+        AppRepository.markNotificationsRead()
+        refresh()
     }
     override fun onResume() { super.onResume(); if (::adapter.isInitialized) refresh() }
+    override fun onDestroy() { refreshState.cancel(); super.onDestroy() }
     private fun refresh() {
         val centerState = NotificationCenterState.fromUnreadCount(AppRepository.unreadNotificationCount())
         unreadLabel.text = centerState.unreadLabel
         markAllRead.isEnabled = centerState.canMarkAllRead
         adapter.submit(AppRepository.notifications())
+    }
+
+    private fun refreshFromSwipeGesture() {
+        if (!refreshState.tryStart()) {
+            contentRefresh.isRefreshing = false
+            return
+        }
+        try {
+            refresh()
+        } finally {
+            refreshState.finish()
+            contentRefresh.isRefreshing = false
+        }
     }
 
     private class NotificationAdapter : RecyclerView.Adapter<NotificationHolder>() {

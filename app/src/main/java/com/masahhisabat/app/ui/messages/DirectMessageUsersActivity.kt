@@ -11,16 +11,19 @@ import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.widget.TextViewCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.card.MaterialCardView
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.User
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.SessionStore
+import com.masahhisabat.app.ui.common.LocalContentRefreshState
 
 /** قائمة محلية للمراسلة الفردية؛ تعيد استخدام بيانات الحضور المتزامنة داخل الشبكة فقط. */
 class DirectMessageUsersActivity : AppCompatActivity() {
@@ -28,6 +31,8 @@ class DirectMessageUsersActivity : AppCompatActivity() {
     private lateinit var emptyState: TextView
     private lateinit var adapter: UserAdapter
     private var currentUser = ""
+    private lateinit var contentRefresh: SwipeRefreshLayout
+    private val refreshState = LocalContentRefreshState()
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
@@ -79,13 +84,22 @@ class DirectMessageUsersActivity : AppCompatActivity() {
             )
             visibility = View.GONE
         }
-        root.addView(emptyState, LinearLayout.LayoutParams(-1, 0, 1f))
         usersList = RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@DirectMessageUsersActivity)
             clipToPadding = false
             setPadding(0, dp(4), 0, dp(12))
         }
-        root.addView(usersList, LinearLayout.LayoutParams(-1, 0, 1f))
+        val content = FrameLayout(this).apply {
+            addView(emptyState, FrameLayout.LayoutParams(-1, -1))
+            addView(usersList, FrameLayout.LayoutParams(-1, -1))
+        }
+        contentRefresh = SwipeRefreshLayout(this).apply {
+            setColorSchemeColors(ThemeHelper.accent(this@DirectMessageUsersActivity))
+            setOnChildScrollUpCallback { _, _ -> usersList.canScrollVertically(-1) }
+            setOnRefreshListener { refreshFromSwipeGesture() }
+            addView(content)
+        }
+        root.addView(contentRefresh, LinearLayout.LayoutParams(-1, 0, 1f))
         adapter = UserAdapter()
         usersList.adapter = adapter
         setContentView(root)
@@ -97,6 +111,11 @@ class DirectMessageUsersActivity : AppCompatActivity() {
         refreshUsers()
     }
 
+    override fun onDestroy() {
+        refreshState.cancel()
+        super.onDestroy()
+    }
+
     private fun refreshUsers() {
         val users = AppRepository.users()
             .filter { it.enabled && !it.username.equals(currentUser, ignoreCase = true) }
@@ -104,6 +123,19 @@ class DirectMessageUsersActivity : AppCompatActivity() {
         emptyState.visibility = if (users.isEmpty()) View.VISIBLE else View.GONE
         usersList.visibility = if (users.isEmpty()) View.GONE else View.VISIBLE
         adapter.submit(users)
+    }
+
+    private fun refreshFromSwipeGesture() {
+        if (!refreshState.tryStart()) {
+            contentRefresh.isRefreshing = false
+            return
+        }
+        try {
+            refreshUsers()
+        } finally {
+            refreshState.finish()
+            contentRefresh.isRefreshing = false
+        }
     }
 
     private inner class UserAdapter : RecyclerView.Adapter<UserHolder>() {

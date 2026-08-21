@@ -23,6 +23,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -36,6 +37,7 @@ import com.masahhisabat.app.data.Group
 import com.masahhisabat.app.data.generateId
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.SessionStore
+import com.masahhisabat.app.ui.common.LocalContentRefreshState
 import com.masahhisabat.app.ui.invoice.GroupActivity
 
 class GroupsFragment : Fragment() {
@@ -44,6 +46,8 @@ class GroupsFragment : Fragment() {
     private var groupQuery = ""
     private var allGroups: List<Group> = emptyList()
     private lateinit var tradersAdapter: GroupsAdapter
+    private lateinit var contentRefresh: SwipeRefreshLayout
+    private val refreshState = LocalContentRefreshState()
 
     private data class GroupSnapshot(
         val documentCount: Int,
@@ -76,6 +80,9 @@ class GroupsFragment : Fragment() {
             recycler.setHasFixedSize(true)
             tradersAdapter = GroupsAdapter()
             recycler.adapter = tradersAdapter
+            contentRefresh = view.findViewById(R.id.groups_refresh)
+            contentRefresh.setOnChildScrollUpCallback { _, _ -> recycler.canScrollVertically(-1) }
+            contentRefresh.setOnRefreshListener { refreshFromSwipeGesture() }
 
             val search = view.findViewById<EditText>(R.id.et_group_search)
             val clearSearch = view.findViewById<ImageView>(R.id.btn_clear_group_search)
@@ -163,6 +170,9 @@ class GroupsFragment : Fragment() {
             )
         }
         view.findViewById<ImageView>(R.id.btn_clear_group_search)?.setColorFilter(ThemeHelper.textSecondary(requireContext()))
+        view.findViewById<SwipeRefreshLayout>(R.id.groups_refresh)?.setColorSchemeColors(
+            ThemeHelper.accent(requireContext())
+        )
         view.findViewById<android.widget.ImageButton>(R.id.btn_filter_groups)?.setColorFilter(
             ThemeHelper.textSecondary(requireContext())
         )
@@ -175,6 +185,11 @@ class GroupsFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         if (::recycler.isInitialized) refresh()
+    }
+
+    override fun onDestroyView() {
+        refreshState.cancel()
+        super.onDestroyView()
     }
 
     private fun showNewGroupDialog() {
@@ -395,6 +410,20 @@ class GroupsFragment : Fragment() {
             }
         } catch (e: Exception) {
             logAndToast(e, "قراءة المجموعات")
+        }
+    }
+
+    /** يعيد قراءة البيانات المحلية وينهي مؤشر السحب في النجاح أو عند معالجة الخطأ. */
+    private fun refreshFromSwipeGesture() {
+        if (!refreshState.tryStart()) {
+            contentRefresh.isRefreshing = false
+            return
+        }
+        try {
+            refresh()
+        } finally {
+            refreshState.finish()
+            contentRefresh.isRefreshing = false
         }
     }
 

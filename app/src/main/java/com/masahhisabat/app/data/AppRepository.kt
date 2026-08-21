@@ -303,6 +303,7 @@ object AppRepository {
             groupName = group.name,
             group = group,
             items = items(group.id),
+            messageDraft = GroupTrashDraftPolicy.draftForTrash(messageDraft(group.id)),
             deletedBy = deletedBy?.let(::normalizeUsername)
         )
         saveList("groups.json", groups().filterNot { it.id == id })
@@ -414,14 +415,16 @@ object AppRepository {
         writeTextAtomically(File(dir, "items.json"), gson.toJson(stableGroupItemOrder(list)))
 
         // الإشعار تحسين إضافي فقط؛ لا يجوز لفشله أن يحوّل رسالة محفوظة إلى «إرسال فاشل» في الواجهة.
-        runCatching {
-            val groupName = groups().firstOrNull { it.id == groupId }?.name ?: "مجموعة"
-            addNotification(NotificationEvent(
-                title = "رسالة جديدة في $groupName",
-                body = item.text?.takeIf { it.isNotBlank() } ?: if (item.imagePath != null) "تمت إضافة صورة إلى المجموعة" else "تمت إضافة رسالة جديدة",
-                type = "group_message",
-                actor = item.sender
-            ))
+        if (GroupNotificationPolicy.shouldCreateUnreadEvent(item.sender, activeSessionUsername())) {
+            runCatching {
+                val groupName = groups().firstOrNull { it.id == groupId }?.name ?: "مجموعة"
+                addNotification(NotificationEvent(
+                    title = "رسالة جديدة في $groupName",
+                    body = item.text?.takeIf { it.isNotBlank() } ?: if (item.imagePath != null) "تمت إضافة صورة إلى المجموعة" else "تمت إضافة رسالة جديدة",
+                    type = "group_message",
+                    actor = item.sender
+                ))
+            }
         }
     }
 
@@ -638,6 +641,9 @@ object AppRepository {
                     }
                     if (TrashRestoreSafetyPolicy.canExposeRestoredGroup(itemsPersisted)) {
                         restoreGroup(group)
+                        entry.messageDraft?.let { draft ->
+                            setMessageDraft(group.id, GroupTrashDraftPolicy.draftForRestore(draft, messageDraft(group.id)))
+                        }
                         true
                     } else false
                 }
@@ -729,7 +735,12 @@ object AppRepository {
             }
             "restored" -> {
                 if (entry.type == "group") {
-                    entry.group?.let(::restoreGroup)
+                    entry.group?.let { group ->
+                        restoreGroup(group)
+                        entry.messageDraft?.let { draft ->
+                            setMessageDraft(group.id, GroupTrashDraftPolicy.draftForRestore(draft, messageDraft(group.id)))
+                        }
+                    }
                 }
                 if (groups().any { it.id == entry.groupId }) restoreItems(entry.groupId, entry.items)
             }
@@ -981,6 +992,10 @@ object AppRepository {
     fun directConversation(first: String, second: String): List<DirectMessage> = directMessages()
         .filter { (it.fromUser == first && it.toUser == second) || (it.fromUser == second && it.toUser == first) }
         .let(::stableDirectMessageOrder)
+    fun activeSessionUsername(): String? = appContext
+        ?.getSharedPreferences("session", Context.MODE_PRIVATE)
+        ?.getString("username", null)
+        ?.takeIf { it.isNotBlank() }
     fun addDirectMessage(message: DirectMessage) {
         saveList(
             "direct_messages.json",

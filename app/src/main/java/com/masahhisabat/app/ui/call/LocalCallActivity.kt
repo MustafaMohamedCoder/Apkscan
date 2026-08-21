@@ -204,7 +204,14 @@ class LocalCallActivity : Activity() {
         acceptButton = Button(this).apply {
             text = if (intent.hasExtra(EXTRA_INCOMING_SDP)) "قبول المكالمة" else "بدء المكالمة"
             setOnClickListener {
-                if (startCall()) isEnabled = false
+                if (startCall()) {
+                    if (!intent.getStringExtra(EXTRA_INCOMING_SDP).isNullOrBlank()) {
+                        intent.getStringExtra(EXTRA_CALL_ID)?.let { callId ->
+                            com.masahhisabat.app.data.LocalCallService.markIncomingCallHandled(applicationContext, callId)
+                        }
+                    }
+                    isEnabled = false
+                }
             }
         }
         micButton = Button(this).apply {

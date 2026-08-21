@@ -20,6 +20,8 @@ import com.masahhisabat.app.ui.auth.SessionStore
 import com.masahhisabat.app.ui.groups.GroupsFragment
 import com.masahhisabat.app.ui.home.HomeFragment
 import com.masahhisabat.app.ui.messages.DirectMessageUsersActivity
+import com.masahhisabat.app.ui.notifications.NotificationBadgeState
+import com.masahhisabat.app.ui.notifications.NotificationsActivity
 import com.masahhisabat.app.ui.scanner.ScannerFragment
 import com.masahhisabat.app.ui.search.SearchFragment
 import com.masahhisabat.app.ui.settings.SettingsFragment
@@ -75,6 +77,11 @@ class MainActivity : AppCompatActivity() {
                 it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 startActivity(Intent(this, DirectMessageUsersActivity::class.java))
             }
+            findViewById<View>(R.id.notifications_button)?.setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                startActivity(Intent(this, NotificationsActivity::class.java))
+            }
+            refreshNotificationBadge()
 
             lastTab = savedInstanceState?.getInt("last_tab", 0) ?: 0
             switchTab(lastTab, animate = false)
@@ -114,6 +121,17 @@ class MainActivity : AppCompatActivity() {
             SyncManager.startAutomaticDataSyncAfterLogin(this)
             com.masahhisabat.app.data.LocalCallService.start(this)
         }
+        refreshNotificationBadge()
+    }
+
+    private fun refreshNotificationBadge() {
+        val state = NotificationBadgeState.fromUnreadCount(AppRepository.unreadNotificationCount())
+        findViewById<TextView>(R.id.notifications_badge)?.apply {
+            text = state.label
+            contentDescription = state.contentDescription
+            visibility = if (state.visible) View.VISIBLE else View.GONE
+        }
+        findViewById<View>(R.id.notifications_button)?.contentDescription = state.contentDescription
     }
 
     private fun switchTab(index: Int, animate: Boolean = true) {

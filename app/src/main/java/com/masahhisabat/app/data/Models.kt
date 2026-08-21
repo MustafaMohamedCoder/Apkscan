@@ -66,6 +66,8 @@ data class TrashEntry(
     val group: Group? = null,
     /** رسالة واحدة أو كل رسائل المجموعة المحذوفة. */
     val items: List<InvoiceItem> = emptyList(),
+    /** مسودة المجموعة قبل نقلها إلى السلة؛ لا تُكتب عندما تكون فارغة. */
+    @SerializedName("message_draft") val messageDraft: String? = null,
     @SerializedName("deleted_by") val deletedBy: String? = null,
     @SerializedName("deleted_at") val deletedAt: Long = System.currentTimeMillis(),
     /** trashed | restored | purged. تُرسل الحالة بين الأجهزة لحل تعارض الحذف والاستعادة. */

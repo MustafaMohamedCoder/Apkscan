@@ -11,6 +11,40 @@
         android:layout_marginStart="@dimen/content_horizontal_margin"
         android:layout_marginEnd="@dimen/content_horizontal_margin" />
 
+    <!-- جرس الإشعارات يظل ظاهرًا فوق المحتوى، وشارته مشتقة من السجل غير المقروء. -->
+    <FrameLayout
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="18dp"
+        android:layout_marginTop="18dp">
+
+        <ImageButton
+            android:id="@+id/notifications_button"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="center"
+            android:background="@drawable/nav_item_active_bg"
+            android:contentDescription="@string/notifications"
+            android:padding="12dp"
+            android:src="@drawable/ic_notifications" />
+
+        <TextView
+            android:id="@+id/notifications_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="20dp"
+            android:layout_gravity="top|right"
+            android:background="@drawable/notification_badge_background"
+            android:gravity="center"
+            android:minWidth="20dp"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:textColor="@android:color/white"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </FrameLayout>
+
     <!-- مدخل مراسلة دائم فوق المحتوى، بعيد عن شريط التنقل السفلي. -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/floating_messages"

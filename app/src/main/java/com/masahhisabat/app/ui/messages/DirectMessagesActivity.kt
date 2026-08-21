@@ -19,6 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.masahhisabat.app.R
@@ -29,6 +30,7 @@ import com.masahhisabat.app.data.SyncManager
 import com.masahhisabat.app.data.User
 import com.masahhisabat.app.ui.auth.SessionStore
 import com.masahhisabat.app.ui.ThemeHelper
+import com.masahhisabat.app.ui.common.LocalContentRefreshState
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -48,6 +50,7 @@ class DirectMessagesActivity : AppCompatActivity() {
     private lateinit var input: EditText
     private lateinit var attachButton: ImageButton
     private lateinit var sendButton: ImageButton
+    private lateinit var contentRefresh: SwipeRefreshLayout
     private var selectedImage: String? = null
     private var imagePreparationInProgress = false
     private var currentUser = ""
@@ -56,6 +59,7 @@ class DirectMessagesActivity : AppCompatActivity() {
     private var lastCallFailure: String? = null
     private var lastLatencyMs: Long? = null
     private var pendingDiagnosticExport: String? = null
+    private val refreshState = LocalContentRefreshState()
 
     private val imagePickerLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(::prepareImageForSend)
@@ -156,8 +160,13 @@ class DirectMessagesActivity : AppCompatActivity() {
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
         root.addView(status)
+        contentRefresh = SwipeRefreshLayout(this).apply {
+            setColorSchemeColors(ThemeHelper.accent(this@DirectMessagesActivity))
+            setOnRefreshListener { refreshFromSwipeGesture() }
+        }
         list = RecyclerView(this).apply { layoutManager = LinearLayoutManager(this@DirectMessagesActivity); setPadding(4, 8, 4, 8); clipToPadding = false }
-        root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
+        contentRefresh.addView(list)
+        root.addView(contentRefresh, LinearLayout.LayoutParams(-1, 0, 1f))
         val composer = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         input = EditText(this).apply {
             hint = getString(R.string.direct_message_hint)
@@ -215,6 +224,11 @@ class DirectMessagesActivity : AppCompatActivity() {
 
     override fun onResume() { super.onResume(); if (currentUser.isNotBlank()) { AppRepository.touchPresence(currentUser); refresh() } }
 
+    override fun onDestroy() {
+        refreshState.cancel()
+        super.onDestroy()
+    }
+
     private fun refresh() {
         if (!::adapter.isInitialized || targetUser.isBlank()) return
         val online = AppRepository.isUserOnline(targetUser)
@@ -228,6 +242,19 @@ class DirectMessagesActivity : AppCompatActivity() {
         adapter.submit(AppRepository.directConversation(currentUser, targetUser))
         list.post { list.scrollToPosition((adapter.itemCount - 1).coerceAtLeast(0)) }
         updateComposerState()
+    }
+
+    private fun refreshFromSwipeGesture() {
+        if (!refreshState.tryStart()) {
+            contentRefresh.isRefreshing = false
+            return
+        }
+        try {
+            refresh()
+        } finally {
+            refreshState.finish()
+            contentRefresh.isRefreshing = false
+        }
     }
 
     private fun updateComposerState() {
@@ -455,7 +482,6 @@ class DirectMessagesActivity : AppCompatActivity() {
         if (!state.canSend) return
         trigger?.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         AppRepository.addDirectMessage(DirectMessage(fromUser = currentUser, toUser = targetUser, text = text.takeIf { it.isNotBlank() }, imagePath = selectedImage))
-        AppRepository.addNotification(com.masahhisabat.app.data.NotificationEvent("رسالة من $currentUser", text.takeIf { it.isNotBlank() } ?: "تم إرسال صورة", "direct_message", currentUser))
         input.setText(""); selectedImage = null; updateComposerState(); refresh()
     }
 

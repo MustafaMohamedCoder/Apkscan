@@ -141,7 +141,8 @@
             android:visibility="gone" />
     </LinearLayout>
 
-    <FrameLayout
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/groups_refresh"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
@@ -149,35 +150,40 @@
         android:layout_marginEnd="8dp"
         android:layout_marginBottom="96dp">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/groups_list"
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:clipToPadding="false"
-            android:paddingStart="4dp"
-            android:paddingTop="2dp"
-            android:paddingEnd="4dp"
-            android:paddingBottom="16dp" />
+            android:layout_height="match_parent">
 
-        <TextView
-            android:id="@+id/groups_empty"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_margin="12dp"
-            android:background="@drawable/empty_state_panel"
-            android:clickable="true"
-            android:focusable="true"
-            android:fontFamily="@font/tajawal_medium"
-            android:foreground="?attr/selectableItemBackground"
-            android:gravity="center"
-            android:lineSpacingExtra="4dp"
-            android:minHeight="132dp"
-            android:padding="28dp"
-            android:text="@string/groups_empty_action"
-            android:textAlignment="center"
-            android:textColor="@color/day_text_secondary"
-            android:textSize="15sp" />
-    </FrameLayout>
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/groups_list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingStart="4dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="4dp"
+                android:paddingBottom="16dp" />
+
+            <TextView
+                android:id="@+id/groups_empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_margin="12dp"
+                android:background="@drawable/empty_state_panel"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="@font/tajawal_medium"
+                android:foreground="?attr/selectableItemBackground"
+                android:gravity="center"
+                android:lineSpacingExtra="4dp"
+                android:minHeight="132dp"
+                android:padding="28dp"
+                android:text="@string/groups_empty_action"
+                android:textAlignment="center"
+                android:textColor="@color/day_text_secondary"
+                android:textSize="15sp" />
+        </FrameLayout>
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
 </LinearLayout>

@@ -1320,10 +1320,31 @@ object SyncManager {
                 )
                 continue
             }
-            AppRepository.addDirectMessage(incoming.message.copy(imagePath = imagePath))
+            val message = incoming.message.copy(imagePath = imagePath)
+            AppRepository.addDirectMessage(message)
+            val activeUser = AppRepository.activeSessionUsername()
+            if (
+                activeUser != null &&
+                AppRepository.normalizeUsername(message.toUser) == AppRepository.normalizeUsername(activeUser) &&
+                AppRepository.normalizeUsername(message.fromUser) != AppRepository.normalizeUsername(activeUser)
+            ) {
+                AppRepository.addNotification(
+                    NotificationEvent(
+                        title = "رسالة من ${message.fromUser}",
+                        body = message.text?.takeIf { it.isNotBlank() } ?: "تم إرسال صورة",
+                        type = "direct_message",
+                        actor = message.fromUser
+                    )
+                )
+            }
         }
         for (incoming in payload.notifications.orEmpty()) {
-            if (AppRepository.notifications().none { it.id == incoming.id }) AppRepository.addNotification(incoming)
+            if (
+                GroupNotificationPolicy.shouldImportSyncedEvent(incoming.type) &&
+                AppRepository.notifications().none { it.id == incoming.id }
+            ) {
+                AppRepository.addNotification(incoming)
+            }
         }
         val incomingPresence = payload.presence.orEmpty()
         if (incomingPresence.isNotEmpty()) {

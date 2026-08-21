@@ -96,7 +96,7 @@ class TeamActivity : AppCompatActivity() {
             .setTitle(R.string.add_member)
             .setView(view)
             .setCancelable(false)
-            .setPositiveButton(R.string.save) { d, _ ->
+            .setPositiveButton(R.string.save) { _, _ ->
                 val username = AppRepository.normalizeUsername(etUsername.text.toString())
                 val password = etPassword.text.toString().trim()
                 val role = when (spRole.selectedItemPosition) {
@@ -383,8 +383,7 @@ class TeamActivity : AppCompatActivity() {
                         u.copy(passwordHash = com.masahhisabat.app.data.HashUtil.encodePlain(newPassword))
                     }
                 }
-                AppRepository.removeUser(user.username)
-                AppRepository.addUser(updated)
+                AppRepository.updateUser(user.username, updated)
                 val me = SessionStore.currentUser(ctx) ?: "?"
                 AppRepository.logActivity(ActivityEntry(me, "عدّل $me العضو $newUsername"))
                 Toast.makeText(ctx, "تم تحديث بيانات العضو", Toast.LENGTH_SHORT).show()

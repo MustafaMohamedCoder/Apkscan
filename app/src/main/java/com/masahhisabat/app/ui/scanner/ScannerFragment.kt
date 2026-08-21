@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -25,6 +26,17 @@ import java.io.File
 
 class ScannerFragment : Fragment() {
 
+    private sealed class GalleryCopyResult {
+        data class Success(val path: String) : GalleryCopyResult()
+        data object TooLarge : GalleryCopyResult()
+        data object Failed : GalleryCopyResult()
+    }
+
+    private companion object {
+        /** حد وقائي يمنع استنزاف الذاكرة عند فتح صور المعرض الكبيرة في محرر المستندات. */
+        const val MAX_GALLERY_IMAGE_BYTES = 30L * 1024L * 1024L
+    }
+
     private var isScannerBusy = false
 
     private val galleryLauncher = registerForActivityResult(
@@ -39,8 +51,19 @@ class ScannerFragment : Fragment() {
                 activity?.runOnUiThread {
                     if (!isAdded) return@runOnUiThread
                     setScannerBusy(false)
-                    if (copied != null) showPostScanOptions(copied)
-                    else Toast.makeText(requireContext(), "تعذر قراءة الصورة", Toast.LENGTH_SHORT).show()
+                    when (copied) {
+                        is GalleryCopyResult.Success -> showPostScanOptions(copied.path)
+                        GalleryCopyResult.TooLarge -> Toast.makeText(
+                            requireContext(),
+                            "الصورة كبيرة جدًا للمعالجة المحلية. اختر صورة أصغر من 30 ميجابايت",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        GalleryCopyResult.Failed -> Toast.makeText(
+                            requireContext(),
+                            "تعذر قراءة الصورة",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             }.apply { name = "scanner-gallery-copy"; start() }
         }
@@ -55,9 +78,13 @@ class ScannerFragment : Fragment() {
         applyTheme(view)
         refreshRecentScans()
 
-        view.findViewById<FrameLayout>(R.id.btn_camera).setOnClickListener { checkCameraAndOpen() }
+        view.findViewById<FrameLayout>(R.id.btn_camera).setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            checkCameraAndOpen()
+        }
         view.findViewById<FrameLayout>(R.id.btn_gallery).setOnClickListener {
             if (isScannerBusy) return@setOnClickListener
+            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
             try {
                 galleryLauncher.launch("image/*")
             } catch (_: Exception) {
@@ -123,7 +150,9 @@ class ScannerFragment : Fragment() {
                     strokeWidth = 1.dp(ctx)
                     isClickable = true
                     isFocusable = true
+                    contentDescription = "فتح مجموعة ${group.name} وعرض المستند الممسوح"
                     setOnClickListener {
+                        it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         startActivity(Intent(ctx, GroupActivity::class.java).putExtra("group_id", group.id))
                     }
                 }
@@ -141,7 +170,8 @@ class ScannerFragment : Fragment() {
                 val textColumn = LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL
                     layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                    setPadding(12.dp(ctx), 0, 0, 0)
+                    // يعتمد الحشو على البداية المنطقية، فتظل المسافة بجوار الأيقونة صحيحة في RTL.
+                    setPaddingRelative(12.dp(ctx), 0, 0, 0)
                 }
                 val title = TextView(ctx).apply {
                     text = group.name
@@ -202,30 +232,42 @@ class ScannerFragment : Fragment() {
         screen.findViewById<TextView>(R.id.scan_status_text).text = message
     }
 
-    private fun copyToInternal(context: Context, uri: Uri): String? {
+    private fun copyToInternal(context: Context, uri: Uri): GalleryCopyResult {
         val file = File(context.cacheDir, "gallery_${System.currentTimeMillis()}.jpg")
         return try {
-            val input = context.contentResolver.openInputStream(uri) ?: return null
+            val input = context.contentResolver.openInputStream(uri) ?: return GalleryCopyResult.Failed
             input.use {
-                val inputStream = it
-                file.outputStream().use { output -> inputStream.copyTo(output) }
+                file.outputStream().use { output ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    var copiedBytes = 0L
+                    while (true) {
+                        val count = it.read(buffer)
+                        if (count <= 0) break
+                        copiedBytes += count
+                        if (copiedBytes > MAX_GALLERY_IMAGE_BYTES) {
+                            file.delete()
+                            return GalleryCopyResult.TooLarge
+                        }
+                        output.write(buffer, 0, count)
+                    }
+                }
             }
             if (file.exists() && file.length() > 0L) {
-                file.absolutePath
+                GalleryCopyResult.Success(file.absolutePath)
             } else {
                 file.delete()
-                null
+                GalleryCopyResult.Failed
             }
         } catch (_: Exception) {
             file.delete()
-            null
+            GalleryCopyResult.Failed
         }
     }
 
     private fun showPostScanOptions(imagePath: String) {
         val ctx = requireContext()
         // يفتح محرر القص مباشرةً: خيارات إخراج النسخة المحسنة تظهر بعد المعالجة.
-        (ctx.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
+        ctx.getSystemService(Vibrator::class.java)
             ?.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE))
         startCrop(imagePath, action = CropEditActivity.ACTION_NEW_INVOICE)
     }

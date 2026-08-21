@@ -3,6 +3,7 @@ package com.masahhisabat.app.ui.groups
 import android.content.Intent
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -16,7 +17,9 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.widget.TextViewCompat
 import androidx.fragment.app.Fragment
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -50,6 +53,12 @@ class GroupsFragment : Fragment() {
         val unpaidInvoices: Int
     )
 
+    private data class GroupRow(
+        val group: Group,
+        val snapshot: GroupSnapshot,
+        val isPinned: Boolean
+    )
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return inflater.inflate(R.layout.fragment_groups, container, false)
     }
@@ -79,23 +88,34 @@ class GroupsFragment : Fragment() {
                 }
                 override fun afterTextChanged(s: Editable?) = Unit
             })
-            clearSearch.setOnClickListener { search.text?.clear() }
+            clearSearch.setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                search.text?.clear()
+            }
 
             val role = SessionStore.currentRole(requireContext())
             val canManage = AppRepository.canEdit(role)
 
             view.findViewById<View>(R.id.btn_add_group).setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 if (!canManage) {
-                    Toast.makeText(requireContext(), "لا تملك صلاحية لإنشاء المجموعات", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), R.string.groups_create_permission_denied, Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
                 showNewGroupDialog()
             }
-            view.findViewById<View>(R.id.btn_sort_groups).setOnClickListener { showSortGroupsDialog() }
-            view.findViewById<View>(R.id.btn_filter_groups).setOnClickListener { showFilterGroupsDialog() }
+            view.findViewById<View>(R.id.btn_sort_groups).setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                showSortGroupsDialog()
+            }
+            view.findViewById<View>(R.id.btn_filter_groups).setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                showFilterGroupsDialog()
+            }
             view.findViewById<TextView>(R.id.groups_empty).setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 if (canManage) showNewGroupDialog()
-                else Toast.makeText(requireContext(), "لا تملك صلاحية إنشاء المجموعات", Toast.LENGTH_SHORT).show()
+                else Toast.makeText(requireContext(), R.string.groups_create_permission_denied, Toast.LENGTH_SHORT).show()
             }
 
             if (!canManage) view.findViewById<View>(R.id.btn_add_group).visibility = View.GONE
@@ -111,13 +131,13 @@ class GroupsFragment : Fragment() {
         view.setBackgroundResource(ThemeHelper.backgroundRes())
         view.findViewById<View>(R.id.groups_root).setBackgroundResource(ThemeHelper.backgroundRes())
         view.findViewById<TextView>(R.id.title).apply {
-            this.text = "المجموعات"
+            this.text = getString(R.string.groups_title)
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 26f)
             typeface = resources.getFont(R.font.tajawal_bold)
             setTextColor(text)
         }
         view.findViewById<TextView>(R.id.subtitle)?.apply {
-            this.text = "أرشيف الفواتير والطلبات داخل المجموعات"
+            this.text = getString(R.string.groups_subtitle)
             typeface = resources.getFont(R.font.tajawal_medium)
             setTextColor(ThemeHelper.textSecondary(requireContext()))
         }
@@ -125,13 +145,22 @@ class GroupsFragment : Fragment() {
             setTextColor(ThemeHelper.textSecondary(requireContext()))
             setBackgroundResource(ThemeHelper.glassPanelRes())
             backgroundTintList = null
+            setCompoundDrawablesRelativeWithIntrinsicBounds(0, R.drawable.ic_invoice, 0, 0)
+            compoundDrawablePadding = (10 * resources.displayMetrics.density).toInt()
+            TextViewCompat.setCompoundDrawableTintList(
+                this,
+                android.content.res.ColorStateList.valueOf(ThemeHelper.accent(requireContext()))
+            )
         }
         view.findViewById<TextView>(R.id.groups_summary)?.setTextColor(ThemeHelper.textSecondary(requireContext()))
         view.findViewById<TextView>(R.id.groups_sort_label)?.setTextColor(ThemeHelper.textSecondary(requireContext()))
         view.findViewById<EditText>(R.id.et_group_search)?.apply {
             setTextColor(ThemeHelper.inputText(requireContext()))
             setHintTextColor(ThemeHelper.inputHint(requireContext()))
-            compoundDrawableTintList = android.content.res.ColorStateList.valueOf(ThemeHelper.textSecondary(requireContext()))
+            TextViewCompat.setCompoundDrawableTintList(
+                this,
+                android.content.res.ColorStateList.valueOf(ThemeHelper.textSecondary(requireContext()))
+            )
         }
         view.findViewById<ImageView>(R.id.btn_clear_group_search)?.setColorFilter(ThemeHelper.textSecondary(requireContext()))
         view.findViewById<android.widget.ImageButton>(R.id.btn_filter_groups)?.setColorFilter(
@@ -310,12 +339,8 @@ class GroupsFragment : Fragment() {
                     refresh()
                 }
             }
-            .setNegativeButton(R.string.cancel) { _, _ ->
-                // إذا أُلغي التسمية ولم يبق اسم للمجموعة الجديدة: حذفها
-                val group = AppRepository.groups().find { it.id == g.id }
-                if (group != null && group.name.isBlank()) AppRepository.removeGroup(g.id)
-                refresh()
-            }
+            // الإلغاء لا يحذف المجموعة؛ جميع عمليات الحذف الصريحة تمر عبر سلة المحذوفات.
+            .setNegativeButton(R.string.cancel, null)
             .setOnDismissListener { refresh() }
             .show()
     }
@@ -351,13 +376,22 @@ class GroupsFragment : Fragment() {
             }
             val empty = requireView().findViewById<TextView>(R.id.groups_empty)
             if (groups.isEmpty()) {
-                empty?.text = emptyStateMessage(query, filterMode)
+                val emptyState = GroupEmptyStatePolicy.resolve(
+                    hasAnyGroups = allGroups.isNotEmpty(),
+                    query = query,
+                    filterMode = filterMode,
+                    canCreate = AppRepository.canEdit(SessionStore.currentRole(requireContext()))
+                )
+                empty?.text = emptyStateText(emptyState.message, query)
+                empty?.isEnabled = emptyState.canCreate
+                empty?.isClickable = emptyState.canCreate
+                empty?.isFocusable = emptyState.canCreate
                 empty?.visibility = View.VISIBLE
                 recycler.visibility = View.GONE
             } else {
                 empty?.visibility = View.GONE
                 recycler.visibility = View.VISIBLE
-                tradersAdapter.submit(groups, snapshots)
+                tradersAdapter.submit(groups, snapshots, pinned)
             }
         } catch (e: Exception) {
             logAndToast(e, "قراءة المجموعات")
@@ -389,13 +423,14 @@ class GroupsFragment : Fragment() {
         pinned: Set<String>,
         filterMode: String
     ): Boolean {
+        if (filterMode == "archived") return group.archivedAt != null
+        if (group.archivedAt != null) return false
         return when (filterMode) {
             "with_documents" -> (snapshot?.documentCount ?: 0) > 0
             "empty" -> (snapshot?.documentCount ?: 0) == 0
             "pinned" -> group.id in pinned
             "recent_30d" -> group.createdAt >= System.currentTimeMillis() - 30L * 24L * 60L * 60L * 1000L
-            "archived" -> group.archivedAt != null
-            else -> group.archivedAt == null
+            else -> true
         }
     }
 
@@ -485,12 +520,12 @@ class GroupsFragment : Fragment() {
         else -> "الكل"
     }
 
-    private fun emptyStateMessage(query: String, filterMode: String): String = when {
-        allGroups.isEmpty() -> "لا توجد فواتير بعد. اضغط هنا لإضافة أول فاتورة أو مورد."
-        query.isNotBlank() && filterMode != "all" -> "لا توجد نتائج تطابق البحث والتصفية الحالية. جرّب تغيير أحدهما."
-        query.isNotBlank() -> "لا توجد مجموعة تطابق «$query». جرّب كلمة أخرى."
-        filterMode != "all" -> "لا توجد مجموعات ضمن التصفية الحالية. جرّب تصفية أخرى."
-        else -> "لا توجد فواتير بعد. اضغط هنا لإضافة أول فاتورة أو مورد."
+    private fun emptyStateText(message: GroupEmptyMessage, query: String): String = when (message) {
+        GroupEmptyMessage.NO_GROUPS_WITH_CREATE_ACTION -> getString(R.string.groups_empty_action)
+        GroupEmptyMessage.NO_GROUPS_READ_ONLY -> getString(R.string.groups_empty_read_only)
+        GroupEmptyMessage.NO_SEARCH_AND_FILTER_RESULTS -> getString(R.string.groups_empty_search_and_filter)
+        GroupEmptyMessage.NO_SEARCH_RESULTS -> getString(R.string.groups_empty_search_result, query)
+        GroupEmptyMessage.NO_FILTER_RESULTS -> getString(R.string.groups_empty_filter_result)
     }
 
     private fun logAndToast(e: Exception, tag: String) {
@@ -506,13 +541,39 @@ class GroupsFragment : Fragment() {
 
     private inner class GroupsAdapter :
         RecyclerView.Adapter<GroupsAdapter.VH>() {
-        private var groups: List<Group> = emptyList()
-        private var snapshots: Map<String, GroupSnapshot> = emptyMap()
+        private var rows: List<GroupRow> = emptyList()
 
-        fun submit(newGroups: List<Group>, newSnapshots: Map<String, GroupSnapshot>) {
-            groups = newGroups
-            snapshots = newSnapshots
-            notifyDataSetChanged()
+        fun submit(
+            newGroups: List<Group>,
+            newSnapshots: Map<String, GroupSnapshot>,
+            pinned: Set<String>
+        ) {
+            val newRows = newGroups.map { group ->
+                GroupRow(
+                    group = group,
+                    snapshot = newSnapshots[group.id] ?: GroupSnapshot(
+                        documentCount = 0,
+                        lastActivity = group.createdAt,
+                        lastPreview = "لا توجد مستندات بعد",
+                        openOrders = 0,
+                        unpaidInvoices = 0
+                    ),
+                    isPinned = group.id in pinned
+                )
+            }
+            val previousRows = rows
+            if (previousRows == newRows) return
+            val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+                override fun getOldListSize() = previousRows.size
+                override fun getNewListSize() = newRows.size
+                override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int) =
+                    previousRows[oldItemPosition].group.id == newRows[newItemPosition].group.id
+
+                override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int) =
+                    previousRows[oldItemPosition] == newRows[newItemPosition]
+            })
+            rows = newRows
+            diff.dispatchUpdatesTo(this)
         }
 
         inner class VH(view: View) : RecyclerView.ViewHolder(view) {
@@ -545,7 +606,8 @@ class GroupsFragment : Fragment() {
         }
 
         override fun onBindViewHolder(holder: VH, position: Int) {
-            val g = groups[position]
+            val row = rows[position]
+            val g = row.group
             val ctx = requireContext()
             val surface = ThemeHelper.surface(ctx)
             val text = ThemeHelper.text(ctx)
@@ -556,13 +618,7 @@ class GroupsFragment : Fragment() {
             holder.name.text = if (g.archivedAt != null) "${g.name} · مؤرشف" else g.name
             holder.name.setTextColor(text)
             holder.name.typeface = ctx.resources.getFont(R.font.tajawal_bold)
-            val snapshot = snapshots[g.id] ?: GroupSnapshot(
-                documentCount = 0,
-                lastActivity = g.createdAt,
-                lastPreview = "لا توجد مستندات بعد",
-                openOrders = 0,
-                unpaidInvoices = 0
-            )
+            val snapshot = row.snapshot
             holder.preview.text = buildString {
                 append("${snapshot.documentCount} فاتورة/طلب")
                 if (snapshot.openOrders > 0) append(" · ${snapshot.openOrders} قيد المتابعة")
@@ -580,7 +636,7 @@ class GroupsFragment : Fragment() {
             holder.itemCount.background?.setTint(ThemeHelper.chipBgColor(ctx))
             holder.icon.setColorFilter(android.graphics.Color.WHITE)
             holder.more.setColorFilter(textSec)
-            holder.pin.visibility = if (g.id in AppRepository.favoriteGroupIds()) View.VISIBLE else View.GONE
+            holder.pin.visibility = if (row.isPinned) View.VISIBLE else View.GONE
             holder.pin.setColorFilter(ThemeHelper.accent(ctx))
             holder.itemView.contentDescription = "فتح أرشيف الفاتورة ${g.name}"
             holder.more.contentDescription = "إجراءات الفاتورة ${g.name}"
@@ -625,7 +681,7 @@ class GroupsFragment : Fragment() {
             }
         }
 
-        override fun getItemCount() = groups.size
+        override fun getItemCount() = rows.size
 
         private fun confirmDelete(g: Group) {
             MaterialAlertDialogBuilder(requireContext())

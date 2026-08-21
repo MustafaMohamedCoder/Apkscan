@@ -18,7 +18,7 @@
         android:layout_gravity="top|end"
         android:layout_margin="16dp"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="إغلاق"
+        android:contentDescription="@string/viewer_close"
         android:padding="10dp"
         android:src="@drawable/ic_close"
         app:tint="#FFFFFF" />
@@ -30,7 +30,7 @@
         android:layout_gravity="top|start"
         android:layout_margin="16dp"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="البحث داخل الصورة"
+        android:contentDescription="@string/viewer_search_image"
         android:padding="10dp"
         android:src="@drawable/ic_search"
         app:tint="#FFFFFF" />
@@ -61,7 +61,7 @@
                 android:layout_height="46dp"
                 android:layout_weight="1"
                 android:background="@drawable/viewer_search_input_bg"
-                android:hint="ابحث عن كلمة داخل الصورة"
+                android:hint="@string/viewer_search_hint"
                 android:imeOptions="actionSearch"
                 android:inputType="text"
                 android:paddingStart="13dp"
@@ -76,7 +76,7 @@
                 android:layout_height="44dp"
                 android:layout_marginStart="8dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="إغلاق البحث"
+                android:contentDescription="@string/viewer_close_search"
                 android:padding="10dp"
                 android:src="@drawable/ic_close"
                 app:tint="#FFFFFF" />
@@ -87,7 +87,7 @@
             android:layout_width="match_parent"
             android:layout_height="44dp"
             android:layout_marginTop="10dp"
-            android:text="استخراج النص والبحث"
+            android:text="@string/viewer_extract_and_search"
             android:textColor="@color/white"
             android:textSize="13sp"
             app:backgroundTint="@color/primary"
@@ -129,7 +129,7 @@
         android:paddingTop="6dp"
         android:paddingEnd="16dp"
         android:paddingBottom="6dp"
-        android:text="1 / 1"
+        android:text="@string/viewer_counter_placeholder"
         android:textColor="#FFFFFF"
         android:textSize="14sp" />
 </FrameLayout>

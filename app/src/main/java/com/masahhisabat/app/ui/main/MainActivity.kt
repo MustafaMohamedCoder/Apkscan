@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -45,13 +46,14 @@ class MainActivity : AppCompatActivity() {
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         AppRepository.initAppContext(this)
-        if (SessionStore.currentUser(this) == null) {
+        if (SessionStore.activeUser(this) == null) {
+            SessionStore.clear(this)
             startActivity(Intent(this, LoginActivity::class.java))
             finish()
             return
         }
-        super.onCreate(savedInstanceState)
         try {
             setContentView(R.layout.activity_main)
 
@@ -97,6 +99,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (SessionStore.activeUser(this) == null) {
+            SessionStore.clear(this)
+            startActivity(Intent(this, LoginActivity::class.java))
+            finish()
+            return
+        }
         if (SessionStore.requiresUnlock(this)) {
             startActivity(Intent(this, LockActivity::class.java))
             return
@@ -154,18 +162,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun findIconInView(parent: View): ImageView? {
-        var target: ImageView? = null
         if (parent is ImageView) return parent
-        if (parent is LinearLayout) {
-            for (i in 0 until parent.childCount) {
-                val child = parent.getChildAt(i)
-                if (child is ImageView) {
-                    target = child
-                    break
-                }
-            }
+        if (parent !is ViewGroup) return null
+        for (i in 0 until parent.childCount) {
+            findIconInView(parent.getChildAt(i))?.let { return it }
         }
-        return target
+        return null
     }
     private fun applyTheme() {
         window.decorView.setBackgroundResource(ThemeHelper.backgroundRes())

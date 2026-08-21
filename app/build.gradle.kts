@@ -22,8 +22,8 @@ android {
         applicationId = "com.masahhisabat.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 54
-        versionName = "1.2.50"
+        versionCode = 57
+        versionName = "1.2.54"
 
         // أجهزة Android الفعلية المستهدفة تعمل بمعماريات ARM؛ استبعاد x86 يزيل نسخ OpenCV غير اللازمة.
         ndk {
@@ -106,4 +106,7 @@ dependencies {
     implementation("org.opencv:opencv:4.9.0")
     // WebRTC: قناة صوت/فيديو مباشرة، مع تبادل الإشارة داخل الشبكة المحلية.
     implementation("io.github.webrtc-sdk:android:144.7559.12")
+
+    // اختبارات منطق محلي خفيفة لتغطية مسارات المصادقة دون اعتماد على جهاز أو GMS.
+    testImplementation("junit:junit:4.13.2")
 }

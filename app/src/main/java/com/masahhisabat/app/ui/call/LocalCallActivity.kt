@@ -9,6 +9,7 @@ import android.app.PendingIntent
 import android.app.PictureInPictureParams
 import android.app.RemoteAction
 import android.content.Intent
+import android.content.res.Configuration
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
@@ -30,6 +31,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.CallFeedback
@@ -73,6 +75,9 @@ class LocalCallActivity : Activity() {
     private var returningFromAppSettings = false
     private var permissionWaitPanel: LinearLayout? = null
     private var permissionWaitText: TextView? = null
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density + 0.5f).toInt()
+
     private val callTimer = object : Runnable {
         override fun run() {
             updateDuration()
@@ -124,7 +129,7 @@ class LocalCallActivity : Activity() {
     private fun render() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(32, 48, 32, 32)
+            setPadding(dp(16), dp(24), dp(16), dp(16))
         }
         val title = TextView(this).apply {
             text = if (mediaType == "video") "مكالمة فيديو محلية" else "مكالمة صوتية محلية"
@@ -133,7 +138,7 @@ class LocalCallActivity : Activity() {
         val peer = TextView(this).apply {
             text = "المستخدم: $peerUser"
             textSize = 18f
-            setPadding(0, 24, 0, 12)
+            setPadding(0, dp(12), 0, dp(6))
         }
         statusView = TextView(this).apply {
             text = if (intent.hasExtra(EXTRA_INCOMING_SDP)) "مكالمة واردة من $peerUser — اضغط قبول للرد" else "جاهز للاتصال داخل الشبكة"
@@ -142,18 +147,18 @@ class LocalCallActivity : Activity() {
         permissionWaitPanel = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(20, 18, 20, 18)
+            setPadding(dp(10), dp(9), dp(10), dp(9))
             setBackgroundColor(Color.rgb(8, 95, 100))
             contentDescription = "مؤشر انتظار قرار إذن الوسائط"
             visibility = View.GONE
             addView(ProgressBar(this@LocalCallActivity).apply {
                 isIndeterminate = true
                 contentDescription = "جارٍ الانتظار"
-            }, LinearLayout.LayoutParams(48, 48))
+            }, LinearLayout.LayoutParams(dp(24), dp(24)))
             permissionWaitText = TextView(this@LocalCallActivity).apply {
                 textSize = 15f
                 setTextColor(Color.WHITE)
-                setPadding(16, 0, 0, 0)
+                setPaddingRelative(16, 0, 0, 0)
             }
             addView(permissionWaitText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         }
@@ -162,7 +167,7 @@ class LocalCallActivity : Activity() {
             textSize = 15f
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.rgb(198, 40, 40))
-            setPadding(22, 12, 22, 12)
+            setPadding(dp(11), dp(6), dp(11), dp(6))
             contentDescription = "تنبيه: الميكروفون مكتوم"
             visibility = View.GONE
         }
@@ -171,7 +176,7 @@ class LocalCallActivity : Activity() {
             textSize = 15f
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.rgb(217, 119, 6))
-            setPadding(22, 12, 22, 12)
+            setPadding(dp(11), dp(6), dp(11), dp(6))
             contentDescription = "تنبيه: الكاميرا متوقفة"
             visibility = View.GONE
         }
@@ -179,7 +184,7 @@ class LocalCallActivity : Activity() {
             text = "جودة الشبكة: جارٍ القياس"
             textSize = 14f
             setTextColor(Color.WHITE)
-            setPadding(22, 10, 22, 10)
+            setPadding(dp(11), dp(5), dp(11), dp(5))
             contentDescription = "جودة الشبكة: جارٍ القياس"
             visibility = View.GONE
         }
@@ -188,7 +193,7 @@ class LocalCallActivity : Activity() {
             textSize = 15f
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.rgb(15, 118, 110))
-            setPadding(22, 10, 22, 10)
+            setPadding(dp(11), dp(5), dp(11), dp(5))
             contentDescription = "مدة المكالمة صفر دقيقة وصفر ثانية"
             visibility = View.GONE
         }
@@ -224,7 +229,7 @@ class LocalCallActivity : Activity() {
         controlsLayout = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             isEnabled = false
-            setPadding(0, 16, 0, 16)
+            setPadding(0, dp(8), 0, dp(8))
             addView(micButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             addView(cameraButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             addView(switchCameraButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -238,8 +243,8 @@ class LocalCallActivity : Activity() {
         root.addView(networkIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(durationView, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         if (mediaType == "video") {
-            root.addView(remoteRenderer, LinearLayout.LayoutParams(-1, 520))
-            root.addView(localRenderer, LinearLayout.LayoutParams(-1, 220))
+            root.addView(remoteRenderer, LinearLayout.LayoutParams(-1, 0, 1f))
+            root.addView(localRenderer, LinearLayout.LayoutParams(-1, dp(120)))
         }
         root.addView(acceptButton)
         root.addView(controlsLayout)
@@ -287,6 +292,7 @@ class LocalCallActivity : Activity() {
             localRenderer = localRenderer,
             remoteRenderer = remoteRenderer,
             onState = { state -> runOnUiThread {
+                if (isFinishing || isDestroyed || ending) return@runOnUiThread
                 statusView?.text = "حالة الاتصال: $state"
                 when (state) {
                     "CONNECTED" -> {
@@ -301,6 +307,7 @@ class LocalCallActivity : Activity() {
             } },
             onNetworkQuality = { quality ->
                 runOnUiThread {
+                    if (isFinishing || isDestroyed || ending) return@runOnUiThread
                     networkQuality = quality
                     updateNetworkIndicator()
                 }
@@ -312,7 +319,10 @@ class LocalCallActivity : Activity() {
                 }
             },
             onCallEnded = { reason, diagnostics ->
-                runOnUiThread { finishCall("failed", reason, notifyPeer = false, diagnosticLog = diagnostics) }
+                runOnUiThread {
+                    if (isFinishing || isDestroyed || ending) return@runOnUiThread
+                    finishCall("failed", reason, notifyPeer = false, diagnosticLog = diagnostics)
+                }
             }
         )
         controlsLayout?.isEnabled = true
@@ -494,8 +504,11 @@ class LocalCallActivity : Activity() {
         manager.moveTaskToFront(taskId, ActivityManager.MOVE_TASK_WITH_HOME)
     }
 
-    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode)
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         val compact = isInPictureInPictureMode
         statusView?.visibility = if (compact) View.GONE else View.VISIBLE
         minimizeButton?.visibility = if (compact) View.GONE else View.VISIBLE
@@ -508,7 +521,7 @@ class LocalCallActivity : Activity() {
         updateDuration()
         // في وضع PiP يتولى Android السحب وتغيير الحجم، وتبقى الوسائط والمحرك مستمرين.
         if (!compact) {
-            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            WindowCompat.setDecorFitsSystemWindows(window, true)
         }
     }
 

@@ -39,9 +39,7 @@ import java.net.Inet4Address
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.net.SocketException
 import java.net.SocketTimeoutException
-import java.net.UnknownHostException
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -142,7 +140,7 @@ object SyncManager {
                 AppRepository.logSync(SyncEntry("بدء الاستماع", "خادم المزامنة نشط", true))
                 while (isServing) {
                     val client = try { server?.accept() } catch (_: Throwable) { break } ?: break
-                    handleClient(client, context)
+                    handleClient(client)
                 }
             } catch (e: Throwable) {
                 Log.e(TAG, "server error", e)
@@ -421,7 +419,7 @@ object SyncManager {
         }
     }
 
-    private fun handleClient(socket: Socket, context: Context) {
+    private fun handleClient(socket: Socket) {
         Thread {
             socket.use { client ->
                 val clientAddress = client.inetAddress?.hostAddress?.takeIf { it.isNotBlank() } ?: "عنوان غير معروف"
@@ -462,7 +460,7 @@ object SyncManager {
                             ?: throw IOException("تعذر إنشاء نسخة احتياطية وقائية قبل المزامنة")
                         AppRepository.logSync(SyncEntry("نسخة احتياطية تلقائية", "حُفظت نسخة وقائية: ${backup.name}", true))
                     }
-                    val result = if (isMustafaUserFile) applyAuthoritativeUsers(payload) else applyPayload(context, payload)
+                    val result = if (isMustafaUserFile) applyAuthoritativeUsers(payload) else applyPayload(payload)
                     // رد: عدد العناصر المستقبلة + عدد المستخدمين المستقبلة.
                     val ack = "OK ${result.items} ${result.users}\n"
                     client.getOutputStream().write(ack.toByteArray())
@@ -504,7 +502,6 @@ object SyncManager {
     // ---------- العميل: الاتصال والارسال ----------
     /** إرسال بيانات هذا الجهاز إلى جهاز آخر (يستقبلها بدوره) */
     fun syncWithHost(
-        context: Context,
         host: String,
         peerName: String = host,
         onProgress: (percent: Int, status: String) -> Unit = { _, _ -> }
@@ -516,7 +513,7 @@ object SyncManager {
                 socket.connect(InetSocketAddress(host, TCP_PORT), CONNECT_TIMEOUT_MS)
                 socket.soTimeout = SYNC_READ_TIMEOUT_MS
                 onProgress(25, "تم الاتصال. جارٍ تجهيز البيانات...")
-                val currentPayload = buildPayload(context)
+                val currentPayload = buildPayload()
                 payload = currentPayload
                 onProgress(45, "جارٍ إرسال ${currentPayload.totalItems} عناصر و${currentPayload.users.size} مستخدمين...")
                 val writer = socket.getOutputStream().bufferedWriter()
@@ -590,7 +587,7 @@ object SyncManager {
      * مزامنة تلقائية ثنائية الاتجاه لكامل بيانات التطبيق بعد فتح جلسة المستخدم.
      * تشمل الحسابات والمجموعات والرسائل والمرفقات وسجل السلة، مع دمج غير هدّام.
      */
-    private fun syncAutomaticDataWithHost(context: Context, host: String, peerName: String): SyncResult {
+    private fun syncAutomaticDataWithHost(host: String, peerName: String): SyncResult {
         try {
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(host, TCP_PORT), CONNECT_TIMEOUT_MS)
@@ -619,7 +616,7 @@ object SyncManager {
                     val backup = AppRepository.createSafetyBackup()
                     AppRepository.logSync(SyncEntry("نسخة احتياطية تلقائية", "حُفظت نسخة وقائية: ${backup.name}", true))
                 }
-                val received = applyPayload(context, returnedPayload)
+                val received = applyPayload(returnedPayload)
                 AppRepository.logSync(SyncEntry(
                     "مزامنة تلقائية للبيانات",
                     "بعد تسجيل الدخول مع $peerName: أُرسلت ${outgoing.totalItems} عنصرًا واستُقبلت ${received.items} عنصرًا.",
@@ -715,7 +712,7 @@ object SyncManager {
                         .distinctBy { it.address }
                         .forEach { peer ->
                             if (autoSyncedDataFiles[peer.address] != fingerprint) {
-                                val result = syncAutomaticDataWithHost(appContext, peer.address, peer.name)
+                                val result = syncAutomaticDataWithHost(peer.address, peer.name)
                                 if (result.ok) autoSyncedDataFiles[peer.address] = dataFingerprint()
                             }
                         }
@@ -740,13 +737,21 @@ object SyncManager {
     private fun isMustafaSession(context: Context): Boolean {
         val username = context.getSharedPreferences("session", Context.MODE_PRIVATE)
             .getString("username", null)
-        return AppRepository.normalizeUsername(username.orEmpty()) == "mustafa"
+        return AppRepository.normalizeUsername(username.orEmpty()) == "mustafa" &&
+            AppRepository.users().any { user ->
+                user.enabled && AppRepository.normalizeUsername(user.username) == "mustafa" && user.role == Role.ADMIN
+            }
     }
 
-    private fun hasActiveSession(context: Context): Boolean = context
-        .getSharedPreferences("session", Context.MODE_PRIVATE)
-        .getString("username", null)
-        ?.isNotBlank() == true
+    private fun hasActiveSession(context: Context): Boolean {
+        val username = context.getSharedPreferences("session", Context.MODE_PRIVATE)
+            .getString("username", null)
+            ?.takeIf { it.isNotBlank() }
+            ?: return false
+        return AppRepository.users().any { user ->
+            user.enabled && AppRepository.normalizeUsername(user.username) == AppRepository.normalizeUsername(username)
+        }
+    }
 
     private fun userFileFingerprint(): String = AppRepository.users()
         .sortedBy { AppRepository.normalizeUsername(it.username) }
@@ -851,16 +856,8 @@ object SyncManager {
         }
     }
 
-    /** يحول أخطاء الشبكة المتوقعة إلى رسائل عربية مفهومة، بلا كشف تفاصيل داخلية للمستخدم. */
-    private fun syncErrorMessage(error: Throwable): String = when (error) {
-        is UnknownHostException -> "تعذر الوصول للجهاز الآخر. تحقق من اتصال الشبكة."
-        is SocketTimeoutException -> "انتهت مهلة المزامنة. ربما انقطع الاتصال أو استغرق الجهاز الآخر وقتًا طويلًا."
-        is ConnectException -> "تعذر الاتصال بالجهاز الآخر. تأكد أن التطبيق مفتوح وأنكما على الشبكة نفسها."
-        is EOFException -> "انقطع الاتصال قبل اكتمال المزامنة."
-        is SocketException -> "انقطع اتصال الشبكة أثناء المزامنة."
-        is IOException -> "لم تكتمل المزامنة بسبب استجابة غير صالحة أو اتصال غير مستقر."
-        else -> "حدث خطأ غير متوقع أثناء المزامنة. أعد المحاولة."
-    }
+    /** نقطة توافق داخلية لمسارات النقل؛ التصنيف نفسه قابل لاختبار الوحدة في [SyncErrorPolicy]. */
+    private fun syncErrorMessage(error: Throwable): String = SyncErrorPolicy.userMessage(error)
 
     /** يحفظ ملخص آخر محاولة مع جهاز، ولا يسمح لفشل ملف السجل بتعطيل المزامنة نفسها. */
     private fun recordSyncDevice(address: String, name: String, success: Boolean, error: String? = null) {
@@ -1048,7 +1045,7 @@ object SyncManager {
         }
     }
 
-    private fun buildPayload(context: Context): SyncPayload {
+    private fun buildPayload(): SyncPayload {
         return SyncPayload(
             deviceName = AppRepository.currentUserDeviceName(),
             users = AppRepository.users().map { UserPayload(it.username, it.passwordHash, it.role.name, it.enabled) },
@@ -1189,7 +1186,7 @@ object SyncManager {
     }
 
     /** تطبيق بيانات مستقبلة ومزامنتها مع المحلي: المستخدمون يُدمجون (إضافة الجدد، تحديث كلمات المرور)، والبيانات تُضاف. */
-    private fun applyPayload(context: Context, payload: SyncPayload): ApplyResult {
+    private fun applyPayload(payload: SyncPayload): ApplyResult {
         // تطبق حالات السلة أولًا حتى لا تعود البيانات المحذوفة من جهاز آخر.
         val localTrash = AppRepository.trashRecords().associateBy { it.id }
         payload.trashRecords.orEmpty().forEach { incoming ->
@@ -1240,7 +1237,7 @@ object SyncManager {
             }
         }
         // المالك المحلي (mustafa الافتراضي) لا يُمس إن لم يُرسل من الطرف الآخر
-        AppRepository.saveList("users.json", local)
+        AppRepository.saveUsers(local)
 
         // 2) مزامنة المجموعات والعناصر، بما فيها المجموعات الخالية من الرسائل
         for (incomingGroup in payload.groups) {
@@ -1268,9 +1265,31 @@ object SyncManager {
             }
             val existingItem = AppRepository.items(p.groupId).find { it.id == p.item.id }
             if (existingItem == null) {
+                val restoredOriginalPath = restoreImageFromSync(p.item.id, "original", p.image)
+                val restoredProcessedPath = restoreImageFromSync(p.item.id, "processed", p.processedImage)
+                val attachmentsReady = SyncAttachmentIntegrityPolicy.canCommitItem(
+                    sourceOriginalPath = p.item.imagePath,
+                    originalPayloadPresent = p.image != null,
+                    originalRestored = restoredOriginalPath != null,
+                    sourceProcessedPath = p.item.processedPath,
+                    processedPayloadPresent = p.processedImage != null,
+                    processedRestored = restoredProcessedPath != null
+                )
+                if (!attachmentsReady) {
+                    listOfNotNull(restoredOriginalPath, restoredProcessedPath)
+                        .distinct()
+                        .forEach { File(it).delete() }
+                    recordSyncConflict(
+                        payload,
+                        "item",
+                        p.item.id,
+                        "تُرك عنصر وارد خارج البيانات لأن أحد مرفقاته لم يُنقل كاملًا."
+                    )
+                    continue
+                }
                 val syncedItem = p.item.copy(
-                    imagePath = restoreImageFromSync(p.item.id, "original", p.image),
-                    processedPath = restoreImageFromSync(p.item.id, "processed", p.processedImage)
+                    imagePath = restoredOriginalPath,
+                    processedPath = restoredProcessedPath
                 )
                 AppRepository.addItem(p.groupId, syncedItem)
                 addedItems++
@@ -1286,6 +1305,21 @@ object SyncManager {
         for (incoming in payload.directMessages.orEmpty()) {
             if (AppRepository.directMessages().any { it.id == incoming.message.id }) continue
             val imagePath = restoreImageFromSync(incoming.message.id, "direct", incoming.image)
+            val attachmentReady = SyncAttachmentIntegrityPolicy.canCommitDirectMessage(
+                sourceImagePath = incoming.message.imagePath,
+                imagePayloadPresent = incoming.image != null,
+                imageRestored = imagePath != null
+            )
+            if (!attachmentReady) {
+                imagePath?.let { File(it).delete() }
+                recordSyncConflict(
+                    payload,
+                    "direct_message",
+                    incoming.message.id,
+                    "تُركت رسالة واردة خارج البيانات لأن صورتها المرفقة لم تُنقل كاملة."
+                )
+                continue
+            }
             AppRepository.addDirectMessage(incoming.message.copy(imagePath = imagePath))
         }
         for (incoming in payload.notifications.orEmpty()) {
@@ -1293,10 +1327,11 @@ object SyncManager {
         }
         val incomingPresence = payload.presence.orEmpty()
         if (incomingPresence.isNotEmpty()) {
-            val mergedPresence = (AppRepository.presence() + incomingPresence)
-                .distinctBy { it.username }
-                .sortedByDescending { it.lastSeenAt }
-                .take(200)
+            val mergedPresence = PresenceMergePolicy.merge(
+                local = AppRepository.presence(),
+                incoming = incomingPresence,
+                limit = 200
+            )
             AppRepository.saveList("presence.json", mergedPresence)
         }
         return ApplyResult(addedItems, addedUsers)
@@ -1333,7 +1368,7 @@ object SyncManager {
                 changedUsers++
             }
         }
-        AppRepository.saveList("users.json", local)
+        AppRepository.saveUsers(local)
         return ApplyResult(0, changedUsers)
     }
 

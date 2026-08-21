@@ -43,7 +43,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:fontFamily="@font/tajawal_medium"
-                        android:text="مساحة عملك"
+                        android:text="@string/home_workspace"
                         android:textColor="#CCFFFFFF"
                         android:textSize="13sp" />
 
@@ -63,7 +63,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="3dp"
                         android:fontFamily="@font/tajawal_regular"
-                        android:text="امسح المستندات ونظّمها بسرعة"
+                        android:text="@string/home_subtitle"
                         android:textColor="#E6FFFB"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -102,7 +102,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="22dp"
             android:fontFamily="@font/tajawal_bold"
-            android:text="نظرة سريعة"
+            android:text="@string/home_quick_overview"
             android:textColor="@color/day_text"
             android:textSize="16sp" />
 
@@ -257,7 +257,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:fontFamily="@font/tajawal_bold"
-                        android:text="صندوق الوارد"
+                        android:text="@string/inbox"
                         android:textSize="15sp" />
 
                     <TextView
@@ -290,7 +290,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="42dp"
                     android:fontFamily="@font/tajawal_bold"
-                    android:text="فتح"
+                    android:text="@string/open_inbox"
                     android:textSize="13sp"
                     app:cornerRadius="13dp" />
             </LinearLayout>
@@ -315,7 +315,7 @@
                 app:cardElevation="0dp"
                 app:strokeWidth="1dp">
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="15dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="الإشعارات" android:textSize="15sp" android:fontFamily="@font/tajawal_bold" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/notifications" android:textSize="15sp" android:fontFamily="@font/tajawal_bold" />
                     <TextView android:id="@+id/notifications_summary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textSize="12sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -333,12 +333,11 @@
                 app:cardElevation="0dp"
                 app:strokeWidth="1dp">
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="15dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="رسائل المستخدمين" android:textSize="15sp" android:fontFamily="@font/tajawal_bold" />
-                    <TextView android:id="@+id/direct_messages_summary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="إرسال نصوص وصور" android:textSize="12sp" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/user_messages" android:textSize="15sp" android:fontFamily="@font/tajawal_bold" />
+                    <TextView android:id="@+id/direct_messages_summary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="@string/user_messages_summary" android:textSize="12sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
-

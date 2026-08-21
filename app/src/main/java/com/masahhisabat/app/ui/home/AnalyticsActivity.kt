@@ -352,6 +352,8 @@ class AnalyticsActivity : AppCompatActivity() {
             textSize = dp(11f)
             typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
+        private val backgroundBarRect = RectF()
+        private val valueBarRect = RectF()
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
@@ -367,8 +369,10 @@ class AnalyticsActivity : AppCompatActivity() {
                 val left = side + index * (barWidth + gap)
                 val ratio = bucket.count.toFloat() / max
                 val barTop = bottom - availableHeight * ratio
-                canvas.drawRoundRect(RectF(left, top, left + barWidth, bottom), dp(9f), dp(9f), backgroundPaint)
-                canvas.drawRoundRect(RectF(left, barTop, left + barWidth, bottom), dp(9f), dp(9f), barPaint)
+                backgroundBarRect.set(left, top, left + barWidth, bottom)
+                valueBarRect.set(left, barTop, left + barWidth, bottom)
+                canvas.drawRoundRect(backgroundBarRect, dp(9f), dp(9f), backgroundPaint)
+                canvas.drawRoundRect(valueBarRect, dp(9f), dp(9f), barPaint)
                 val center = left + barWidth / 2
                 canvas.drawText(bucket.count.toString(), center, (barTop - dp(7f)).coerceAtLeast(dp(12f)), valuePaint)
                 canvas.drawText(bucket.label, center, height - dp(6f), labelPaint)

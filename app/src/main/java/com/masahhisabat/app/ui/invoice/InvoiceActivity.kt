@@ -201,7 +201,7 @@ class InvoiceActivity : AppCompatActivity() {
             InvoiceReminderScheduler.update(this)
             val user = SessionStore.currentUser(this) ?: "?"
             AppRepository.logActivity(ActivityEntry(user, getString(R.string.log_create_invoice, user, name)))
-            (getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
+            getSystemService(Vibrator::class.java)
                 ?.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
             Toast.makeText(this, R.string.success, Toast.LENGTH_SHORT).show()
             finish()

@@ -1,6 +1,5 @@
 package com.masahhisabat.app.ui.messages
 
-import android.app.Activity
 import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -8,11 +7,16 @@ import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
@@ -42,15 +46,28 @@ class DirectMessagesActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var headerPresence: TextView
     private lateinit var input: EditText
+    private lateinit var attachButton: ImageButton
+    private lateinit var sendButton: ImageButton
     private var selectedImage: String? = null
+    private var imagePreparationInProgress = false
     private var currentUser = ""
     private var targetUser = ""
     private var callCheckInProgress = false
     private var lastCallFailure: String? = null
     private var lastLatencyMs: Long? = null
-    private val pickerCode = 431
-    private val diagnosticExportCode = 432
     private var pendingDiagnosticExport: String? = null
+
+    private val imagePickerLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(::prepareImageForSend)
+    }
+
+    private val diagnosticExportLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        val details = pendingDiagnosticExport
+        pendingDiagnosticExport = null
+        if (uri != null && !details.isNullOrBlank()) writeCallDiagnostic(uri, details)
+    }
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -59,25 +76,39 @@ class DirectMessagesActivity : AppCompatActivity() {
         AppRepository.touchPresence(currentUser)
         val requestedTarget = intent.getStringExtra(EXTRA_TARGET_USER)?.trim().orEmpty()
         if (requestedTarget.isNotBlank()) targetUser = requestedTarget
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(18, 12, 18, 16); setBackgroundColor(getColor(com.masahhisabat.app.R.color.day_background)) }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(18, 12, 18, 16)
+            setBackgroundColor(ThemeHelper.bg(this@DirectMessagesActivity))
+        }
         val toolbar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        val back = ImageButton(this).apply { setImageResource(R.drawable.ic_arrow_back); setBackgroundColor(Color.TRANSPARENT); setOnClickListener { finish() }; contentDescription = "رجوع" }
+        val back = ImageButton(this).apply {
+            setImageResource(R.drawable.ic_arrow_back)
+            setBackgroundColor(Color.TRANSPARENT)
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                finish()
+            }
+            contentDescription = getString(R.string.direct_back)
+        }
         toolbar.addView(back, LinearLayout.LayoutParams(48, 48))
         val titleBlock = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
         }
         titleBlock.addView(TextView(this).apply {
-            text = targetUser.ifBlank { "رسائل المستخدمين" }
+            text = targetUser.ifBlank { getString(R.string.direct_messages_title) }
             textSize = 20f
             setTextColor(ThemeHelper.text(this@DirectMessagesActivity))
             typeface = resources.getFont(R.font.tajawal_bold)
             maxLines = 1
         })
         headerPresence = TextView(this).apply {
-            text = if (targetUser.isBlank()) "اختر محادثة" else "جارٍ فحص الحضور…"
+            text = if (targetUser.isBlank()) getString(R.string.direct_select_conversation) else getString(R.string.direct_checking_presence)
             textSize = 11f
             setPadding(0, 2, 0, 0)
+            textDirection = View.TEXT_DIRECTION_RTL
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
         titleBlock.addView(headerPresence)
         toolbar.addView(titleBlock, LinearLayout.LayoutParams(0, 60, 1f))
@@ -85,15 +116,21 @@ class DirectMessagesActivity : AppCompatActivity() {
             setImageResource(R.drawable.ic_call)
             setColorFilter(ThemeHelper.accent(this@DirectMessagesActivity))
             setBackgroundColor(Color.TRANSPARENT)
-            contentDescription = "بدء مكالمة صوتية مع ${targetUser.ifBlank { "المستخدم" }}"
-            setOnClickListener { openCall("voice") }
+            contentDescription = getString(R.string.direct_voice_call_description, targetUser.ifBlank { getString(R.string.direct_default_user) })
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                openCall("voice")
+            }
         }, LinearLayout.LayoutParams(48, 48))
         toolbar.addView(ImageButton(this).apply {
             setImageResource(R.drawable.ic_videocam)
             setColorFilter(ThemeHelper.accent(this@DirectMessagesActivity))
             setBackgroundColor(Color.TRANSPARENT)
-            contentDescription = "بدء مكالمة فيديو مع ${targetUser.ifBlank { "المستخدم" }}"
-            setOnClickListener { openCall("video") }
+            contentDescription = getString(R.string.direct_video_call_description, targetUser.ifBlank { getString(R.string.direct_default_user) })
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                openCall("video")
+            }
         }, LinearLayout.LayoutParams(48, 48))
         root.addView(toolbar)
 
@@ -103,22 +140,58 @@ class DirectMessagesActivity : AppCompatActivity() {
         }
         val callBar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         val history = MaterialButton(this).apply {
-            text = "سجل المكالمات"
-            setOnClickListener { showCallHistory() }
+            text = getString(R.string.direct_call_history)
+            contentDescription = getString(R.string.direct_view_call_history)
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                showCallHistory()
+            }
         }
         callBar.addView(history, LinearLayout.LayoutParams(-1, 44))
         root.addView(callBar)
-        status = TextView(this).apply { textSize = 13f; setPadding(12, 2, 12, 10) }
+        status = TextView(this).apply {
+            textSize = 13f
+            setPadding(12, 2, 12, 10)
+            textDirection = View.TEXT_DIRECTION_RTL
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
         root.addView(status)
         list = RecyclerView(this).apply { layoutManager = LinearLayoutManager(this@DirectMessagesActivity); setPadding(4, 8, 4, 8); clipToPadding = false }
         root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
         val composer = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        input = EditText(this).apply { hint = "اكتب رسالة…"; setTextColor(ThemeHelper.text(this@DirectMessagesActivity)); setHintTextColor(ThemeHelper.textSecondary(this@DirectMessagesActivity)); minHeight = 52; setPadding(14, 0, 14, 0); background = getDrawable(R.drawable.compose_bar_bg) }
+        input = EditText(this).apply {
+            hint = getString(R.string.direct_message_hint)
+            setTextColor(ThemeHelper.text(this@DirectMessagesActivity))
+            setHintTextColor(ThemeHelper.textSecondary(this@DirectMessagesActivity))
+            minHeight = 52
+            setPadding(14, 0, 14, 0)
+            background = AppCompatResources.getDrawable(this@DirectMessagesActivity, R.drawable.compose_bar_bg)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(value: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(value: CharSequence?, start: Int, before: Int, count: Int) = updateComposerState()
+                override fun afterTextChanged(value: Editable?) = Unit
+            })
+        }
         composer.addView(input, LinearLayout.LayoutParams(0, 56, 1f))
-        val attach = ImageButton(this).apply { setImageResource(R.drawable.ic_image_attach); background = getDrawable(R.drawable.nav_item_bg); contentDescription = "إضافة صورة"; setOnClickListener { chooseImage() } }
-        composer.addView(attach, LinearLayout.LayoutParams(52, 52))
-        val send = ImageButton(this).apply { setImageResource(R.drawable.ic_send); background = getDrawable(R.drawable.nav_item_bg); contentDescription = "إرسال"; setOnClickListener { sendMessage() } }
-        composer.addView(send, LinearLayout.LayoutParams(52, 52))
+        attachButton = ImageButton(this).apply { setImageResource(R.drawable.ic_image_attach); background = AppCompatResources.getDrawable(this@DirectMessagesActivity, R.drawable.nav_item_bg); contentDescription = getString(R.string.direct_attach_image);             setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                chooseImage()
+            } }
+        composer.addView(attachButton, LinearLayout.LayoutParams(52, 52))
+        sendButton = ImageButton(this).apply {
+            setImageResource(R.drawable.ic_send)
+            background = AppCompatResources.getDrawable(this@DirectMessagesActivity, R.drawable.nav_item_bg)
+            contentDescription = getString(R.string.direct_send)
+            setOnClickListener {
+                if (imagePreparationInProgress) {
+                    it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    Toast.makeText(this@DirectMessagesActivity, getString(R.string.direct_wait_for_image), Toast.LENGTH_SHORT).show()
+                } else {
+                    sendMessage(it)
+                }
+            }
+        }
+        composer.addView(sendButton, LinearLayout.LayoutParams(52, 52))
         root.addView(composer)
         setContentView(root)
         val users = AppRepository.users().filter { it.username != currentUser && it.enabled }
@@ -134,8 +207,9 @@ class DirectMessagesActivity : AppCompatActivity() {
         }
         adapter = MessageAdapter(currentUser)
         list.adapter = adapter
-        if (users.isEmpty()) status.text = "لا يوجد مستخدمون آخرون متاحون للمراسلة"
-        else if (targetUser.isBlank()) status.text = "اختر مستخدمًا لبدء المحادثة"
+        updateComposerState()
+        if (users.isEmpty()) status.text = getString(R.string.direct_no_users_available)
+        else if (targetUser.isBlank()) status.text = getString(R.string.direct_select_user_to_start)
         else refresh()
     }
 
@@ -144,15 +218,34 @@ class DirectMessagesActivity : AppCompatActivity() {
     private fun refresh() {
         if (!::adapter.isInitialized || targetUser.isBlank()) return
         val online = AppRepository.isUserOnline(targetUser)
-        val presence = if (online) "●  متصل الآن" else "○  غير متصل الآن"
-        val latency = lastLatencyMs?.let { " | زمن الاستجابة: ${it}ms" }.orEmpty()
-        val failure = lastCallFailure?.let { "\nآخر فشل اتصال: $it" }.orEmpty()
+        val presence = getString(if (online) R.string.direct_presence_online_bullet else R.string.direct_presence_offline_bullet)
+        val latency = lastLatencyMs?.let { getString(R.string.direct_connection_latency, it) }.orEmpty()
+        val failure = lastCallFailure?.let { getString(R.string.direct_last_call_failure, it) }.orEmpty()
         status.text = "$presence$latency$failure"
         status.setTextColor(if (online) Color.rgb(35, 160, 85) else ThemeHelper.textSecondary(this))
-        headerPresence.text = if (online) "● متصل الآن" else "○ غير متصل الآن"
+        headerPresence.text = presence
         headerPresence.setTextColor(if (online) Color.rgb(35, 160, 85) else ThemeHelper.textSecondary(this))
         adapter.submit(AppRepository.directConversation(currentUser, targetUser))
         list.post { list.scrollToPosition((adapter.itemCount - 1).coerceAtLeast(0)) }
+        updateComposerState()
+    }
+
+    private fun updateComposerState() {
+        if (!::sendButton.isInitialized || !::attachButton.isInitialized || !::input.isInitialized) return
+        val state = MessageComposerState(
+            hasRecipient = targetUser.isNotBlank(),
+            hasTypedText = !input.text.isNullOrBlank(),
+            hasPreparedImage = selectedImage != null,
+            isImagePreparationInProgress = imagePreparationInProgress
+        )
+        sendButton.isEnabled = state.canSend
+        sendButton.alpha = if (state.canSend) 1f else 0.42f
+        attachButton.contentDescription = if (state.hasPreparedImage) {
+            getString(R.string.direct_attachment_ready_description)
+        } else {
+            getString(R.string.direct_attach_image)
+        }
+        attachButton.setColorFilter(if (state.hasPreparedImage) ThemeHelper.accent(this) else ThemeHelper.textSecondary(this))
     }
 
     private data class CallHistoryFilter(
@@ -308,11 +401,7 @@ class DirectMessagesActivity : AppCompatActivity() {
     /** يفتح موفر الملفات في النظام لحفظ ملف نصي محلي؛ لا يُرفع المحتوى إلى الإنترنت أو إلى خادم. */
     private fun exportCallDiagnostic(details: String) {
         pendingDiagnosticExport = details
-        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TITLE, "masah-call-diagnostic-${System.currentTimeMillis()}.txt")
-        }, diagnosticExportCode)
+        diagnosticExportLauncher.launch("masah-call-diagnostic-${System.currentTimeMillis()}.txt")
     }
 
     private fun openCall(type: String) {
@@ -324,7 +413,7 @@ class DirectMessagesActivity : AppCompatActivity() {
         callCheckInProgress = true
         lastCallFailure = null
         lastLatencyMs = null
-        status.text = "جارٍ التحقق من اتصال $targetUser داخل الشبكة المحلية…"
+        status.text = getString(R.string.direct_connection_checking, targetUser)
         Thread {
             val peer = SyncManager.discover(1200).firstOrNull { it.name.equals(targetUser, ignoreCase = true) }
             val address = peer?.address ?: AppRepository.syncDevices().firstOrNull { it.name.equals(targetUser, ignoreCase = true) }?.address
@@ -336,14 +425,15 @@ class DirectMessagesActivity : AppCompatActivity() {
             val latencyMs = (android.os.SystemClock.elapsedRealtime() - probeStartedAt).coerceAtLeast(0L)
             runOnUiThread {
                 callCheckInProgress = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
                 if (!reachable || address == null) {
-                    lastCallFailure = "تعذر الوصول محليًا. تأكد من اتصال الجهازين بالشبكة نفسها ومن فتح التطبيق."
+                    lastCallFailure = getString(R.string.direct_connection_unavailable)
                     refresh()
-                    Toast.makeText(this, "فشل اختبار الاتصال المحلي", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, getString(R.string.direct_connection_test_failed), Toast.LENGTH_LONG).show()
                     return@runOnUiThread
                 }
                 lastLatencyMs = latencyMs
-                status.text = "تم اختبار الاتصال المحلي بنجاح | زمن الاستجابة: ${latencyMs}ms — جارٍ فتح المكالمة"
+                status.text = getString(R.string.direct_connection_ready, latencyMs)
                 startActivity(Intent(this, com.masahhisabat.app.ui.call.LocalCallActivity::class.java).apply {
                     putExtra(com.masahhisabat.app.ui.call.LocalCallActivity.EXTRA_PEER_USER, targetUser)
                     putExtra(com.masahhisabat.app.ui.call.LocalCallActivity.EXTRA_PEER_ADDRESS, address)
@@ -354,87 +444,145 @@ class DirectMessagesActivity : AppCompatActivity() {
         }.start()
     }
 
-    private fun sendMessage() {
+    private fun sendMessage(trigger: View? = null) {
         val text = input.text?.toString()?.trim().orEmpty()
-        if (text.isBlank() && selectedImage == null || targetUser.isBlank()) return
+        val state = MessageComposerState(
+            hasRecipient = targetUser.isNotBlank(),
+            hasTypedText = text.isNotBlank(),
+            hasPreparedImage = selectedImage != null,
+            isImagePreparationInProgress = imagePreparationInProgress
+        )
+        if (!state.canSend) return
+        trigger?.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         AppRepository.addDirectMessage(DirectMessage(fromUser = currentUser, toUser = targetUser, text = text.takeIf { it.isNotBlank() }, imagePath = selectedImage))
         AppRepository.addNotification(com.masahhisabat.app.data.NotificationEvent("رسالة من $currentUser", text.takeIf { it.isNotBlank() } ?: "تم إرسال صورة", "direct_message", currentUser))
-        input.setText(""); selectedImage = null; refresh()
+        input.setText(""); selectedImage = null; updateComposerState(); refresh()
     }
 
-    private fun chooseImage() { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE) }, pickerCode) }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != Activity.RESULT_OK) return
-        val uri: Uri = data?.data ?: return
-        when (requestCode) {
-            pickerCode -> runCatching {
-                val temp = File(cacheDir, "direct_${System.currentTimeMillis()}.jpg")
-                contentResolver.openInputStream(uri)?.use { input -> temp.outputStream().use { output -> input.copyTo(output) } }
-                selectedImage = AppRepository.persistAppImage(temp.absolutePath)
-                Toast.makeText(this, "الصورة جاهزة للإرسال", Toast.LENGTH_SHORT).show()
-            }.onFailure { Toast.makeText(this, "تعذر تجهيز الصورة", Toast.LENGTH_SHORT).show() }
-            diagnosticExportCode -> {
-                val details = pendingDiagnosticExport ?: return
-                runCatching {
-                    contentResolver.openOutputStream(uri)?.use { output ->
-                        output.write(details.toByteArray(Charsets.UTF_8))
-                    } ?: error("تعذر فتح الملف")
-                    Toast.makeText(this, "تم حفظ سجل التشخيص كنص محليًا", Toast.LENGTH_LONG).show()
-                }.onFailure { Toast.makeText(this, "تعذر حفظ سجل التشخيص", Toast.LENGTH_SHORT).show() }
-                pendingDiagnosticExport = null
-            }
+    private fun chooseImage() {
+        if (imagePreparationInProgress) {
+            Toast.makeText(this, "جارٍ تجهيز صورة مختارة بالفعل", Toast.LENGTH_SHORT).show()
+            return
         }
+        imagePickerLauncher.launch(arrayOf("image/*"))
+    }
+
+    private fun prepareImageForSend(uri: Uri) {
+        if (imagePreparationInProgress) return
+        imagePreparationInProgress = true
+        attachButton.isEnabled = false
+        attachButton.alpha = 0.55f
+        status.text = getString(R.string.direct_image_preparing)
+        status.setTextColor(ThemeHelper.textSecondary(this))
+        updateComposerState()
+        Thread {
+            val imagePath = runCatching {
+                val temp = File(cacheDir, "direct_${System.currentTimeMillis()}.jpg")
+                try {
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        temp.outputStream().use { output -> input.copyTo(output) }
+                    } ?: error("تعذر قراءة الصورة")
+                    AppRepository.persistAppImage(temp.absolutePath)
+                } catch (e: Exception) {
+                    temp.delete()
+                    throw e
+                }
+            }.getOrNull()
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                imagePreparationInProgress = false
+                attachButton.isEnabled = true
+                attachButton.alpha = 1f
+                if (imagePath != null) {
+                    selectedImage = imagePath
+                    updateComposerState()
+                    refresh()
+                    Toast.makeText(this, getString(R.string.direct_image_ready), Toast.LENGTH_SHORT).show()
+                } else {
+                    updateComposerState()
+                    refresh()
+                    Toast.makeText(this, getString(R.string.direct_image_preparation_failed), Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.apply { name = "direct-message-image-copy"; start() }
+    }
+
+    private fun writeCallDiagnostic(uri: Uri, details: String) {
+        Thread {
+            val saved = runCatching {
+                contentResolver.openOutputStream(uri)?.use { output ->
+                    output.write(details.toByteArray(Charsets.UTF_8))
+                } ?: error("تعذر فتح الملف")
+            }.isSuccess
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                Toast.makeText(
+                    this,
+                    if (saved) "تم حفظ سجل التشخيص كنص محليًا" else "تعذر حفظ سجل التشخيص",
+                    if (saved) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+                ).show()
+            }
+        }.apply { name = "call-diagnostic-export"; start() }
     }
 
     private class MessageAdapter(private val me: String) : RecyclerView.Adapter<MessageHolder>() {
         private var data = emptyList<DirectMessage>()
-        fun submit(items: List<DirectMessage>) { data = items; notifyDataSetChanged() }
+        fun submit(items: List<DirectMessage>) {
+            val newData = items.toList()
+            val oldData = data
+            val diff = androidx.recyclerview.widget.DiffUtil.calculateDiff(object : androidx.recyclerview.widget.DiffUtil.Callback() {
+                override fun getOldListSize() = oldData.size
+                override fun getNewListSize() = newData.size
+                override fun areItemsTheSame(oldPosition: Int, newPosition: Int) =
+                    oldData[oldPosition].id == newData[newPosition].id
+
+                override fun areContentsTheSame(oldPosition: Int, newPosition: Int) =
+                    oldData[oldPosition] == newData[newPosition]
+            })
+            data = newData
+            diff.dispatchUpdatesTo(this)
+        }
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = MessageHolder(MaterialCardView(parent.context).apply { radius = 18f; setContentPadding(14, 10, 14, 10) })
         override fun getItemCount() = data.size
         override fun onBindViewHolder(holder: MessageHolder, position: Int) = holder.bind(data[position], me)
     }
-    private class MessageHolder(view: View) : RecyclerView.ViewHolder(view) {
+    private class MessageHolder(private val card: MaterialCardView) : RecyclerView.ViewHolder(card) {
         fun bind(message: DirectMessage, me: String) {
-            val card = itemView as MaterialCardView
-            val box = LinearLayout(itemView.context).apply { orientation = LinearLayout.VERTICAL }
-            val who = TextView(itemView.context).apply { text = if (message.fromUser == me) "أنت" else message.fromUser; textSize = 12f; setTextColor(ThemeHelper.accent(itemView.context)) }
+            val context = card.context
+            val box = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+            val who = TextView(context).apply { text = if (message.fromUser == me) "أنت" else message.fromUser; textSize = 12f; setTextColor(ThemeHelper.accent(context)) }
             box.addView(who)
-            message.text?.let { box.addView(TextView(itemView.context).apply { text = it; textSize = 16f; setTextColor(ThemeHelper.text(itemView.context)); setPadding(0, 5, 0, 5) }) }
+            message.text?.let { box.addView(TextView(context).apply { text = it; textSize = 16f; setTextColor(ThemeHelper.text(context)); setPadding(0, 5, 0, 5) }) }
             message.imagePath?.let { path ->
-                box.addView(ImageView(itemView.context).apply {
+                box.addView(ImageView(context).apply {
                     layoutParams = LinearLayout.LayoutParams(-1, 220)
                     scaleType = ImageView.ScaleType.CENTER_CROP
                     runCatching {
                         setImageURI(androidx.core.content.FileProvider.getUriForFile(
-                            itemView.context,
-                            "${itemView.context.packageName}.fileprovider",
+                            context,
+                            "${context.packageName}.fileprovider",
                             File(path)
                         ))
                     }.onFailure {
                         setImageResource(R.drawable.ic_image_attach)
                     }
-                    contentDescription = "صورة الرسالة"
+                    contentDescription = context.getString(R.string.direct_message_image_description)
                     isClickable = true
                     setOnClickListener {
-                        runCatching {
-                            val uri = androidx.core.content.FileProvider.getUriForFile(
-                                itemView.context,
-                                "${itemView.context.packageName}.fileprovider",
-                                File(path)
-                            )
-                            itemView.context.startActivity(Intent(Intent.ACTION_VIEW).apply {
-                                setDataAndType(uri, "image/jpeg")
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            })
-                        }.onFailure {
-                            Toast.makeText(itemView.context, "تعذر فتح الصورة بالحجم الكامل", Toast.LENGTH_SHORT).show()
+                        val imageFile = File(path)
+                        if (!imageFile.isFile || imageFile.length() <= 0L) {
+                            Toast.makeText(context, context.getString(R.string.direct_message_image_missing), Toast.LENGTH_SHORT).show()
+                            return@setOnClickListener
                         }
+                        context.startActivity(Intent(context, com.masahhisabat.app.ui.invoice.ImageViewerActivity::class.java).apply {
+                            putExtra("image_index", 0)
+                            putExtra("image_path", imageFile.absolutePath)
+                            putStringArrayListExtra("image_paths", arrayListOf(imageFile.absolutePath))
+                        })
                     }
                 })
             }
-            box.addView(TextView(itemView.context).apply { text = SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.getDefault()).format(Date(message.createdAt)); textSize = 11f; setTextColor(ThemeHelper.textSecondary(itemView.context)) })
+            box.addView(TextView(context).apply { text = SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.getDefault()).format(Date(message.createdAt)); textSize = 11f; setTextColor(ThemeHelper.textSecondary(context)) })
             card.removeAllViews(); card.addView(box)
         }
     }

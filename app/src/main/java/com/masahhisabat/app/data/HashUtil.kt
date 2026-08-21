@@ -25,14 +25,14 @@ object HashUtil {
         val key = KEY.toByteArray(Charsets.UTF_8)
         val out = ByteArray(bytes.size)
         for (i in bytes.indices) out[i] = (bytes[i].toInt() xor key[i % key.size].toInt()).toByte()
-        return "v2:" + android.util.Base64.encodeToString(out, android.util.Base64.NO_WRAP)
+        return "v2:" + java.util.Base64.getEncoder().encodeToString(out)
     }
 
     /** فك كلمة المرور المشفرة (null إذا كانت بصيغة قديمة غير قابلة للفك) */
     fun decodePlain(stored: String): String? {
         return try {
             if (!stored.startsWith("v2:")) return null
-            val raw = android.util.Base64.decode(stored.removePrefix("v2:"), android.util.Base64.NO_WRAP)
+            val raw = java.util.Base64.getDecoder().decode(stored.removePrefix("v2:"))
             val key = KEY.toByteArray(Charsets.UTF_8)
             val out = ByteArray(raw.size)
             for (i in raw.indices) out[i] = (raw[i].toInt() xor key[i % key.size].toInt()).toByte()
@@ -40,6 +40,6 @@ object HashUtil {
         } catch (_: Exception) { null }
     }
 
-    /** هل كلمة المرور المخزنة من النوع القابل للفك؟ */
-    fun isDecodable(stored: String): Boolean = stored.startsWith("v2:")
+    /** هل كلمة المرور المخزنة من النوع القابل للفك وببيانات سليمة؟ */
+    fun isDecodable(stored: String): Boolean = decodePlain(stored) != null
 }

@@ -52,6 +52,17 @@ class SearchFragment : Fragment() {
     private var filterGroup = ""
     private var filterSender = ""
     private var filterType = "" // image | text | فارغ لكل الأنواع
+    /** يمنع نتيجة قديمة من استبدال نتائج الكتابة أو الفلاتر الأحدث. */
+    private val searchRequestGate = SearchRequestGate()
+
+    private data class SearchFilters(
+        val date: String,
+        val store: String,
+        val amount: String,
+        val group: String,
+        val sender: String,
+        val type: String
+    )
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return inflater.inflate(R.layout.fragment_search, container, false)
@@ -77,9 +88,11 @@ class SearchFragment : Fragment() {
         filterSender = AppRepository.lastSavedSearch("global_filter_sender")
         filterType = AppRepository.lastSavedSearch("global_filter_type")
         searchInput.setText(AppRepository.lastSavedSearch("global_query"))
+        query = searchInput.text.toString().trim()
 
         filterButton.setOnClickListener { showFilterDialog() }
         view.findViewById<MaterialButton>(R.id.btn_reset).setOnClickListener {
+            searchRequestGate.invalidate()
             query = ""
             searchInput.setText("")
             filterDate = ""; filterStore = ""; filterAmount = ""
@@ -92,14 +105,20 @@ class SearchFragment : Fragment() {
         }
 
         updateSearchState()
+        // تعرض الشاشة آخر بحث أو فلاتر محفوظة مباشرة، بلا انتظار كتابة جديدة من المستخدم.
+        if (query.isNotEmpty() || hasActiveFilters()) {
+            loadingBar.visibility = View.VISIBLE
+            performSearch()
+        }
 
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
+                val requestedQuery = s?.toString()?.trim().orEmpty()
                 handler.removeCallbacksAndMessages(null)
                 handler.postDelayed({
-                    query = s.toString().trim()
+                    query = requestedQuery
                     AppRepository.setLastSavedSearch("global_query", query)
                     if (query.isNotEmpty() || hasActiveFilters()) {
                         loadingBar.visibility = View.VISIBLE
@@ -114,6 +133,12 @@ class SearchFragment : Fragment() {
                 }, 300)
             }
         })
+    }
+
+    override fun onDestroyView() {
+        searchRequestGate.invalidate()
+        handler.removeCallbacksAndMessages(null)
+        super.onDestroyView()
     }
 
     private fun applyTheme(view: View) {
@@ -137,6 +162,14 @@ class SearchFragment : Fragment() {
 
     private fun performSearch() {
         val q = query.lowercase()
+        val filters = SearchFilters(
+            date = filterDate,
+            store = filterStore,
+            amount = filterAmount,
+            group = filterGroup,
+            sender = filterSender,
+            type = filterType
+        )
         if (q.isBlank() && !hasActiveFilters()) {
             resultsPanel.removeAllViews()
             emptyText.visibility = View.GONE
@@ -146,36 +179,41 @@ class SearchFragment : Fragment() {
         }
         loadingBar.visibility = View.VISIBLE
 
-        val results = mutableListOf<Pair<String, InvoiceItem>>()
-        val groupMatches = AppRepository.groups().filter { group ->
-            q.isNotBlank() && group.name.lowercase().contains(q) &&
-                (filterGroup.isBlank() || group.name.lowercase().contains(filterGroup.lowercase()))
-        }
-        for (g in AppRepository.groups()) {
-            for (item in AppRepository.items(g.id)) {
-                if ((q.isBlank() || matches(item, q)) && matchesFilters(item, g.name)) {
-                    results.add(Pair(g.name, item))
+        val requestId = searchRequestGate.begin()
+        Thread {
+            val groups = AppRepository.groups()
+            val results = mutableListOf<Pair<String, InvoiceItem>>()
+            val groupMatches = groups.filter { group ->
+                q.isNotBlank() && group.name.lowercase().contains(q) &&
+                    (filters.group.isBlank() || group.name.lowercase().contains(filters.group.lowercase()))
+            }
+            for (g in groups) {
+                for (item in AppRepository.items(g.id)) {
+                    if ((q.isBlank() || matches(item, q)) && matchesFilters(item, g.name, filters)) {
+                        results.add(Pair(g.name, item))
+                    }
                 }
             }
-        }
 
-        // اقتراحات: كلمات متكررة في البيانات المستخرجة
-        if (q.isNotBlank()) showSuggestions(q) else suggestionsPanel.removeAllViews()
-
-        handler.post {
-            loadingBar.visibility = View.GONE
-            resultsPanel.removeAllViews()
-            if (results.isEmpty() && groupMatches.isEmpty()) {
-                emptyText.visibility = View.VISIBLE
-            } else {
-                emptyText.visibility = View.GONE
-                groupMatches.forEach { group -> resultsPanel.addView(buildGroupResultCard(group)) }
-                results.forEach { (groupName, item) ->
-                    resultsPanel.addView(buildResultCard(groupName, item))
+            // الاقتراحات قد تمر على أرشيف كبير، لذلك تُحسب خارج الخيط الرئيسي كذلك.
+            val suggestions = if (q.isNotBlank()) collectSuggestions(groups, q) else emptyList()
+            handler.post {
+                if (!isAdded || !searchRequestGate.accepts(requestId) || !::resultsPanel.isInitialized) return@post
+                loadingBar.visibility = View.GONE
+                resultsPanel.removeAllViews()
+                if (results.isEmpty() && groupMatches.isEmpty()) {
+                    emptyText.visibility = View.VISIBLE
+                } else {
+                    emptyText.visibility = View.GONE
+                    groupMatches.forEach { group -> resultsPanel.addView(buildGroupResultCard(group)) }
+                    results.forEach { (groupName, item) ->
+                        resultsPanel.addView(buildResultCard(groupName, item))
+                    }
                 }
+                showSuggestions(suggestions)
+                updateSearchState(results.size + groupMatches.size)
             }
-            updateSearchState(results.size + groupMatches.size)
-        }
+        }.start()
     }
 
     private fun matches(item: InvoiceItem, q: String): Boolean =
@@ -187,13 +225,13 @@ class SearchFragment : Fragment() {
             (item.itemsText?.lowercase()?.contains(q) == true) ||
             (item.documentText?.lowercase()?.contains(q) == true)
 
-    private fun matchesFilters(item: InvoiceItem, groupName: String): Boolean {
-        if (filterDate.isNotBlank() && (item.date?.contains(filterDate) != true)) return false
-        if (filterStore.isNotBlank() && (item.storeName?.lowercase()?.contains(filterStore.lowercase()) != true)) return false
-        if (filterAmount.isNotBlank() && (item.total?.contains(filterAmount) != true)) return false
-        if (filterGroup.isNotBlank() && !groupName.lowercase().contains(filterGroup.lowercase())) return false
-        if (filterSender.isNotBlank() && (item.sender?.lowercase()?.contains(filterSender.lowercase()) != true)) return false
-        if (filterType.isNotBlank() && item.type != filterType) return false
+    private fun matchesFilters(item: InvoiceItem, groupName: String, filters: SearchFilters): Boolean {
+        if (filters.date.isNotBlank() && (item.date?.contains(filters.date) != true)) return false
+        if (filters.store.isNotBlank() && (item.storeName?.lowercase()?.contains(filters.store.lowercase()) != true)) return false
+        if (filters.amount.isNotBlank() && (item.total?.contains(filters.amount) != true)) return false
+        if (filters.group.isNotBlank() && !groupName.lowercase().contains(filters.group.lowercase())) return false
+        if (filters.sender.isNotBlank() && (item.sender?.lowercase()?.contains(filters.sender.lowercase()) != true)) return false
+        if (filters.type.isNotBlank() && item.type != filters.type) return false
         return true
     }
 
@@ -229,11 +267,12 @@ class SearchFragment : Fragment() {
         AppRepository.setLastSavedSearch("global_filter_type", filterType)
     }
 
-    private fun showSuggestions(q: String) {
-        suggestionsPanel.removeAllViews()
-        // جمع الكلمات المتكررة
+    private fun collectSuggestions(
+        groups: List<com.masahhisabat.app.data.Group>,
+        q: String
+    ): List<Pair<String, Int>> {
         val wordCount = mutableMapOf<String, Int>()
-        for (g in AppRepository.groups()) {
+        for (g in groups) {
             for (item in AppRepository.items(g.id)) {
                 val texts = listOfNotNull(item.storeName, item.text, item.itemsText, item.currency)
                 for (t in texts) {
@@ -244,8 +283,12 @@ class SearchFragment : Fragment() {
                 }
             }
         }
-        val repeated = wordCount.filter { it.key.lowercase().contains(q) && it.value > 1 }
+        return wordCount.filter { it.key.lowercase().contains(q) && it.value > 1 }
             .toList().sortedByDescending { it.second }.take(6)
+    }
+
+    private fun showSuggestions(repeated: List<Pair<String, Int>>) {
+        suggestionsPanel.removeAllViews()
         val ctx = requireContext()
         repeated.forEach { (word, count) ->
             val chip = MaterialButton(ctx).apply {

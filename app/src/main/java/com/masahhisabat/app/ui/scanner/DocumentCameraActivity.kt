@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Size
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.TextView
@@ -27,6 +28,8 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
@@ -71,6 +74,10 @@ class DocumentCameraActivity : AppCompatActivity() {
         if (uri != null) copyGalleryImageAndEdit(uri)
     }
 
+    private val editorLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        resumeCaptureAfterEditor()
+    }
+
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         setCameraPermissionWaiting(false)
         if (granted) startCamera()
@@ -93,15 +100,27 @@ class DocumentCameraActivity : AppCompatActivity() {
         val sessionPageCount = intent.getIntExtra(EXTRA_PDF_PAGE_COUNT, 0)
         if (sessionPageCount > 0) {
             pdfSessionLabel.visibility = View.VISIBLE
-            pdfSessionLabel.text = "جلسة PDF · أضيفت $sessionPageCount صفحات · الصفحة التالية"
+            pdfSessionLabel.text = getString(R.string.camera_pdf_session_progress, sessionPageCount)
         }
 
-        findViewById<View>(R.id.btn_close_camera).setOnClickListener { finish() }
-        captureButton.setOnClickListener { captureDocument() }
-        findViewById<View>(R.id.btn_camera_gallery).setOnClickListener {
-            if (!captureInProgress) galleryLauncher.launch("image/*")
+        findViewById<View>(R.id.btn_close_camera).setOnClickListener { button ->
+            button.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            finish()
         }
-        flashButton.setOnClickListener { toggleTorch() }
+        captureButton.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            captureDocument()
+        }
+        findViewById<View>(R.id.btn_camera_gallery).setOnClickListener { button ->
+            if (!captureInProgress) {
+                button.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                galleryLauncher.launch("image/*")
+            }
+        }
+        flashButton.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            toggleTorch()
+        }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             startCamera()
@@ -114,13 +133,13 @@ class DocumentCameraActivity : AppCompatActivity() {
     private fun requestCameraPermission() {
         if (cameraPermissionRequestInFlight || isFinishing || isDestroyed) return
         AlertDialog.Builder(this)
-            .setTitle("قبل فتح الكاميرا")
-            .setMessage("يحتاج الماسح إذن الكاميرا لالتقاط المستندات واكتشاف حوافها على جهازك. يمكنك بدلاً من ذلك اختيار صورة محفوظة من المعرض.")
-            .setNegativeButton("اختيار صورة") { _, _ ->
+            .setTitle(R.string.camera_permission_intro_title)
+            .setMessage(R.string.camera_permission_intro_message)
+            .setNegativeButton(R.string.camera_choose_image) { _, _ ->
                 setCameraPermissionWaiting(false)
                 showGalleryOnlyState()
             }
-            .setPositiveButton("متابعة") { _, _ ->
+            .setPositiveButton(R.string.camera_continue) { _, _ ->
                 setCameraPermissionWaiting(true)
                 permissionLauncher.launch(Manifest.permission.CAMERA)
             }
@@ -140,7 +159,7 @@ class DocumentCameraActivity : AppCompatActivity() {
             captureButton.alpha = 0.45f
             flashButton.isEnabled = false
             flashButton.alpha = 0.45f
-            statusText.text = "بانتظار قرارك بشأن إذن الكاميرا…"
+            statusText.text = getString(R.string.camera_permission_waiting)
         }
     }
 
@@ -148,19 +167,19 @@ class DocumentCameraActivity : AppCompatActivity() {
     private fun showCameraPermissionFallback() {
         val canRequestAgain = shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)
         AlertDialog.Builder(this)
-            .setTitle("يلزم إذن الكاميرا للمسح")
+            .setTitle(R.string.camera_permission_required_title)
             .setMessage(
                 if (canRequestAgain) {
-                    "لم يتم السماح باستخدام الكاميرا. يمكنك فتح إعدادات التطبيق لتفعيلها يدويًا، أو إعادة طلب الإذن، أو اختيار صورة من المعرض."
+                    getString(R.string.camera_permission_rejected_retry)
                 } else {
-                    "تم منع إذن الكاميرا. افتح إعدادات التطبيق واسمح بالكاميرا لتصوير المستندات، أو اختر صورة من المعرض."
+                    getString(R.string.camera_permission_rejected_settings)
                 }
             )
-            .setNegativeButton("اختيار صورة") { _, _ -> showGalleryOnlyState() }
-            .setNeutralButton(if (canRequestAgain) "إعادة طلب الإذن" else "إلغاء") { _, _ ->
+            .setNegativeButton(R.string.camera_choose_image) { _, _ -> showGalleryOnlyState() }
+            .setNeutralButton(if (canRequestAgain) R.string.camera_retry_permission else R.string.cancel) { _, _ ->
                 if (canRequestAgain) requestCameraPermission() else showGalleryOnlyState()
             }
-            .setPositiveButton("فتح الإعدادات") { _, _ -> openAppSettings() }
+            .setPositiveButton(R.string.camera_open_settings) { _, _ -> openAppSettings() }
             .show()
     }
 
@@ -169,7 +188,7 @@ class DocumentCameraActivity : AppCompatActivity() {
         captureButton.alpha = 0.45f
         flashButton.isEnabled = false
         flashButton.alpha = 0.45f
-        statusText.text = "يمكنك اختيار صورة من المعرض ومتابعة تحسينها محلياً"
+        statusText.text = getString(R.string.camera_gallery_only_status)
     }
 
     private fun openAppSettings() {
@@ -181,7 +200,7 @@ class DocumentCameraActivity : AppCompatActivity() {
 
     /** تأكيد بصري قصير بعد العودة من الإعدادات؛ لا يلتقط صورة ولا يفتح المحرر تلقائيًا. */
     private fun showCameraPermissionGrantedFeedback() {
-        val message = "✓ تم تفعيل إذن الكاميرا — الكاميرا جاهزة للمسح"
+        val message = getString(R.string.camera_permission_granted_status)
         statusText.apply {
             text = message
             alpha = 0f
@@ -192,7 +211,7 @@ class DocumentCameraActivity : AppCompatActivity() {
                 .setDuration(220L)
                 .start()
         }
-        Toast.makeText(this, "تم تفعيل إذن الكاميرا بنجاح", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, R.string.camera_permission_granted_toast, Toast.LENGTH_SHORT).show()
     }
 
     private fun startCamera() {
@@ -200,6 +219,10 @@ class DocumentCameraActivity : AppCompatActivity() {
         cameraStartRequested = true
         val providerFuture = ProcessCameraProvider.getInstance(this)
         providerFuture.addListener({
+            if (isFinishing || isDestroyed) {
+                cameraStartRequested = false
+                return@addListener
+            }
             try {
                 val provider = providerFuture.get()
                 val preview = Preview.Builder().build().also {
@@ -211,7 +234,16 @@ class DocumentCameraActivity : AppCompatActivity() {
                     .build()
                 imageAnalysis = ImageAnalysis.Builder()
                     // دقة منخفضة للمحلل فقط؛ لا تؤثر في دقة صورة المستند النهائية.
-                    .setTargetResolution(Size(960, 540))
+                    .setResolutionSelector(
+                        ResolutionSelector.Builder()
+                            .setResolutionStrategy(
+                                ResolutionStrategy(
+                                    Size(960, 540),
+                                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                                )
+                            )
+                            .build()
+                    )
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                     .build()
@@ -229,12 +261,12 @@ class DocumentCameraActivity : AppCompatActivity() {
                 val available = camera?.cameraInfo?.hasFlashUnit() == true
                 flashButton.isEnabled = available
                 flashButton.alpha = if (available) 1f else 0.45f
-                updateGuideState(ready = false, lowLight = false, message = "ثبّت المستند داخل الإطار")
-                setCaptureState(false, "وجّه المستند داخل الإطار ثم التقط الصورة")
+                updateGuideState(ready = false, lowLight = false, message = getString(R.string.camera_guide_center_document))
+                setCaptureState(false, getString(R.string.camera_guide_capture_document))
             } catch (_: Exception) {
                 cameraStartRequested = false
                 showGalleryOnlyState()
-                Toast.makeText(this, "تعذر تشغيل كاميرا المستندات، يمكنك اختيار صورة من المعرض", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, R.string.camera_start_failed, Toast.LENGTH_LONG).show()
             }
         }, ContextCompat.getMainExecutor(this))
     }
@@ -294,9 +326,9 @@ class DocumentCameraActivity : AppCompatActivity() {
                         ready = readyNow,
                         lowLight = lowLight,
                         message = when {
-                            lowLight -> "إضاءة منخفضة — فعّل الفلاش أو قرّب المستند"
-                            readyNow -> "إضاءة ثابتة — المستند جاهز للالتقاط"
-                            else -> "إضاءة مناسبة — ثبّت المستند داخل الإطار"
+                            lowLight -> getString(R.string.camera_low_light)
+                            readyNow -> getString(R.string.camera_ready_to_capture)
+                            else -> getString(R.string.camera_light_good)
                         }
                     )
                 }
@@ -311,7 +343,7 @@ class DocumentCameraActivity : AppCompatActivity() {
         if (!activeCamera.cameraInfo.hasFlashUnit()) return
         torchEnabled = !torchEnabled
         activeCamera.cameraControl.enableTorch(torchEnabled)
-        flashButton.text = if (torchEnabled) "فلاش: تشغيل" else "فلاش"
+        flashButton.text = getString(if (torchEnabled) R.string.camera_flash_on else R.string.camera_flash_off)
     }
 
     private fun captureDocument() {
@@ -319,25 +351,32 @@ class DocumentCameraActivity : AppCompatActivity() {
         if (captureInProgress) return
         captureInProgress = true
         analysisActive = false
-        updateGuideState(ready = false, lowLight = false, message = "يجري حفظ المستند…")
-        setCaptureState(true, "يجري حفظ المستند…")
+        updateGuideState(ready = false, lowLight = false, message = getString(R.string.camera_saving_document))
+        setCaptureState(true, getString(R.string.camera_saving_document))
         val file = File(cacheDir, "document_${System.currentTimeMillis()}.jpg")
         val options = ImageCapture.OutputFileOptions.Builder(file).build()
         capture.takePicture(options, ContextCompat.getMainExecutor(this), object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                if (isFinishing || isDestroyed) {
+                    file.delete()
+                    return
+                }
                 if (!file.exists() || file.length() <= 0L) {
+                    file.delete()
                     captureInProgress = false
                     analysisActive = true
-                    setCaptureState(false, "تعذر حفظ الصورة، أعد المحاولة")
+                    setCaptureState(false, getString(R.string.camera_save_failed))
                     return
                 }
                 openEditor(file.absolutePath)
             }
 
             override fun onError(exception: ImageCaptureException) {
+                file.delete()
+                if (isFinishing || isDestroyed) return
                 captureInProgress = false
                 analysisActive = true
-                setCaptureState(false, "تعذر التقاط المستند، أعد المحاولة")
+                setCaptureState(false, getString(R.string.camera_capture_failed))
             }
         })
     }
@@ -345,7 +384,7 @@ class DocumentCameraActivity : AppCompatActivity() {
     private fun copyGalleryImageAndEdit(uri: Uri) {
         if (captureInProgress) return
         captureInProgress = true
-        setCaptureState(true, "يجري تجهيز الصورة…")
+        setCaptureState(true, getString(R.string.camera_preparing_image))
         Thread {
             val file = File(cacheDir, "gallery_document_${System.currentTimeMillis()}.jpg")
             val copied = runCatching {
@@ -355,24 +394,35 @@ class DocumentCameraActivity : AppCompatActivity() {
                 } ?: false
             }.getOrDefault(false)
             runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (isFinishing || isDestroyed) {
+                    file.delete()
+                    return@runOnUiThread
+                }
                 if (copied && file.exists() && file.length() > 0L) openEditor(file.absolutePath)
                 else {
                     file.delete()
                     captureInProgress = false
-                    setCaptureState(false, "تعذر قراءة الصورة المختارة")
+                    setCaptureState(false, getString(R.string.camera_read_selected_failed))
                 }
             }
         }.apply { name = "document-camera-gallery-copy"; start() }
     }
 
     private fun openEditor(path: String) {
-        startActivity(Intent(this, CropEditActivity::class.java).apply {
+        editorLauncher.launch(Intent(this, CropEditActivity::class.java).apply {
             putExtra(CropEditActivity.EXTRA_IMAGE_PATH, path)
             putExtra(CropEditActivity.EXTRA_ACTION, CropEditActivity.ACTION_NEW_INVOICE)
             putExtra(CropEditActivity.EXTRA_PDF_PAGE_COUNT, PdfSessionManager.pageCount(this@DocumentCameraActivity))
         })
-        finish()
+    }
+
+    /** يظل الماسح حاضرًا بعد إغلاق المحرر كي يتمكن المستخدم من التقاط صفحة أخرى بدل الرجوع خارج التدفق. */
+    private fun resumeCaptureAfterEditor() {
+        if (isFinishing || isDestroyed) return
+        captureInProgress = false
+        analysisActive = true
+        setCaptureState(false, getString(R.string.camera_guide_capture_document))
+        if (camera == null) startCamera()
     }
 
     /** يربط لون الإطار ونقطة الحالة بجاهزية الإضاءة؛ لا يدّعي اكتشاف الورقة قبل الالتقاط. */

@@ -39,7 +39,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:fontFamily="@font/tajawal_bold"
-            android:text="ماسح المستندات"
+            android:text="@string/scanner_title"
             android:textSize="25sp" />
 
         <TextView
@@ -48,7 +48,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="5dp"
             android:fontFamily="@font/tajawal_medium"
-            android:text="مسح ذكي محلي · كشف حواف وتحسين فوري"
+            android:text="@string/scanner_summary"
             android:textColor="@color/day_text_secondary"
             android:textSize="12sp" />
 
@@ -58,7 +58,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:text="التقط المستند داخل إطار واضح، ثم راجع القص والفلاتر قبل الحفظ"
+            android:text="@string/scanner_hint"
             android:textColor="@color/day_text_secondary"
             android:textSize="14sp" />
 
@@ -68,13 +68,14 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="28dp"
             android:fontFamily="@font/tajawal_bold"
-            android:text="مسح جديد"
+            android:text="@string/scanner_new_scan"
             android:textSize="16sp" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="188dp"
             android:layout_marginTop="12dp"
+            android:baselineAligned="false"
             android:orientation="horizontal">
 
             <FrameLayout
@@ -85,7 +86,7 @@
                android:layout_weight="1"
                android:background="@drawable/scanner_tile_bg"
                android:clickable="true"
-                android:contentDescription="فتح كاميرا المستندات"
+                android:contentDescription="@string/open_document_camera"
                android:elevation="2dp"
                android:focusable="true"
                android:foreground="?attr/selectableItemBackground">
@@ -112,7 +113,7 @@
                         android:layout_marginTop="12dp"
                         android:fontFamily="@font/tajawal_bold"
                         android:gravity="center"
-                        android:text="كاميرا المستندات"
+                        android:text="@string/document_camera"
                         android:textColor="#FFFFFF"
                         android:textSize="15sp" />
 
@@ -121,7 +122,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="3dp"
                         android:gravity="center"
-                        android:text="إطار تلقائي · فلاش · كشف الحواف"
+                        android:text="@string/document_camera_summary"
                         android:textColor="#DDF8F3"
                         android:textSize="10sp" />
                 </LinearLayout>
@@ -135,7 +136,7 @@
                android:layout_weight="1"
                android:background="@drawable/scanner_tile_bg"
                android:clickable="true"
-                android:contentDescription="اختيار مستند من المعرض"
+                android:contentDescription="@string/choose_document_from_gallery"
                android:elevation="2dp"
                android:focusable="true"
                android:foreground="?attr/selectableItemBackground">
@@ -161,7 +162,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:fontFamily="@font/tajawal_bold"
-                        android:text="من المعرض"
+                        android:text="@string/gallery_document"
                         android:textColor="#FFFFFF"
                         android:textSize="15sp" />
 
@@ -170,7 +171,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="3dp"
                         android:gravity="center"
-                        android:text="تحويل صورة إلى مستند"
+                        android:text="@string/gallery_document_summary"
                         android:textColor="#DDF8F3"
                         android:textSize="10sp" />
                 </LinearLayout>
@@ -200,7 +201,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:fontFamily="@font/tajawal_bold"
-                    android:text="آخر المستندات الممسوحة"
+                    android:text="@string/recent_scanned_documents"
                     android:textSize="16sp" />
 
                 <LinearLayout
@@ -217,10 +218,10 @@
                    android:layout_marginTop="4dp"
                    android:fontFamily="@font/tajawal_medium"
                    android:gravity="center"
-                    android:background="@drawable/empty_state_panel"
-                    android:lineSpacingExtra="3dp"
+                   android:background="@drawable/empty_state_panel"
+                   android:lineSpacingExtra="3dp"
                    android:padding="12dp"
-                   android:text="ستظهر المستندات هنا بعد أول عملية مسح."
+                   android:text="@string/recent_scans_empty"
                     android:textColor="@color/day_text_secondary"
                     android:textSize="13sp" />
             </LinearLayout>

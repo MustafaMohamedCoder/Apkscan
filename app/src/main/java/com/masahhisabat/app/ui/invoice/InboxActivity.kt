@@ -74,7 +74,7 @@ class InboxActivity : AppCompatActivity() {
             InvoiceWorkflow.COMPLETED -> "${items.size} فواتير مكتملة بانتظار الإقفال"
             else -> "${items.size} فواتير مدفوعة محفوظة للرجوع إليها"
         }
-        adapter.submit(items, animated && motionEnabled())
+        adapter.submit(items)
         updateFilterStyles()
         if (animated && motionEnabled()) animateRefresh(items.isEmpty(), fromUser)
     }
@@ -154,23 +154,19 @@ class InboxActivity : AppCompatActivity() {
         private val onStatus: (Group, InvoiceItem) -> Unit
     ) : RecyclerView.Adapter<InboxAdapter.Holder>() {
         private var rows: List<Pair<Group, InvoiceItem>> = emptyList()
-        fun submit(newRows: List<Pair<Group, InvoiceItem>>, animate: Boolean) {
-            if (!animate) {
-                rows = newRows
-                notifyDataSetChanged()
-                return
-            }
+        fun submit(newRows: List<Pair<Group, InvoiceItem>>) {
+            val nextRows = newRows.toList()
             val previousRows = rows
             val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
                 override fun getOldListSize() = previousRows.size
-                override fun getNewListSize() = newRows.size
+                override fun getNewListSize() = nextRows.size
                 override fun areItemsTheSame(oldPosition: Int, newPosition: Int): Boolean =
-                    previousRows[oldPosition].first.id == newRows[newPosition].first.id &&
-                        previousRows[oldPosition].second.id == newRows[newPosition].second.id
+                    previousRows[oldPosition].first.id == nextRows[newPosition].first.id &&
+                        previousRows[oldPosition].second.id == nextRows[newPosition].second.id
                 override fun areContentsTheSame(oldPosition: Int, newPosition: Int): Boolean =
-                    previousRows[oldPosition] == newRows[newPosition]
+                    previousRows[oldPosition] == nextRows[newPosition]
             })
-            rows = newRows
+            rows = nextRows
             diff.dispatchUpdatesTo(this)
         }
         class Holder(val binding: ItemInboxInvoiceBinding) : RecyclerView.ViewHolder(binding.root)

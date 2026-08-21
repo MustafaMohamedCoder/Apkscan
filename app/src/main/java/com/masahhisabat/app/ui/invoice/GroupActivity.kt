@@ -56,6 +56,10 @@ class GroupActivity : AppCompatActivity() {
     private lateinit var adapter: ItemsAdapter
     private lateinit var searchInput: EditText
     private lateinit var messageInput: EditText
+    private lateinit var attachButton: ImageView
+    private lateinit var sendButton: ImageView
+    private lateinit var addAttachmentButton: MaterialButton
+    private lateinit var removeAttachmentButton: ImageView
     private var savedQuery: String = ""
     private var isSending = false
     private var isPreparingAttachment = false
@@ -75,7 +79,7 @@ class GroupActivity : AppCompatActivity() {
         groupId = intent.getStringExtra("group_id") ?: ""
         val group = AppRepository.groups().find { it.id == groupId }
         if (group == null) {
-            Toast.makeText(this, "المجموعة غير موجودة", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.group_not_found, Toast.LENGTH_SHORT).show()
             finish()
             return
         }
@@ -108,12 +112,14 @@ class GroupActivity : AppCompatActivity() {
         // شريط الإرسال السفلي (مثل تليجرام/واتساب)
         val etMessage = findViewById<EditText>(R.id.et_message)
         messageInput = etMessage
-        val btnAttach = findViewById<ImageView>(R.id.btn_attach)
-        val btnSend = findViewById<ImageView>(R.id.btn_send)
-        findViewById<MaterialButton>(R.id.btn_add_attachment).setOnClickListener {
-            btnSend.performClick()
+        attachButton = findViewById(R.id.btn_attach)
+        sendButton = findViewById(R.id.btn_send)
+        addAttachmentButton = findViewById(R.id.btn_add_attachment)
+        addAttachmentButton.setOnClickListener {
+            sendButton.performClick()
         }
-        findViewById<ImageView>(R.id.btn_remove_attachment).setOnClickListener {
+        removeAttachmentButton = findViewById(R.id.btn_remove_attachment)
+        removeAttachmentButton.setOnClickListener {
             clearPendingAttachment(deleteFile = true)
         }
 
@@ -122,7 +128,7 @@ class GroupActivity : AppCompatActivity() {
         if (restoredDraft.isNotBlank()) {
             etMessage.setText(restoredDraft)
             etMessage.setSelection(restoredDraft.length)
-            Snackbar.make(etMessage, "تمت استعادة مسودة غير مرسلة", Snackbar.LENGTH_LONG).show()
+            Snackbar.make(etMessage, R.string.group_draft_restored, Snackbar.LENGTH_LONG).show()
         }
         etMessage.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -130,35 +136,30 @@ class GroupActivity : AppCompatActivity() {
             override fun afterTextChanged(s: Editable?) {
                 draftHandler.removeCallbacks(saveDraftTask)
                 draftHandler.postDelayed(saveDraftTask, 450L)
+                renderComposerState()
             }
         })
 
-        btnAttach.setOnClickListener { attachLauncher.launch("image/*") }
+        attachButton.setOnClickListener { attachLauncher.launch("image/*") }
 
-        btnSend.setOnClickListener {
+        sendButton.setOnClickListener {
             val ctx = this
-            if (isSending) {
-                Toast.makeText(ctx, "يجري حفظ الرسالة…", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            if (isPreparingAttachment) {
-                Toast.makeText(ctx, "يجري تجهيز الصورة…", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            val role = SessionStore.currentRole(ctx)
-            if (!AppRepository.canEdit(role)) {
-                Toast.makeText(ctx, "لا تملك صلاحية للإضافة", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
+            val composer = composerState()
             val text = etMessage.text.toString().trim()
             val textAttachment = pendingAttach
-            if (text.isBlank() && textAttachment == null) {
-                Toast.makeText(ctx, "اكتب نصًا أو أرفق صورة", Toast.LENGTH_SHORT).show()
+            if (!composer.canSend) {
+                val feedback = when {
+                    isSending -> R.string.group_message_saving
+                    isPreparingAttachment -> R.string.group_attachment_preparing
+                    !composer.canEdit -> R.string.group_add_permission_denied
+                    else -> R.string.group_message_or_attachment_required
+                }
+                Toast.makeText(ctx, feedback, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             isSending = true
-            btnSend.isEnabled = false
-            btnSend.alpha = 0.55f
+            renderComposerState()
+            val saveFailureMessage = getString(R.string.group_message_save_failed)
             // النسخ إلى Documents والكتابة إلى JSON عمليتان قد تكونان بطيئتين؛ تنفذان بعيدًا عن الواجهة.
             Thread {
                 val error = try {
@@ -183,14 +184,13 @@ class GroupActivity : AppCompatActivity() {
                         }
                     }
                     null
-                } catch (e: Exception) {
-                    e.message ?: "تعذر حفظ الرسالة. أعد المحاولة."
+                } catch (_: Exception) {
+                    saveFailureMessage
                 }
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     isSending = false
-                    btnSend.isEnabled = true
-                    btnSend.alpha = 1f
+                    renderComposerState()
                     if (error == null) {
                         if (pendingAttach == textAttachment) {
                             clearPendingAttachment(deleteFile = true)
@@ -204,7 +204,7 @@ class GroupActivity : AppCompatActivity() {
                         // قد يخفي فلتر بحث محفوظ الرسالة الجديدة فورًا؛ نمسحه بعد إرسال ناجح حتى تظهر للمستخدم.
                         if (searchInput.text.toString().trim().isNotBlank()) {
                             searchInput.setText("")
-                            Snackbar.make(recycler, "تمت إضافة الرسالة وعرض أحدث محتوى المجموعة", Snackbar.LENGTH_SHORT).show()
+                            Snackbar.make(recycler, R.string.group_message_added_latest, Snackbar.LENGTH_SHORT).show()
                         }
                         refresh()
                         scrollToLatestMessage()
@@ -219,7 +219,7 @@ class GroupActivity : AppCompatActivity() {
         // إرسال بالضغط على زر الإرسال في لوحة المفاتيح
         etMessage.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND) {
-                btnSend.performClick()
+                sendButton.performClick()
                 true
             } else false
         }
@@ -229,6 +229,7 @@ class GroupActivity : AppCompatActivity() {
             selected.clear(); isSelecting = false; refresh()
         }
 
+        renderComposerState()
         refresh()
     }
 
@@ -252,19 +253,19 @@ class GroupActivity : AppCompatActivity() {
     ) { uri ->
         if (uri == null || isPreparingAttachment) return@registerForActivityResult
         isPreparingAttachment = true
-        findViewById<ImageView>(R.id.btn_attach).isEnabled = false
-        Toast.makeText(this, "يجري تجهيز الصورة…", Toast.LENGTH_SHORT).show()
+        renderComposerState()
+        Toast.makeText(this, R.string.group_attachment_preparing, Toast.LENGTH_SHORT).show()
         Thread {
             val copied = copyToInternal(uri)
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 isPreparingAttachment = false
-                findViewById<ImageView>(R.id.btn_attach).isEnabled = true
+                renderComposerState()
                 if (copied != null) {
                     pendingAttach = copied
                     showAttachmentPreview(copied)
                 } else {
-                    Toast.makeText(this, "تعذر قراءة الصورة", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, R.string.group_attachment_read_failed, Toast.LENGTH_SHORT).show()
                 }
             }
         }.start()
@@ -320,16 +321,16 @@ class GroupActivity : AppCompatActivity() {
             ImageProcessor.loadBitmap(path, 480)
         } catch (_: Exception) {
             clearPendingAttachment(deleteFile = true)
-            Toast.makeText(this, "تعذر تجهيز معاينة الصورة", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.group_attachment_preview_failed, Toast.LENGTH_SHORT).show()
             return
         }
         thumb.setImageDrawable(null)
         thumb.setImageBitmap(previewBitmap)
-        findViewById<TextView>(R.id.attachment_label).text = "الصورة جاهزة — اكتب نصًا اختياريًا ثم أضفها"
+        findViewById<TextView>(R.id.attachment_label).text = getString(R.string.group_attachment_ready)
         findViewById<View>(R.id.attachment_preview).visibility = View.VISIBLE
-        findViewById<MaterialButton>(R.id.btn_add_attachment).isEnabled = true
+        renderComposerState()
         val message = findViewById<EditText>(R.id.et_message)
-        message.hint = "اكتب نصًا مصاحبًا للصورة..."
+        message.hint = getString(R.string.group_attachment_message_hint)
         message.requestFocus()
         showSoftKeyboard(message)
     }
@@ -340,8 +341,33 @@ class GroupActivity : AppCompatActivity() {
         if (deleteFile) path?.let { File(it).delete() }
         findViewById<ImageView>(R.id.attachment_thumb).setImageDrawable(null)
         findViewById<View>(R.id.attachment_preview).visibility = View.GONE
-        findViewById<MaterialButton>(R.id.btn_add_attachment).isEnabled = false
-        findViewById<EditText>(R.id.et_message).hint = "اكتب رسالة..."
+        findViewById<EditText>(R.id.et_message).hint = getString(R.string.group_message_hint)
+        if (::sendButton.isInitialized) renderComposerState()
+    }
+
+    private fun composerState(): GroupMessageComposerState = GroupMessageComposerState(
+        canEdit = AppRepository.canEdit(SessionStore.currentRole(this)),
+        hasTypedText = messageInput.text.toString().trim().isNotBlank(),
+        hasPreparedAttachment = pendingAttach != null,
+        isPreparingAttachment = isPreparingAttachment,
+        isSaving = isSending
+    )
+
+    private fun renderComposerState() {
+        if (!::messageInput.isInitialized || !::sendButton.isInitialized) return
+        val state = composerState()
+        sendButton.isEnabled = state.canSend
+        sendButton.alpha = if (state.canSend) 1f else 0.55f
+        if (::addAttachmentButton.isInitialized) addAttachmentButton.isEnabled = state.canSend
+        if (::attachButton.isInitialized) {
+            val canChooseAttachment = state.canEdit && !state.isPreparingAttachment && !state.isSaving
+            attachButton.isEnabled = canChooseAttachment
+            attachButton.alpha = if (canChooseAttachment) 1f else 0.55f
+        }
+        if (::removeAttachmentButton.isInitialized) {
+            removeAttachmentButton.isEnabled = state.canRemoveAttachment
+            removeAttachmentButton.alpha = if (state.canRemoveAttachment) 1f else 0.55f
+        }
     }
 
     private fun showSoftKeyboard(view: android.view.View) {
@@ -374,8 +400,8 @@ class GroupActivity : AppCompatActivity() {
         val empty = visibleItems == 0
         emptyState.visibility = if (empty) View.VISIBLE else View.GONE
         if (empty) {
-            title.text = if (isSearching) "لا توجد نتائج مطابقة" else "لا توجد رسائل بعد"
-            hint.text = if (isSearching) "جرّب كلمة بحث أخرى أو أعد ضبط البحث" else "اكتب رسالة أو أضف صورة لبدء المحادثة"
+            title.text = getString(if (isSearching) R.string.group_search_empty_title else R.string.group_empty_title)
+            hint.text = getString(if (isSearching) R.string.group_search_empty_hint else R.string.group_empty_hint)
         }
     }
 
@@ -397,6 +423,11 @@ class GroupActivity : AppCompatActivity() {
 
     private fun showAddTextDialog() {
         val ctx = this
+        val role = SessionStore.currentRole(ctx)
+        if (!AppRepository.canEdit(role)) {
+            Toast.makeText(ctx, "لا تملك صلاحية", Toast.LENGTH_SHORT).show()
+            return
+        }
         val input = EditText(ctx).apply {
             setPadding(24, 24, 24, 24)
             hint = getString(R.string.manual_text)
@@ -409,8 +440,8 @@ class GroupActivity : AppCompatActivity() {
             .setPositiveButton(R.string.save) { _, _ ->
                 val text = input.text.toString().trim()
                 if (text.isNotBlank()) {
-                    AppRepository.addItem(groupId, InvoiceItem(type = "text", text = text))
                     val user = SessionStore.currentUser(ctx) ?: "?"
+                    AppRepository.addItem(groupId, InvoiceItem(type = "text", text = text, sender = user))
                     AppRepository.logActivity(ActivityEntry(user, "أضاف $user نصاً يدوياً في $groupName"))
                     refresh()
                 }
@@ -477,17 +508,20 @@ class GroupActivity : AppCompatActivity() {
     private fun shareSelected() {
         if (selected.isEmpty()) return
         try {
-            val paths = AppRepository.items(groupId).filter { it.id in selected && it.imagePath != null }
-                .mapNotNull { it.imagePath }
-            if (paths.isEmpty()) {
-                Toast.makeText(this, "لا توجد صور في العناصر المحددة", Toast.LENGTH_SHORT).show()
+            val files = AppRepository.items(groupId)
+                .filter { it.id in selected }
+                .mapNotNull { AppRepository.availableImagePath(it) }
+                .map(::File)
+                .filter { it.isFile && it.length() > 0L }
+            if (files.isEmpty()) {
+                Toast.makeText(this, "لا توجد صور متاحة للمشاركة في العناصر المحددة", Toast.LENGTH_SHORT).show()
                 return
             }
-            val uris = paths.map {
-                androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", java.io.File(it))
+            val uris = files.map { file ->
+                androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
             }
             val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-                type = "image/jpeg"
+                type = "image/*"
                 putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }

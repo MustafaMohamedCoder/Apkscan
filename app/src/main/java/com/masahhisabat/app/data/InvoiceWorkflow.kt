@@ -18,8 +18,12 @@ object InvoiceWorkflow {
         else -> "جديدة"
     }
 
+    /** تمنع بيانات المزامنة القديمة أو التالفة من حفظ حالة لا تستطيع الواجهة عرضها. */
+    internal fun canonicalStatus(status: String?): String =
+        status?.trim()?.takeIf { it in statuses } ?: NEW
+
     fun updateStatus(context: Context, groupId: String, itemId: String, status: String): InvoiceItem? {
-        val item = AppRepository.updateInvoiceStatus(groupId, itemId, status) ?: return null
+        val item = AppRepository.updateInvoiceStatus(groupId, itemId, canonicalStatus(status)) ?: return null
         InvoiceReminderScheduler.update(context)
         return item
     }

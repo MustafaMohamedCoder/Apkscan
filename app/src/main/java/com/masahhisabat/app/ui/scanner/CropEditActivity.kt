@@ -9,12 +9,13 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.RectF
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import java.io.File
 import java.util.concurrent.Future
 import android.graphics.Paint
-import android.graphics.RectF
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Environment
@@ -23,6 +24,7 @@ import android.os.Vibrator
 import android.provider.MediaStore
 import android.view.MotionEvent
 import android.view.View
+import android.view.HapticFeedbackConstants
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
@@ -123,6 +125,7 @@ class CropEditActivity : AppCompatActivity() {
         updateProcessingStage(1, "تحليل الحواف")
 
         findViewById<MaterialButton>(R.id.btn_rotate).setOnClickListener {
+            confirmEditorTap()
             val croppedForRotation = cropView.getCroppedBitmap()
             val rotated = ImageProcessor.rotateBitmap(croppedForRotation, -90)
             if (rotated !== croppedForRotation && !croppedForRotation.isRecycled) croppedForRotation.recycle()
@@ -140,32 +143,41 @@ class CropEditActivity : AppCompatActivity() {
         }
 
         findViewById<MaterialButton>(R.id.btn_grid).setOnClickListener {
+            confirmEditorTap()
             cropView.toggleGrid()
         }
 
         findViewById<MaterialButton>(R.id.btn_crop_center).setOnClickListener {
+            confirmEditorTap()
             cropView.centerCrop()
             Toast.makeText(this, R.string.crop_center, Toast.LENGTH_SHORT).show()
         }
 
         findViewById<MaterialButton>(R.id.btn_crop_auto).setOnClickListener {
+            confirmEditorTap()
             detectAndApplyEdges(showResult = true)
         }
 
         findViewById<MaterialButton>(R.id.btn_filter).setOnClickListener {
+            confirmEditorTap()
             showFilterPicker()
         }
 
         findViewById<MaterialButton>(R.id.btn_compare).setOnClickListener {
+            confirmEditorTap()
             showComparison()
         }
 
         findViewById<MaterialButton>(R.id.btn_done).setOnClickListener {
             if (processing || filterPreviewInProgress) return@setOnClickListener
+            confirmEditorTap()
             processAndContinue()
         }
 
-        findViewById<ImageView>(R.id.btn_back).setOnClickListener { finish() }
+        findViewById<ImageView>(R.id.btn_back).setOnClickListener {
+            confirmEditorTap()
+            finish()
+        }
 
         // يبدأ الاقتراح تلقائيًا بعد فتح الصورة؛ يظل الإطار قابلاً للتعديل دائمًا.
         detectAndApplyEdges(showResult = true)
@@ -191,6 +203,11 @@ class CropEditActivity : AppCompatActivity() {
         findViewById<View>(R.id.crop_root).setBackgroundColor(Color.BLACK)
     }
 
+    /** تأكيد محلي قصير للتفاعلات المتعمدة في محرر المستند، دون صلاحية اهتزاز أو صوت. */
+    private fun confirmEditorTap() {
+        window.decorView.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+    }
+
     private fun processAndContinue() {
         if (edgeDetectionInProgress) return
         processing = true
@@ -205,6 +222,11 @@ class CropEditActivity : AppCompatActivity() {
         // المعاينة لا تُحفظ مباشرة: يعاد تطبيق الفلتر على الجزء المقصوص بالحجم الكامل.
         ImageProcessor.process(lastMode, cropped, object : ImageProcessor.Callback {
             override fun onDone(bitmap: android.graphics.Bitmap) {
+                if (isFinishing || isDestroyed) {
+                    if (bitmap !== cropped && !bitmap.isRecycled) bitmap.recycle()
+                    if (!cropped.isRecycled) cropped.recycle()
+                    return
+                }
                 processing = false
                 setEditorControlsEnabled(true)
                 loadingPanel.visibility = View.GONE
@@ -215,6 +237,10 @@ class CropEditActivity : AppCompatActivity() {
                 showSuccessAndContinue(bitmap)
             }
             override fun onError() {
+                if (isFinishing || isDestroyed) {
+                    if (!cropped.isRecycled) cropped.recycle()
+                    return
+                }
                 processing = false
                 setEditorControlsEnabled(true)
                 loadingPanel.visibility = View.GONE
@@ -508,7 +534,7 @@ class CropEditActivity : AppCompatActivity() {
 
     private fun showSuccessAndContinue(bitmap: android.graphics.Bitmap) {
         val ctx = this
-        val v = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        val v = getSystemService(Vibrator::class.java)
         v?.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
         Toast.makeText(ctx, R.string.success, Toast.LENGTH_SHORT).show()
 
@@ -739,7 +765,12 @@ class CropEditActivity : AppCompatActivity() {
                     file.outputStream().use { out ->
                         if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)) throw IllegalStateException("تعذر حفظ الصورة")
                     }
-                    sendBroadcast(Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE).apply { data = Uri.fromFile(file) })
+                    MediaScannerConnection.scanFile(
+                        this,
+                        arrayOf(file.absolutePath),
+                        arrayOf("image/jpeg"),
+                        null
+                    )
                 }
                 null
             } catch (e: Exception) {
@@ -978,7 +1009,7 @@ class CropEditActivity : AppCompatActivity() {
                     // تنبيه اهتزازي عند الوصول للحواف
                     if (cropRect.left <= 0.005f || cropRect.right >= 0.995f ||
                         cropRect.top <= 0.005f || cropRect.bottom >= 0.995f) {
-                        (context.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator)
+                        context.getSystemService(android.os.Vibrator::class.java)
                             ?.vibrate(VibrationEffect.createOneShot(60, VibrationEffect.DEFAULT_AMPLITUDE))
                         Toast.makeText(context, R.string.edge_reached, Toast.LENGTH_SHORT).show()
                     }

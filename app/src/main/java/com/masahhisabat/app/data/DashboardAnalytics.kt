@@ -157,17 +157,36 @@ object DashboardAnalytics {
 
     private fun normalizedCurrency(value: String?): String? = value?.trim()?.takeIf { it.isNotBlank() }?.uppercase(Locale.ROOT)
 
-    /** يدعم فواصل الآلاف والأرقام العربية في حقل إجمالي الفاتورة إن وجد. */
-    private fun parseAmount(raw: String?): Double? {
+    /** يدعم الأرقام العربية وفواصل الآلاف العربية أو الغربية في حقل إجمالي الفاتورة إن وجد. */
+    internal fun parseAmount(raw: String?): Double? {
         if (raw.isNullOrBlank()) return null
-        val digits = raw.map { char ->
+        val normalizedDigits = raw.map { char ->
             when (char) {
                 '٠' -> '0'; '١' -> '1'; '٢' -> '2'; '٣' -> '3'; '٤' -> '4'
                 '٥' -> '5'; '٦' -> '6'; '٧' -> '7'; '٨' -> '8'; '٩' -> '9'
                 else -> char
             }
         }.joinToString("")
-        val normalized = digits.replace(',', '.').replace(Regex("[^0-9.]"), "")
+            .replace('٬', ',')
+            .replace('٫', '.')
+        // استخراج مقطع رقمي متصل يمنع نقاط اختصارات العملات مثل «ج.م» من التحول إلى فاصلة عشرية إضافية.
+        val numeric = Regex("[0-9][0-9,.]*").find(normalizedDigits)?.value.orEmpty()
+        if (numeric.isBlank()) return null
+        val normalized = when {
+            numeric.contains(',') && numeric.contains('.') -> {
+                // الفاصل الأخير هو العشري؛ أما الآخر فهو فاصل آلاف.
+                if (numeric.lastIndexOf('.') > numeric.lastIndexOf(',')) {
+                    numeric.replace(",", "")
+                } else {
+                    numeric.replace(".", "").replace(',', '.')
+                }
+            }
+            numeric.count { it == ',' } > 1 ||
+                (numeric.count { it == ',' } == 1 && numeric.substringAfterLast(',').length == 3) -> {
+                numeric.replace(",", "")
+            }
+            else -> numeric.replace(',', '.')
+        }
         return normalized.toDoubleOrNull()
     }
 

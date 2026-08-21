@@ -35,7 +35,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="3dp"
                 android:fontFamily="@font/tajawal_medium"
-                android:text="جميع مستنداتك ومحادثاتك في مكان واحد"
+                android:text="@string/groups_subtitle"
                 android:textColor="@color/day_text_secondary"
                 android:textSize="13sp" />
         </LinearLayout>
@@ -46,7 +46,7 @@
             android:layout_height="44dp"
             android:layout_marginEnd="2dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="تصفية الفواتير"
+            android:contentDescription="@string/filter_invoices"
             android:padding="10dp"
             android:src="@drawable/ic_filter"
             app:tint="@color/day_text_secondary" />
@@ -57,7 +57,7 @@
             android:layout_height="44dp"
             android:layout_marginEnd="6dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="ترتيب الفواتير"
+            android:contentDescription="@string/sort_invoices"
             android:padding="10dp"
             android:src="@drawable/ic_sort"
             app:tint="@color/day_text_secondary" />
@@ -88,7 +88,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:fontFamily="@font/tajawal_medium"
-            android:text="0 فاتورة · 0 عنصر"
+            android:text="@string/groups_summary_empty"
             android:textColor="@color/day_text_secondary"
             android:textSize="13sp" />
 
@@ -97,7 +97,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:fontFamily="@font/tajawal_medium"
-            android:text="آخر نشاط"
+            android:text="@string/recent_activity"
             android:textColor="@color/day_text_secondary"
             android:textSize="12sp" />
     </LinearLayout>
@@ -118,7 +118,7 @@
             android:background="@drawable/input_bg"
             android:drawableStart="@drawable/ic_search"
             android:drawablePadding="10dp"
-            android:hint="ابحث باسم الفاتورة أو رقم الهاتف"
+            android:hint="@string/group_search_hint"
             android:imeOptions="actionSearch"
             android:importantForAutofill="no"
             android:inputType="text"
@@ -134,7 +134,7 @@
             android:layout_marginStart="2dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:clickable="true"
-            android:contentDescription="مسح بحث الفواتير"
+            android:contentDescription="@string/clear_invoice_search"
             android:focusable="true"
             android:padding="11dp"
             android:src="@drawable/ic_close"
@@ -174,7 +174,7 @@
             android:lineSpacingExtra="4dp"
             android:minHeight="132dp"
             android:padding="28dp"
-            android:text="لا توجد فواتير بعد. اضغط هنا لإضافة أول فاتورة أو مورد."
+            android:text="@string/groups_empty_action"
             android:textAlignment="center"
             android:textColor="@color/day_text_secondary"
             android:textSize="15sp" />

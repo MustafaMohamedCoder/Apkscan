@@ -1,5 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- واجهة المحادثة الجماعية -->
+    <string name="group_image">صورة المجموعة</string>
+    <string name="local_group_chat">محادثة مجموعة محلية</string>
+    <string name="group_empty_state">حالة المجموعة</string>
+    <string name="no_messages_yet">لا توجد رسائل بعد</string>
+    <string name="group_empty_hint">اكتب رسالة أو أضف صورة لبدء المحادثة</string>
+    <string name="image_preview">معاينة الصورة</string>
+    <string name="attachment_ready_hint">الصورة جاهزة — اكتب نصًا اختياريًا ثم أضفها</string>
+    <string name="add_attachment_to_group">إضافة إلى المجموعة</string>
+    <string name="cancel_image">إلغاء الصورة</string>
+    <string name="add_image">إضافة صورة</string>
+    <string name="write_message">اكتب رسالة...</string>
+    <string name="send_message">إرسال</string>
+
+    <!-- إعدادات تجربة المكالمات -->
+    <string name="call_ringtones">نغمات المكالمات</string>
+    <string name="call_ringtones_summary">رنين وارد ونغمة انتظار، مع احترام وضع الصوت</string>
+    <string name="enable_call_ringtones">تفعيل نغمات المكالمات</string>
+    <string name="call_vibration">اهتزاز المكالمات</string>
+    <string name="call_vibration_summary">تنبيه خفيف عند الرد أو الإغلاق، مع احترام الصامت</string>
+    <string name="enable_call_vibration">تفعيل اهتزاز المكالمات</string>
+    <string name="choose_incoming_call_ringtone">اختيار نغمة المكالمة الواردة</string>
+    <string name="ice_failure_alert">تنبيه فشل اتصال ICE المتكرر</string>
+    <string name="repeated_connection_issue_alert">تنبيه تكرار تعذر الاتصال</string>
+    <string name="repeated_connection_issue_summary">تنبيه محلي بعد 3 حالات فشل ICE خلال 15 دقيقة</string>
+    <string name="help_center">مركز المساعدة</string>
+
     <string name="app_name">ماسح الحسابات</string>
     <string name="app_name_title"><font color="#14B8A6">ماسح</font> الحسابات</string>
     <string name="home_subtitle">مسح، تنظيم، وحفظ فواتيرك بذكاء</string>
@@ -24,7 +51,10 @@
     <string name="login_btn">تسجيل الدخول</string>
     <string name="remember_me">تذكرني</string>
     <string name="show_password">إظهار كلمة المرور</string>
+    <string name="member_active">نشط</string>
+    <string name="edit_member">تعديل العضو</string>
     <string name="login_error">اسم المستخدم أو كلمة المرور غير صحيحة</string>
+    <string name="login_retry_later">محاولات كثيرة غير ناجحة. حاول مجددًا بعد %1$d ثانية.</string>
 
     <!-- Bottom navigation -->
     <string name="nav_home">الرئيسية</string>
@@ -49,10 +79,36 @@
     <string name="start_scan">ابدأ مسحاً جديداً</string>
     <string name="recent_operations">آخر العمليات</string>
     <string name="no_operations">لا توجد عمليات بعد – ابدأ بمسح أول فاتورة لك</string>
+    <string name="home_workspace">مساحة عملك</string>
+    <string name="home_quick_overview">نظرة سريعة</string>
+    <string name="inbox">صندوق الوارد</string>
+    <string name="open_inbox">فتح</string>
+    <string name="notifications">الإشعارات</string>
+    <string name="user_messages">رسائل المستخدمين</string>
+    <string name="user_messages_summary">إرسال نصوص وصور</string>
     <string name="dev_credit">التطبيق من تطوير مصطفي<font color="#EF4444">♥️</font>عبدالفتاح</string>
 
     <!-- Scanner -->
     <string name="scan_tap">اضغط لالتقاط صورة أو اختر من المعرض</string>
+    <string name="scanner_title">ماسح المستندات</string>
+    <string name="scanner_summary">مسح ذكي محلي · كشف حواف وتحسين فوري</string>
+    <string name="scanner_hint">التقط المستند داخل إطار واضح، ثم راجع القص والفلاتر قبل الحفظ</string>
+    <string name="scanner_new_scan">مسح جديد</string>
+    <string name="open_document_camera">فتح كاميرا المستندات</string>
+    <string name="document_camera">كاميرا المستندات</string>
+    <string name="document_camera_summary">إطار تلقائي · فلاش · كشف الحواف</string>
+    <string name="choose_document_from_gallery">اختيار مستند من المعرض</string>
+    <string name="gallery_document">من المعرض</string>
+    <string name="gallery_document_summary">تحويل صورة إلى مستند</string>
+    <string name="recent_scanned_documents">آخر المستندات الممسوحة</string>
+    <string name="recent_scans_empty">ستظهر المستندات هنا بعد أول عملية مسح.</string>
+    <string name="document_camera_title">مسح مستند</string>
+    <string name="document_camera_local_edges">كشف الحواف محليًا</string>
+    <string name="camera_flash">فلاش</string>
+    <string name="camera_preparing">يتم تجهيز الكاميرا…</string>
+    <string name="camera_gallery">المعرض</string>
+    <string name="camera_auto_badge">AUTO</string>
+    <string name="camera_auto_mode">تلقائي</string>
     <string name="auto_edge">تم اقتراح حواف المستند تلقائياً. يمكنك تعديل الإطار يدوياً.</string>
     <string name="detecting_document_edges">جارٍ اكتشاف حواف المستند…</string>
     <string name="edge_detection_failed">لم تتضح حواف المستند. تم استخدام إطار كامل الصورة ويمكنك تعديله يدوياً.</string>
@@ -88,11 +144,32 @@
     <string name="filter_preview_ready">تمت معاينة فلتر %1$s</string>
     <string name="no_groups_for_image">أنشئ فاتورة أولاً لإضافة الصورة إليها.</string>
     <string name="edge_reached">وصلت إلى حافة الصورة</string>
+    <string name="crop_review_title">مراجعة المستند</string>
+    <string name="crop_edge_suggestion">اقتراح حواف المستند</string>
+    <string name="crop_stage_edge_analysis">1 من 3 · تحليل الحواف</string>
+    <string name="crop_center_action">توسيط</string>
+    <string name="crop_auto_edge_action">حواف تلقائية</string>
+    <string name="crop_filter_action">فلتر</string>
+    <string name="crop_compare_action">مقارنة</string>
+    <string name="crop_auto_enhancement_ready">التحسين التلقائي جاهز</string>
+    <string name="crop_continue_to_save">متابعة إلى خيارات الحفظ</string>
 
     <!-- Invoices & Groups -->
     <string name="invoices">الفواتير</string>
     <string name="group_name">اسم الفاتورة أو المورد</string>
     <string name="new_group">فاتورة جديدة</string>
+    <string name="groups_subtitle">جميع مستنداتك ومحادثاتك في مكان واحد</string>
+    <string name="filter_invoices">تصفية الفواتير</string>
+    <string name="sort_invoices">ترتيب الفواتير</string>
+    <string name="groups_summary_empty">0 فاتورة · 0 عنصر</string>
+    <string name="recent_activity">آخر نشاط</string>
+    <string name="group_search_hint">ابحث باسم الفاتورة أو رقم الهاتف</string>
+    <string name="clear_invoice_search">مسح بحث الفواتير</string>
+    <string name="groups_empty_action">لا توجد فواتير بعد. اضغط هنا لإضافة أول فاتورة أو مورد.</string>
+    <string name="groups_empty_read_only">لا توجد فواتير متاحة في هذا الحساب حتى الآن.</string>
+    <string name="groups_empty_search_and_filter">لا توجد نتائج تطابق البحث والتصفية الحالية. جرّب تغيير أحدهما.</string>
+    <string name="groups_empty_search_result">لا توجد مجموعة تطابق «%1$s». جرّب كلمة أخرى.</string>
+    <string name="groups_empty_filter_result">لا توجد مجموعات ضمن التصفية الحالية. جرّب تصفية أخرى.</string>
     <string name="no_invoices">لا توجد فواتير أو طلبات لهذه الفاتورة</string>
     <string name="add_text">إضافة نص</string>
     <string name="manual_text">نص يدوي</string>
@@ -121,9 +198,14 @@
     <string name="reset_search">إعادة ضبط</string>
     <string name="search_group">بحث داخل المجموعة</string>
     <string name="no_results">لا توجد نتائج مطابقة</string>
+    <string name="no_search_results_detail">لا توجد نتائج مطابقة لبحثك</string>
 
     <!-- Settings -->
     <string name="settings">الإعدادات</string>
+    <string name="settings_call_ringtone_saved">تم حفظ نغمة المكالمة الواردة</string>
+    <string name="settings_owner_admin_only">هذه الخاصية للمالك والمشرف فقط</string>
+    <string name="settings_trash_admin_only">سلة المحذوفات متاحة للمدير والمشرف فقط</string>
+    <string name="settings_storage_management">إدارة التخزين</string>
     <string name="toggle_day_mode">التبديل إلى الوضع النهاري</string>
     <string name="manage_accounts">إدارة الحسابات المحلية</string>
     <string name="change_password">تغيير كلمة المرور</string>
@@ -144,6 +226,14 @@
     <string name="password_changed">تم تغيير كلمة المرور بنجاح</string>
     <string name="password_mismatch">كلمتا المرور غير متطابقتين</string>
     <string name="wrong_password">كلمة المرور الحالية غير صحيحة</string>
+    <string name="app_lock">قفل التطبيق</string>
+    <string name="trash">سلة المحذوفات</string>
+    <string name="auto_trash_purge">الحذف التلقائي للسلة</string>
+    <string name="auto_trash_purge_summary">احذف العناصر نهائيًا بعد 30 يومًا</string>
+    <string name="enable_auto_trash_purge">تفعيل الحذف التلقائي للسلة</string>
+    <string name="invoice_alerts">تنبيهات الفواتير</string>
+    <string name="invoice_alerts_summary">تذكير محلي عند استحقاق فاتورة أو طلب</string>
+    <string name="enable_invoice_alerts">تفعيل تنبيهات الفواتير</string>
     <string name="trash_warning_channel_name">تنبيهات سلة المحذوفات</string>
     <string name="trash_warning_channel_description">تنبيهات قبل الحذف النهائي للعناصر المحذوفة.</string>
     <string name="trash_warning_title">حذف نهائي قريب</string>
@@ -164,8 +254,95 @@
     <string name="invoice_reminder_one">حان موعد متابعة فاتورة «%1$s».</string>
     <string name="invoice_reminder_many">لديك %1$d فواتير تحتاج إلى متابعة.</string>
 
+    <!-- Direct messages -->
+    <string name="direct_messages_title">رسائل المستخدمين</string>
+    <string name="direct_messages_list_title">المراسلات</string>
+    <string name="direct_messages_list_subtitle">اختر مستخدمًا لبدء محادثة محلية. النقطة الخضراء تعني أنه متصل الآن.</string>
+    <string name="direct_select_conversation">اختر محادثة</string>
+    <string name="direct_checking_presence">جارٍ فحص الحضور…</string>
+    <string name="direct_presence_online">متصل الآن</string>
+    <string name="direct_presence_offline">غير متصل</string>
+    <string name="direct_presence_offline_now">غير متصل الآن</string>
+    <string name="direct_presence_online_bullet">● متصل الآن</string>
+    <string name="direct_presence_offline_bullet">○ غير متصل الآن</string>
+    <string name="direct_connection_latency"> | زمن الاستجابة: %1$dms</string>
+    <string name="direct_last_call_failure">\nآخر فشل اتصال: %1$s</string>
+    <string name="direct_connection_checking">جارٍ التحقق من اتصال %1$s داخل الشبكة المحلية…</string>
+    <string name="direct_connection_unavailable">تعذر الوصول محليًا. تأكد من اتصال الجهازين بالشبكة نفسها ومن فتح التطبيق.</string>
+    <string name="direct_connection_test_failed">فشل اختبار الاتصال المحلي</string>
+    <string name="direct_connection_ready">تم اختبار الاتصال المحلي بنجاح | زمن الاستجابة: %1$dms — جارٍ فتح المكالمة</string>
+    <string name="direct_message_image_description">صورة الرسالة</string>
+    <string name="direct_message_image_missing">ملف الصورة غير متوفر على الجهاز</string>
+    <string name="direct_back">رجوع</string>
+    <string name="direct_default_user">المستخدم</string>
+    <string name="direct_voice_call_description">بدء مكالمة صوتية مع %1$s</string>
+    <string name="direct_video_call_description">بدء مكالمة فيديو مع %1$s</string>
+    <string name="direct_call_history">سجل المكالمات</string>
+    <string name="direct_view_call_history">عرض سجل المكالمات</string>
+    <string name="direct_message_hint">اكتب رسالة…</string>
+    <string name="direct_attach_image">إضافة صورة</string>
+    <string name="direct_attachment_ready_description">صورة مرفقة وجاهزة للإرسال</string>
+    <string name="direct_send">إرسال</string>
+    <string name="direct_wait_for_image">انتظر حتى يكتمل تجهيز الصورة</string>
+    <string name="direct_image_preparing">جارٍ تجهيز الصورة محليًا…</string>
+    <string name="direct_image_ready">الصورة جاهزة للإرسال</string>
+    <string name="direct_image_preparation_failed">تعذر تجهيز الصورة</string>
+    <string name="direct_no_users_available">لا يوجد مستخدمون آخرون متاحون للمراسلة</string>
+    <string name="direct_select_user_to_start">اختر مستخدمًا لبدء المحادثة</string>
+
+    <!-- Document camera -->
+    <string name="camera_pdf_session_progress">جلسة PDF · أضيفت %1$d صفحات · الصفحة التالية</string>
+    <string name="camera_permission_intro_title">قبل فتح الكاميرا</string>
+    <string name="camera_permission_intro_message">يحتاج الماسح إذن الكاميرا لالتقاط المستندات واكتشاف حوافها على جهازك. يمكنك بدلاً من ذلك اختيار صورة محفوظة من المعرض.</string>
+    <string name="camera_choose_image">اختيار صورة</string>
+    <string name="camera_continue">متابعة</string>
+    <string name="camera_permission_waiting">بانتظار قرارك بشأن إذن الكاميرا…</string>
+    <string name="camera_permission_required_title">يلزم إذن الكاميرا للمسح</string>
+    <string name="camera_permission_rejected_retry">لم يتم السماح باستخدام الكاميرا. يمكنك فتح إعدادات التطبيق لتفعيلها يدويًا، أو إعادة طلب الإذن، أو اختيار صورة من المعرض.</string>
+    <string name="camera_permission_rejected_settings">تم منع إذن الكاميرا. افتح إعدادات التطبيق واسمح بالكاميرا لتصوير المستندات، أو اختر صورة من المعرض.</string>
+    <string name="camera_retry_permission">إعادة طلب الإذن</string>
+    <string name="camera_open_settings">فتح الإعدادات</string>
+    <string name="camera_gallery_only_status">يمكنك اختيار صورة من المعرض ومتابعة تحسينها محلياً</string>
+    <string name="camera_permission_granted_status">✓ تم تفعيل إذن الكاميرا — الكاميرا جاهزة للمسح</string>
+    <string name="camera_permission_granted_toast">تم تفعيل إذن الكاميرا بنجاح</string>
+    <string name="camera_guide_center_document">ثبّت المستند داخل الإطار</string>
+    <string name="camera_guide_capture_document">وجّه المستند داخل الإطار ثم التقط الصورة</string>
+    <string name="camera_start_failed">تعذر تشغيل كاميرا المستندات، يمكنك اختيار صورة من المعرض</string>
+    <string name="camera_low_light">إضاءة منخفضة — فعّل الفلاش أو قرّب المستند</string>
+    <string name="camera_ready_to_capture">إضاءة ثابتة — المستند جاهز للالتقاط</string>
+    <string name="camera_light_good">إضاءة مناسبة — ثبّت المستند داخل الإطار</string>
+    <string name="camera_flash_on">فلاش: تشغيل</string>
+    <string name="camera_flash_off">فلاش</string>
+    <string name="camera_saving_document">يجري حفظ المستند…</string>
+    <string name="camera_save_failed">تعذر حفظ الصورة، أعد المحاولة</string>
+    <string name="camera_capture_failed">تعذر التقاط المستند، أعد المحاولة</string>
+    <string name="camera_preparing_image">يجري تجهيز الصورة…</string>
+    <string name="camera_read_selected_failed">تعذر قراءة الصورة المختارة</string>
+
+    <!-- Groups -->
+    <string name="groups_title">المجموعات</string>
+    <string name="groups_create_permission_denied">لا تملك صلاحية لإنشاء المجموعات</string>
+    <string name="group_not_found">المجموعة غير موجودة</string>
+    <string name="group_draft_restored">تمت استعادة مسودة غير مرسلة</string>
+    <string name="group_message_saving">يجري حفظ الرسالة…</string>
+    <string name="group_attachment_preparing">يجري تجهيز الصورة…</string>
+    <string name="group_add_permission_denied">لا تملك صلاحية للإضافة</string>
+    <string name="group_message_or_attachment_required">اكتب نصًا أو أرفق صورة</string>
+    <string name="group_message_save_failed">تعذر حفظ الرسالة. أعد المحاولة.</string>
+    <string name="group_message_added_latest">تمت إضافة الرسالة وعرض أحدث محتوى المجموعة</string>
+    <string name="group_attachment_read_failed">تعذر قراءة الصورة</string>
+    <string name="group_attachment_preview_failed">تعذر تجهيز معاينة الصورة</string>
+    <string name="group_attachment_ready">الصورة جاهزة — اكتب نصًا اختياريًا ثم أضفها</string>
+    <string name="group_attachment_message_hint">اكتب نصًا مصاحبًا للصورة…</string>
+    <string name="group_message_hint">اكتب رسالة…</string>
+    <string name="group_search_empty_title">لا توجد نتائج مطابقة</string>
+    <string name="group_empty_title">لا توجد رسائل بعد</string>
+    <string name="group_search_empty_hint">جرّب كلمة بحث أخرى أو أعد ضبط البحث</string>
+
     <!-- Team -->
     <string name="team_management">إدارة الفريق</string>
+    <string name="connected_user">المستخدم المتصل</string>
+    <string name="no_members_yet">لا يوجد أعضاء حتى الآن</string>
     <string name="team_subtitle">إدارة من يمكنه تسجيل الدخول وما يمكنه فعله.</string>
     <string name="members">الأعضاء</string>
     <string name="add_people">إضافة أشخاص</string>
@@ -208,4 +385,28 @@
     <string name="log_delete">حذف %s عنصراً</string>
     <string name="log_create_user">أنشأ %1$s مستخدماً جديداً: %2$s</string>
     <string name="log_no_entries">لا يوجد نشاط بعد</string>
+    <!-- Image viewer -->
+    <string name="viewer_no_image_available">لا توجد صورة متاحة للعرض</string>
+    <string name="viewer_image_counter">%1$d / %2$d</string>
+    <string name="viewer_counter_placeholder">1 / 1</string>
+    <string name="viewer_close">إغلاق</string>
+    <string name="viewer_search_image">البحث داخل الصورة</string>
+    <string name="viewer_search_hint">ابحث عن كلمة داخل الصورة</string>
+    <string name="viewer_close_search">إغلاق البحث</string>
+    <string name="viewer_extract_and_search">استخراج النص والبحث</string>
+    <string name="viewer_extracting">جارٍ الاستخراج…</string>
+    <string name="viewer_retry_extraction">إعادة محاولة الاستخراج</string>
+    <string name="viewer_refresh_results">تحديث النتائج</string>
+    <string name="viewer_extracting_local_text">يتم استخراج النص محليًا من الصورة…</string>
+    <string name="viewer_extraction_failed">تعذر استخراج النص من هذه الصورة.</string>
+    <string name="viewer_extraction_retry_hint">تأكد من أن ملف الصورة ما زال متاحًا، ثم أعد المحاولة.</string>
+    <string name="viewer_search_instruction">ابحث في الصورة %1$d من %2$d: اكتب كلمة ثم اضغط استخراج النص والبحث.</string>
+    <string name="viewer_local_only_notice">لن تُرسل الصورة أو النص إلى الإنترنت.</string>
+    <string name="viewer_no_readable_text">لم يتم العثور على نص قابل للقراءة في هذه الصورة.</string>
+    <string name="viewer_no_readable_text_hint">جرّب صورة أوضح أو استخدم تحسين المستند قبل البحث.</string>
+    <string name="viewer_text_extracted_instruction">تم استخراج النص. اكتب كلمة أو عبارة للبحث داخل الصورة.</string>
+    <string name="viewer_no_matching_result">لا توجد نتيجة مطابقة لـ «%1$s» في الصورة الحالية.</string>
+    <string name="viewer_no_matching_result_hint">يمكنك تغيير العبارة أو قراءة النص المستخرج كاملاً بعد مسح كلمة البحث.</string>
+    <string name="viewer_matching_result_count">%1$d نتيجة مطابقة لـ «%2$s» داخل النص المستخرج.</string>
+    <string name="viewer_image_display_failed">تعذر عرض هذه الصورة</string>
 </resources>

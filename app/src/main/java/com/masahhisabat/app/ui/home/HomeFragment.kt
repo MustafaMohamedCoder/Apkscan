@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -36,21 +37,36 @@ class HomeFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         applyTheme(view)
 
-        view.findViewById<MaterialButton>(R.id.btn_start_scan).setOnClickListener { openTab(R.id.nav_scanner) }
-        val openGroups = View.OnClickListener { openTab(R.id.nav_groups) }
+        view.findViewById<MaterialButton>(R.id.btn_start_scan).setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            openTab(R.id.nav_scanner)
+        }
+        val openGroups = View.OnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            openTab(R.id.nav_groups)
+        }
         view.findViewById<View>(R.id.card_groups).setOnClickListener(openGroups)
         view.findViewById<TextView>(R.id.groups_count).setOnClickListener(openGroups)
         view.findViewById<TextView>(R.id.groups_label).setOnClickListener(openGroups)
 
-        val openInbox = View.OnClickListener { openInbox() }
+        val openInbox = View.OnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            openInbox()
+        }
         view.findViewById<View>(R.id.card_invoices).setOnClickListener(openInbox)
         view.findViewById<TextView>(R.id.invoices_count).setOnClickListener(openInbox)
         view.findViewById<TextView>(R.id.invoices_label).setOnClickListener(openInbox)
         view.findViewById<View>(R.id.inbox_card).setOnClickListener(openInbox)
         view.findViewById<MaterialButton>(R.id.btn_open_inbox).setOnClickListener(openInbox)
-        val openNotifications = View.OnClickListener { startActivity(Intent(requireContext(), NotificationsActivity::class.java)) }
+        val openNotifications = View.OnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            startActivity(Intent(requireContext(), NotificationsActivity::class.java))
+        }
         view.findViewById<View>(R.id.notifications_card).setOnClickListener(openNotifications)
-        val openMessages = View.OnClickListener { startActivity(Intent(requireContext(), DirectMessageUsersActivity::class.java)) }
+        val openMessages = View.OnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            startActivity(Intent(requireContext(), DirectMessageUsersActivity::class.java))
+        }
         view.findViewById<View>(R.id.direct_messages_card).setOnClickListener(openMessages)
 
         refresh(force = true)

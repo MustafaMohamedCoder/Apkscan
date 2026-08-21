@@ -131,7 +131,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="60dp"
         android:gravity="center"
-        android:text="لا توجد نتائج مطابقة لبحثك"
+        android:text="@string/no_search_results_detail"
         android:textSize="15sp"
         android:visibility="gone" />
 </LinearLayout>

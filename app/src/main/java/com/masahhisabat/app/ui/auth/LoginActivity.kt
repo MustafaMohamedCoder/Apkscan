@@ -13,6 +13,7 @@ import android.os.Vibrator
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
@@ -24,8 +25,22 @@ class LoginActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityLoginBinding
 
-    private val storageRequestCode = 9001
     private val notificationRequestCode = 9002
+
+    private val storageSettingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        // تعاد التهيئة بعد الرجوع من إعدادات النظام؛ لا تعتمد بعض الواجهات
+        // المعدلة على resultCode لإبلاغ منح الإذن.
+        try {
+            AppRepository.init(this)
+            if (AppRepository.isUsingExternalStorage()) {
+                AppRepository.remapTempImagePaths()
+            }
+        } catch (_: Exception) {
+            // تظل شاشة الدخول متاحة حتى إن تعذر الوصول الخارجي على جهاز مخصص.
+        }
+    }
 
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -42,25 +57,9 @@ class LoginActivity : AppCompatActivity() {
                 intent.data = Uri.parse("package:$packageName")
                 // يعالج catch غياب شاشة الإعدادات على الأنظمة المعدلة، دون أن تمنع
                 // قيود إظهار الحزم فتح الإعدادات النظامية على Android 11+.
-                startActivityForResult(intent, storageRequestCode)
+                storageSettingsLauncher.launch(intent)
             }
         } catch (_: Exception) { /* لا نعيق التشغيل */ }
-    }
-
-    @Suppress("DEPRECATION")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == storageRequestCode) {
-            // إعادة محاولة إنشاء تهيئة البيانات بعد منح الإذن
-            try {
-                AppRepository.init(this)
-                // إن وُجدت صور محفوظة من نسخة قديمة داخل cacheDir/filesDir،
-                // انقلها الآن إلى Documents/MasahHisabat قبل أن يحذفها النظام.
-                if (AppRepository.isUsingExternalStorage()) {
-                    AppRepository.remapTempImagePaths()
-                }
-            } catch (_: Exception) { }
-        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -101,6 +100,13 @@ class LoginActivity : AppCompatActivity() {
 
         binding.loginButton.setOnClickListener {
             try {
+                val remainingSeconds = LoginAttemptGuard.remainingSeconds(this)
+                if (remainingSeconds > 0L) {
+                    binding.errorText.text = getString(R.string.login_retry_later, remainingSeconds)
+                    binding.errorText.visibility = View.VISIBLE
+                    shakeError()
+                    return@setOnClickListener
+                }
                 val username = binding.usernameInput.text.toString().trim()
                 val password = binding.passwordInput.text.toString()
                 if (username.isBlank() || password.isBlank()) {
@@ -109,18 +115,15 @@ class LoginActivity : AppCompatActivity() {
                 }
                 val user = AppRepository.authenticate(username, password)
                 if (user == null) {
+                    LoginAttemptGuard.recordFailure(this)
                     shakeError()
+                    binding.errorText.setText(R.string.login_error)
                     binding.errorText.visibility = View.VISIBLE
-                    // تسجيل تشخيصي داخلي لمعرفة سبب الفشل (ملف login_diag.txt)
+                    // يسجل التشخيص حالة الفشل فقط، دون أسماء الحسابات أو أي بيانات اعتماد.
                     try {
                         val sb = StringBuilder()
-                        sb.append("LOGIN_FAIL ${System.currentTimeMillis()} entered=[$username]\n")
-                        val allUsers = try { AppRepository.users() } catch (_: Exception) { emptyList<com.masahhisabat.app.data.User>() }
-                        sb.append("users count=${allUsers.size} external=${AppRepository.isUsingExternalStorage()}\n")
-                        allUsers.forEach { u ->
-                            val decoded = com.masahhisabat.app.data.HashUtil.decodePlain(u.passwordHash)
-                            sb.append("- ${u.username} role=${u.role} enabled=${u.enabled} v2=${u.passwordHash.startsWith("v2:")} hash_len=${u.passwordHash.length} decoded_len=${decoded?.length ?: -1}\n")
-                        }
+                        sb.append("LOGIN_FAIL ${System.currentTimeMillis()} username_length=${username.length} ")
+                        sb.append("external=${AppRepository.isUsingExternalStorage()}\n")
                         java.io.File(filesDir, "login_diag.txt").appendText(sb.toString() + "---\n")
                     } catch (_: Exception) { }
                     Toast.makeText(this, R.string.login_error, Toast.LENGTH_SHORT).show()
@@ -131,6 +134,7 @@ class LoginActivity : AppCompatActivity() {
                 } else {
                     AppRepository.clearRemember()
                 }
+                LoginAttemptGuard.reset(this)
                 AppRepository.logActivity(ActivityEntry(user.username, getString(R.string.log_login, username)))
                 SessionStore.save(this, user)
                 startActivity(Intent(this, MainActivity::class.java))
@@ -185,7 +189,7 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun shakeError() {
-        val v = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        val v = getSystemService(Vibrator::class.java)
         v?.vibrate(VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE))
         binding.loginForm.animate()
             .translationX(0f)
@@ -211,11 +215,24 @@ object SessionStore {
             .apply()
     }
     fun currentRole(ctx: Context): com.masahhisabat.app.data.Role {
-        val r = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("role", "VIEWER") ?: "VIEWER"
-        return try { com.masahhisabat.app.data.Role.valueOf(r) } catch (e: Exception) { com.masahhisabat.app.data.Role.VIEWER }
+        val activeUser = activeUser(ctx)
+        if (activeUser != null) {
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString("role", activeUser.role.name)
+                .apply()
+            return activeUser.role
+        }
+        return com.masahhisabat.app.data.Role.VIEWER
     }
     fun currentUser(ctx: Context): String? =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("username", null)
+    /** يعيد المستخدم المفعّل فقط؛ لا تعد بيانات الجلسة وحدها إثباتًا لصلاحية الحساب. */
+    fun activeUser(ctx: Context): com.masahhisabat.app.data.User? {
+        val username = currentUser(ctx) ?: return null
+        return AppRepository.users().firstOrNull { user ->
+            user.enabled && AppRepository.normalizeUsername(user.username) == AppRepository.normalizeUsername(username)
+        }
+    }
     fun lock(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("app_locked", true).apply()
     fun unlock(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("app_locked", false).apply()
     fun requiresUnlock(ctx: Context): Boolean =
@@ -223,4 +240,35 @@ object SessionStore {
             ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("app_locked", false)
     fun logout(ctx: Context) = clear(ctx)
     fun clear(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+}
+
+/** تهدئة محلية خفيفة تقلل تخمين كلمات المرور دون حجب الحسابات أو الحاجة إلى خادم. */
+private object LoginAttemptGuard {
+    private const val PREFS = "login_attempt_guard"
+    private const val KEY_FAILURES = "failures"
+    private const val KEY_LOCK_UNTIL = "lock_until"
+    private const val MAX_FAILURES = 5
+    private const val LOCK_DURATION_MS = 90_000L
+
+    fun remainingSeconds(ctx: Context): Long {
+        val until = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(KEY_LOCK_UNTIL, 0L)
+        return ((until - System.currentTimeMillis()).coerceAtLeast(0L) + 999L) / 1_000L
+    }
+
+    fun recordFailure(ctx: Context) {
+        val preferences = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val failures = preferences.getInt(KEY_FAILURES, 0) + 1
+        val editor = preferences.edit()
+        if (failures >= MAX_FAILURES) {
+            editor.putInt(KEY_FAILURES, 0)
+                .putLong(KEY_LOCK_UNTIL, System.currentTimeMillis() + LOCK_DURATION_MS)
+        } else {
+            editor.putInt(KEY_FAILURES, failures)
+        }
+        editor.apply()
+    }
+
+    fun reset(ctx: Context) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+    }
 }

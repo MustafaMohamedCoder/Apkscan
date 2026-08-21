@@ -17,6 +17,8 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.IntentCompat
 import androidx.fragment.app.Fragment
 import androidx.biometric.BiometricManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -42,15 +44,58 @@ import java.util.Locale
  */
 class SettingsFragment : Fragment() {
 
-    companion object {
-        private const val IMPORT_REQUEST = 101
-        private const val CONTENT_IMPORT_REQUEST = 102
-        private const val ENCRYPTED_IMPORT_REQUEST = 103
-        private const val ENCRYPTED_EXPORT_REQUEST = 104
-        private const val CALL_RINGTONE_PICKER_REQUEST = 105
+    private val ringtonePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
+        val uri = result.data?.let {
+            IntentCompat.getParcelableExtra(
+                it,
+                RingtoneManager.EXTRA_RINGTONE_PICKED_URI,
+                Uri::class.java
+            )
+        }
+        AppRepository.setCallRingtoneUri(uri?.toString())
+        view?.findViewById<TextView>(R.id.tv_call_ringtone_picker_title)?.text = callRingtoneTitle()
+        context?.let { Toast.makeText(it, getString(R.string.settings_call_ringtone_saved), Toast.LENGTH_SHORT).show() }
     }
 
     private var pendingBackupPassphrase: String? = null
+    private val activeOperationDialogs = mutableSetOf<androidx.appcompat.app.AlertDialog>()
+
+    private fun trackOperationDialog(dialog: androidx.appcompat.app.AlertDialog) {
+        activeOperationDialogs += dialog
+        dialog.setOnDismissListener { activeOperationDialogs.remove(dialog) }
+    }
+
+    private val encryptedExportLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val passphrase = pendingBackupPassphrase
+        pendingBackupPassphrase = null
+        val uri = result.data?.data
+        if (result.resultCode == Activity.RESULT_OK && uri != null && !passphrase.isNullOrBlank()) {
+            createEncryptedBackup(uri, passphrase)
+        }
+    }
+
+    private val encryptedImportLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) result.data?.data?.let(::showEncryptedRestoreDialog)
+    }
+
+    private val backupImportLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) result.data?.data?.let { importZipBackup(it, contentOnly = false) }
+    }
+
+    private val contentImportLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) result.data?.data?.let { importZipBackup(it, contentOnly = true) }
+    }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return inflater.inflate(R.layout.fragment_settings, container, false)
@@ -74,7 +119,7 @@ class SettingsFragment : Fragment() {
             if (AppRepository.canAdmin(role)) {
                 startActivity(Intent(requireContext(), TeamActivity::class.java))
             } else {
-                Toast.makeText(requireContext(), "هذه الخاصية للمالك والمشرف فقط", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), getString(R.string.settings_owner_admin_only), Toast.LENGTH_SHORT).show()
             }
         }
         setupItem(view, R.id.item_activity, R.id.tv_activity_title, getString(R.string.activity_log)) { showActivityLogDialog() }
@@ -83,24 +128,32 @@ class SettingsFragment : Fragment() {
             if (AppRepository.canDeleteContent(role)) {
                 startActivity(Intent(requireContext(), TrashActivity::class.java))
             } else {
-                Toast.makeText(requireContext(), "سلة المحذوفات متاحة للمدير والمشرف فقط", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), getString(R.string.settings_trash_admin_only), Toast.LENGTH_SHORT).show()
             }
         }
         setupAutoTrashPurge(view)
         setupInvoiceReminders(view)
         setupCallFeedbackSettings(view)
-        setupItem(view, R.id.item_help, R.id.tv_help_title, "مركز المساعدة") { showHelpDialog() }
+        setupItem(view, R.id.item_help, R.id.tv_help_title, getString(R.string.help_center)) { showHelpDialog() }
         setupItem(view, R.id.item_export, R.id.tv_export_title, getString(R.string.export_data)) { showExportOptions() }
-        setupItem(view, R.id.item_storage, R.id.tv_storage_title, "إدارة التخزين") { showStorageDialog() }
+        setupItem(view, R.id.item_storage, R.id.tv_storage_title, getString(R.string.settings_storage_management)) { showStorageDialog() }
         setupItem(view, R.id.item_import, R.id.tv_import_title, getString(R.string.import_backup)) { showImportOptions() }
         setupItem(view, R.id.item_sync, R.id.tv_sync_title, getString(R.string.local_sync)) {
             val role = SessionStore.currentRole(requireContext())
             if (AppRepository.canSync(role)) showSyncDialog()
-            else Toast.makeText(requireContext(), "هذه الخاصية للمدير والمشرف فقط", Toast.LENGTH_SHORT).show()
+            else Toast.makeText(requireContext(), getString(R.string.settings_owner_admin_only), Toast.LENGTH_SHORT).show()
         }
         view.findViewById<TextView>(R.id.tv_sync_summary)?.text = syncSummary()
         // placeholder to keep edits valid
         setupItem(view, R.id.item_logout, R.id.tv_logout_title, getString(R.string.logout), errorText = true) { confirmLogout() }
+    }
+
+    override fun onDestroyView() {
+        activeOperationDialogs.toList().forEach { dialog ->
+            if (dialog.isShowing) dialog.dismiss()
+        }
+        activeOperationDialogs.clear()
+        super.onDestroyView()
     }
 
     private fun setupItem(view: View, rowId: Int, titleId: Int, title: String, errorText: Boolean = false, action: () -> Unit) {
@@ -226,13 +279,13 @@ class SettingsFragment : Fragment() {
     private fun showCallRingtonePicker() {
         val existing = AppRepository.callRingtoneUri()?.let(Uri::parse)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-        startActivityForResult(Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+        ringtonePickerLauncher.launch(Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
             putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_RINGTONE)
             putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "اختر نغمة المكالمة الواردة")
             putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, existing)
             putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
             putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
-        }, CALL_RINGTONE_PICKER_REQUEST)
+        })
     }
 
     private fun showAppLockDialog() {
@@ -524,12 +577,12 @@ class SettingsFragment : Fragment() {
                 "استعادة نسخة مشفرة"
             )) { _, which ->
                 if (which == 0) {
-                    openImportPicker(IMPORT_REQUEST)
+                    openImportPicker(contentOnly = false)
                 } else if (which == 1) {
                     MaterialAlertDialogBuilder(requireContext())
                         .setTitle(getString(R.string.import_groups_documents))
                         .setMessage("سيتم دمج المجموعات والمستندات مع البيانات الحالية دون حذفها، مع إنشاء نسخة وقائية تلقائية قبل الاستيراد.")
-                        .setPositiveButton("اختيار ملف") { _, _ -> openImportPicker(CONTENT_IMPORT_REQUEST) }
+                        .setPositiveButton("اختيار ملف") { _, _ -> openImportPicker(contentOnly = true) }
                         .setNegativeButton(R.string.cancel, null)
                         .show()
                 } else {
@@ -583,7 +636,7 @@ class SettingsFragment : Fragment() {
             putExtra(Intent.EXTRA_TITLE, "masah_backup_${System.currentTimeMillis() / 1000}.masahbak")
         }
         try {
-            startActivityForResult(intent, ENCRYPTED_EXPORT_REQUEST)
+            encryptedExportLauncher.launch(intent)
         } catch (_: Exception) {
             pendingBackupPassphrase = null
             Toast.makeText(requireContext(), "تعذر فتح اختيار مكان الحفظ", Toast.LENGTH_SHORT).show()
@@ -596,7 +649,7 @@ class SettingsFragment : Fragment() {
             addCategory(Intent.CATEGORY_OPENABLE)
         }
         try {
-            startActivityForResult(intent, ENCRYPTED_IMPORT_REQUEST)
+            encryptedImportLauncher.launch(intent)
         } catch (_: Exception) {
             Toast.makeText(requireContext(), "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
         }
@@ -698,17 +751,17 @@ class SettingsFragment : Fragment() {
     }
 
     private fun vibrateShort(ctx: Context) {
-        (ctx.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
+        ctx.getSystemService(Vibrator::class.java)
             ?.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE))
     }
 
-    private fun openImportPicker(requestCode: Int) {
+    private fun openImportPicker(contentOnly: Boolean) {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             type = "application/zip"
             addCategory(Intent.CATEGORY_OPENABLE)
         }
         try {
-            startActivityForResult(intent, requestCode)
+            if (contentOnly) contentImportLauncher.launch(intent) else backupImportLauncher.launch(intent)
         } catch (e: Exception) {
             Toast.makeText(requireContext(), "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
         }
@@ -759,12 +812,20 @@ class SettingsFragment : Fragment() {
             .setTitle(R.string.sync_available_devices)
             .setView(progress)
             .setNegativeButton(R.string.close) { _, _ -> }
-            .show()
+            .create()
+            .also {
+                trackOperationDialog(it)
+                it.show()
+            }
 
         // البحث في الخلفية
         Thread {
             val peers = SyncManager.discover(4000)
             activity?.runOnUiThread {
+                if (!isAdded) {
+                    if (dialog.isShowing) dialog.dismiss()
+                    return@runOnUiThread
+                }
                 if (dialog.isShowing) dialog.dismiss()
                 if (peers.isEmpty()) {
                     MaterialAlertDialogBuilder(ctx)
@@ -809,10 +870,14 @@ class SettingsFragment : Fragment() {
         val ctx = requireContext()
         val syncDialog = showSyncProgressDialog(peer.name)
         Thread {
-            val result = SyncManager.syncWithHost(ctx, peer.address, peer.name) { percent, status ->
-                activity?.runOnUiThread { updateSyncProgress(syncDialog, percent, status) }
+            val result = SyncManager.syncWithHost(peer.address, peer.name) { percent, status ->
+                activity?.runOnUiThread {
+                    if (!isAdded || !syncDialog.isShowing) return@runOnUiThread
+                    updateSyncProgress(syncDialog, percent, status)
+                }
             }
             activity?.runOnUiThread {
+                if (!isAdded) return@runOnUiThread
                 if (syncDialog.isShowing) syncDialog.dismiss()
                 val (title, message) = if (result.ok) {
                     "تمت المزامنة بنجاح" to
@@ -838,7 +903,10 @@ class SettingsFragment : Fragment() {
         )
         Thread {
             val report = SyncManager.runNetworkSelfTest { percent, status ->
-                activity?.runOnUiThread { updateSyncProgress(testDialog, percent, status) }
+                activity?.runOnUiThread {
+                    if (!isAdded || !testDialog.isShowing) return@runOnUiThread
+                    updateSyncProgress(testDialog, percent, status)
+                }
             }
             activity?.runOnUiThread {
                 if (testDialog.isShowing) testDialog.dismiss()
@@ -894,6 +962,9 @@ class SettingsFragment : Fragment() {
                 text = initialStatus
                 textSize = 15f
                 gravity = android.view.Gravity.CENTER
+                textDirection = View.TEXT_DIRECTION_RTL
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                contentDescription = "حالة المزامنة: $initialStatus"
                 setTextColor(ThemeHelper.text(ctx))
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -918,6 +989,8 @@ class SettingsFragment : Fragment() {
                 text = "5%"
                 textSize = 22f
                 gravity = android.view.Gravity.CENTER
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                contentDescription = "نسبة تقدم المزامنة: 5 بالمئة"
                 setTextColor(ThemeHelper.accent(ctx))
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -930,85 +1003,144 @@ class SettingsFragment : Fragment() {
             .setView(content)
             .setCancelable(false)
             .create()
-            .also { it.show() }
+            .also {
+                trackOperationDialog(it)
+                it.show()
+            }
     }
 
     private fun updateSyncProgress(dialog: androidx.appcompat.app.AlertDialog, percent: Int, status: String) {
-        if (!dialog.isShowing) return
+        if (!isAdded || !dialog.isShowing) return
         val progress = percent.coerceIn(0, 100)
         dialog.findViewById<android.widget.ProgressBar>(R.id.sync_progress_bar)?.progress = progress
-        dialog.findViewById<TextView>(R.id.sync_progress_percent)?.text = "$progress%"
-        dialog.findViewById<TextView>(R.id.sync_progress_status)?.text = status
+        dialog.findViewById<TextView>(R.id.sync_progress_percent)?.apply {
+            text = "$progress%"
+            contentDescription = "نسبة تقدم المزامنة: $progress بالمئة"
+        }
+        dialog.findViewById<TextView>(R.id.sync_progress_status)?.apply {
+            text = status
+            contentDescription = "حالة المزامنة: $status"
+        }
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == CALL_RINGTONE_PICKER_REQUEST) {
-            if (resultCode == Activity.RESULT_OK) {
-                val uri = data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
-                AppRepository.setCallRingtoneUri(uri?.toString())
-                view?.findViewById<TextView>(R.id.tv_call_ringtone_picker_title)?.text = callRingtoneTitle()
-                Toast.makeText(requireContext(), "تم حفظ نغمة المكالمة الواردة", Toast.LENGTH_SHORT).show()
+    /** حالة مرئية ثابتة للعمليات الطويلة التي لا يتوافر لها تقدم دقيق، مثل استيراد النسخ. */
+    private fun showBlockingOperationDialog(title: String, status: String): androidx.appcompat.app.AlertDialog {
+        val ctx = requireContext()
+        val content = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(48, 32, 48, 32)
+            addView(android.widget.ProgressBar(ctx).apply {
+                isIndeterminate = true
+                contentDescription = "جارٍ التنفيذ"
+                layoutParams = LinearLayout.LayoutParams(52, 52)
+            })
+            addView(TextView(ctx).apply {
+                text = status
+                textSize = 15f
+                textDirection = View.TEXT_DIRECTION_RTL
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                setTextColor(ThemeHelper.text(ctx))
+                layoutParams = LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                ).apply { marginStart = 24 }
+            })
+        }
+        return MaterialAlertDialogBuilder(ctx)
+            .setTitle(title)
+            .setView(content)
+            .setCancelable(false)
+            .create()
+            .also {
+                trackOperationDialog(it)
+                it.show()
             }
-            return
-        }
-        if (requestCode == ENCRYPTED_EXPORT_REQUEST) {
-            val passphrase = pendingBackupPassphrase
-            pendingBackupPassphrase = null
-            val uri = data?.data
-            if (resultCode == Activity.RESULT_OK && uri != null && !passphrase.isNullOrBlank()) {
-                createEncryptedBackup(uri, passphrase)
-            }
-            return
-        }
-        if (resultCode != Activity.RESULT_OK) return
-        if (requestCode == ENCRYPTED_IMPORT_REQUEST) {
-            data?.data?.let(::showEncryptedRestoreDialog)
-            return
-        }
-        if (requestCode != IMPORT_REQUEST && requestCode != CONTENT_IMPORT_REQUEST) return
-        val uri: Uri = data?.data ?: return
-        requireActivity().contentResolver.openInputStream(uri)?.use { stream ->
-            val tmp = java.io.File(requireContext().cacheDir, "import_${System.currentTimeMillis() / 1000}.zip")
+    }
+
+    private fun importZipBackup(uri: Uri, contentOnly: Boolean) {
+        val ctx = requireContext().applicationContext
+        val progressDialog = showBlockingOperationDialog(
+            title = if (contentOnly) "جارٍ استيراد المجموعات والمستندات" else "جارٍ استيراد النسخة الاحتياطية",
+            status = "يتم فحص الملف وتجهيز البيانات محليًا…"
+        )
+        Thread {
+            val tmp = java.io.File(ctx.cacheDir, "import_${System.currentTimeMillis() / 1000}.zip")
             try {
-                tmp.outputStream().use { out -> stream.copyTo(out) }
-                if (requestCode == CONTENT_IMPORT_REQUEST) {
+                ctx.contentResolver.openInputStream(uri)?.use { stream ->
+                    tmp.outputStream().use { out -> stream.copyTo(out) }
+                } ?: throw IllegalStateException("تعذر قراءة ملف النسخة")
+                if (contentOnly) {
                     val result = AppRepository.importContentBackup(tmp)
-                    val user = SessionStore.currentUser(requireContext()) ?: "?"
+                    val user = SessionStore.currentUser(ctx) ?: "?"
                     AppRepository.logActivity(ActivityEntry(user, "استورد $user المجموعات والمستندات"))
-                    MaterialAlertDialogBuilder(requireContext())
-                        .setTitle("اكتمل استيراد المجموعات والمستندات")
-                        .setMessage(getString(
-                            R.string.content_backup_imported,
-                            result.groupsImported,
-                            result.itemsImported,
-                            result.attachmentsImported
-                        ))
-                        .setPositiveButton(R.string.ok) { _, _ -> activity?.recreate() }
-                        .show()
+                    activity?.runOnUiThread {
+                        if (!isAdded) {
+                            if (progressDialog.isShowing) progressDialog.dismiss()
+                            return@runOnUiThread
+                        }
+                        if (progressDialog.isShowing) progressDialog.dismiss()
+                        MaterialAlertDialogBuilder(requireContext())
+                            .setTitle("اكتمل استيراد المجموعات والمستندات")
+                            .setMessage(getString(
+                                R.string.content_backup_imported,
+                                result.groupsImported,
+                                result.itemsImported,
+                                result.attachmentsImported
+                            ))
+                            .setPositiveButton(R.string.ok) { _, _ -> activity?.recreate() }
+                            .show()
+                    }
                 } else {
                     AppRepository.importBackup(tmp)
-                    val user = SessionStore.currentUser(requireContext()) ?: "?"
+                    val user = SessionStore.currentUser(ctx) ?: "?"
                     AppRepository.logActivity(ActivityEntry(user, "استورد $user نسخة احتياطية كاملة"))
-                    Toast.makeText(requireContext(), "تم الاستيراد بنجاح", Toast.LENGTH_LONG).show()
-                    activity?.recreate()
+                    activity?.runOnUiThread {
+                        if (!isAdded) {
+                            if (progressDialog.isShowing) progressDialog.dismiss()
+                            return@runOnUiThread
+                        }
+                        if (progressDialog.isShowing) progressDialog.dismiss()
+                        MaterialAlertDialogBuilder(requireContext())
+                            .setTitle("تم استيراد النسخة بنجاح")
+                            .setMessage("اكتملت عملية الاستيراد محليًا. حدّث الواجهة لعرض البيانات المستوردة.")
+                            .setPositiveButton("تحديث الآن") { _, _ -> activity?.recreate() }
+                            .setNegativeButton("لاحقًا", null)
+                            .show()
+                    }
                 }
             } catch (e: Exception) {
-                val message = if (requestCode == CONTENT_IMPORT_REQUEST) {
+                val message = if (contentOnly) {
                     "فشل استيراد المجموعات والمستندات — الملف غير صالح أو غير مدعوم"
                 } else {
                     "فشل الاستيراد — الملف تالف"
                 }
-                Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+                val user = SessionStore.currentUser(ctx) ?: "?"
+                val action = if (contentOnly) "فشل استيراد المجموعات والمستندات" else "فشل استيراد النسخة الاحتياطية"
+                runCatching { AppRepository.logActivity(ActivityEntry(user, "$action (${e.javaClass.simpleName})")) }
+                activity?.runOnUiThread {
+                    if (!isAdded) {
+                        if (progressDialog.isShowing) progressDialog.dismiss()
+                        return@runOnUiThread
+                    }
+                    if (progressDialog.isShowing) progressDialog.dismiss()
+                    MaterialAlertDialogBuilder(requireContext())
+                        .setTitle("تعذر الاستيراد")
+                        .setMessage("$message\n\nتحقق من اختيار ملف النسخة الصحيح ثم أعد المحاولة.")
+                        .setPositiveButton("حسنًا", null)
+                        .show()
+                }
             } finally {
                 tmp.delete()
             }
-        }
+        }.apply { name = "backup-import" }.start()
     }
 
     private fun createEncryptedBackup(destination: Uri, passphrase: String) {
         val ctx = requireContext().applicationContext
-        Toast.makeText(ctx, "جارٍ إنشاء النسخة المشفرة…", Toast.LENGTH_SHORT).show()
+        val progressDialog = showBlockingOperationDialog(
+            title = "جارٍ إنشاء النسخة المشفرة",
+            status = "يتم تشفير البيانات وحفظ النسخة محليًا…"
+        )
         Thread {
             var encryptedFile: java.io.File? = null
             try {
@@ -1019,11 +1151,33 @@ class SettingsFragment : Fragment() {
                 val user = SessionStore.currentUser(ctx) ?: "?"
                 AppRepository.logActivity(ActivityEntry(user, "صدّر $user نسخة احتياطية مشفرة"))
                 activity?.runOnUiThread {
-                    if (isAdded) Toast.makeText(requireContext(), "تم حفظ النسخة المشفرة بنجاح", Toast.LENGTH_LONG).show()
+                    if (!isAdded) {
+                        if (progressDialog.isShowing) progressDialog.dismiss()
+                        return@runOnUiThread
+                    }
+                    if (progressDialog.isShowing) progressDialog.dismiss()
+                    MaterialAlertDialogBuilder(requireContext())
+                        .setTitle("تم حفظ النسخة المشفرة")
+                        .setMessage("اكتمل تشفير النسخة وحفظها في الموقع الذي اخترته.")
+                        .setPositiveButton("حسنًا", null)
+                        .show()
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                val user = SessionStore.currentUser(ctx) ?: "?"
+                runCatching {
+                    AppRepository.logActivity(ActivityEntry(user, "فشل تصدير النسخة المشفرة (${e.javaClass.simpleName})"))
+                }
                 activity?.runOnUiThread {
-                    if (isAdded) Toast.makeText(requireContext(), "فشل إنشاء النسخة المشفرة. تحقق من المساحة وكلمة المرور.", Toast.LENGTH_LONG).show()
+                    if (!isAdded) {
+                        if (progressDialog.isShowing) progressDialog.dismiss()
+                        return@runOnUiThread
+                    }
+                    if (progressDialog.isShowing) progressDialog.dismiss()
+                    MaterialAlertDialogBuilder(requireContext())
+                        .setTitle("تعذر إنشاء النسخة المشفرة")
+                        .setMessage("تحقق من توفر مساحة كافية ومن كلمة المرور، ثم أعد المحاولة.")
+                        .setPositiveButton("حسنًا", null)
+                        .show()
                 }
             } finally {
                 encryptedFile?.delete()
@@ -1033,7 +1187,10 @@ class SettingsFragment : Fragment() {
 
     private fun restoreEncryptedBackup(source: Uri, passphrase: String) {
         val ctx = requireContext().applicationContext
-        Toast.makeText(ctx, "جارٍ التحقق من النسخة واستعادتها…", Toast.LENGTH_SHORT).show()
+        val progressDialog = showBlockingOperationDialog(
+            title = "جارٍ استعادة النسخة المشفرة",
+            status = "يتم التحقق من الملف وفك تشفير البيانات محليًا…"
+        )
         Thread {
             val encryptedFile = java.io.File(ctx.cacheDir, "encrypted_restore_${System.currentTimeMillis()}.masahbak")
             try {
@@ -1044,14 +1201,34 @@ class SettingsFragment : Fragment() {
                 val user = SessionStore.currentUser(ctx) ?: "?"
                 AppRepository.logActivity(ActivityEntry(user, "استورد $user نسخة احتياطية مشفرة"))
                 activity?.runOnUiThread {
-                    if (isAdded) {
-                        Toast.makeText(requireContext(), "تمت الاستعادة بنجاح", Toast.LENGTH_LONG).show()
-                        activity?.recreate()
+                    if (!isAdded) {
+                        if (progressDialog.isShowing) progressDialog.dismiss()
+                        return@runOnUiThread
                     }
+                    if (progressDialog.isShowing) progressDialog.dismiss()
+                    MaterialAlertDialogBuilder(requireContext())
+                        .setTitle("تمت استعادة النسخة بنجاح")
+                        .setMessage("اكتملت الاستعادة محليًا. حدّث الواجهة لعرض البيانات المستعادة.")
+                        .setPositiveButton("تحديث الآن") { _, _ -> activity?.recreate() }
+                        .setNegativeButton("لاحقًا", null)
+                        .show()
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                val user = SessionStore.currentUser(ctx) ?: "?"
+                runCatching {
+                    AppRepository.logActivity(ActivityEntry(user, "فشل استيراد النسخة المشفرة (${e.javaClass.simpleName})"))
+                }
                 activity?.runOnUiThread {
-                    if (isAdded) Toast.makeText(requireContext(), "فشلت الاستعادة. تحقق من الملف وكلمة المرور.", Toast.LENGTH_LONG).show()
+                    if (!isAdded) {
+                        if (progressDialog.isShowing) progressDialog.dismiss()
+                        return@runOnUiThread
+                    }
+                    if (progressDialog.isShowing) progressDialog.dismiss()
+                    MaterialAlertDialogBuilder(requireContext())
+                        .setTitle("تعذرت استعادة النسخة")
+                        .setMessage("تحقق من الملف وكلمة المرور ثم أعد المحاولة.")
+                        .setPositiveButton("حسنًا", null)
+                        .show()
                 }
             } finally {
                 encryptedFile.delete()
@@ -1070,6 +1247,8 @@ class SettingsFragment : Fragment() {
                 AppRepository.logActivity(ActivityEntry(user, "سجّل $user خروج"))
                 AppRepository.clearRemember()
                 SessionStore.clear(ctx)
+                SyncManager.stopServer()
+                ctx.stopService(Intent(ctx, com.masahhisabat.app.data.LocalCallService::class.java))
                 val intent = Intent(ctx, LoginActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 }

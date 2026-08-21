@@ -5,12 +5,14 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.widget.TextViewCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
@@ -27,6 +29,8 @@ class DirectMessageUsersActivity : AppCompatActivity() {
     private lateinit var adapter: UserAdapter
     private var currentUser = ""
 
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppRepository.initAppContext(this)
@@ -35,42 +39,51 @@ class DirectMessageUsersActivity : AppCompatActivity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(18, 12, 18, 18)
+            setPadding(dp(18), dp(12), dp(18), dp(18))
             setBackgroundResource(ThemeHelper.backgroundRes())
         }
         val toolbar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         toolbar.addView(ImageButton(this).apply {
             setImageResource(R.drawable.ic_arrow_back)
             setBackgroundColor(Color.TRANSPARENT)
-            contentDescription = "رجوع"
-            setOnClickListener { finish() }
-        }, LinearLayout.LayoutParams(48, 48))
+            contentDescription = getString(R.string.direct_back)
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                finish()
+            }
+        }, LinearLayout.LayoutParams(dp(48), dp(48)))
         toolbar.addView(TextView(this).apply {
-            text = "المراسلات"
+            text = getString(R.string.direct_messages_list_title)
             textSize = 22f
             typeface = resources.getFont(R.font.tajawal_bold)
             setTextColor(ThemeHelper.text(this@DirectMessageUsersActivity))
-        }, LinearLayout.LayoutParams(0, 56, 1f))
+        }, LinearLayout.LayoutParams(0, dp(56), 1f))
         root.addView(toolbar)
         root.addView(TextView(this).apply {
-            text = "اختر مستخدمًا لبدء محادثة محلية. النقطة الخضراء تعني أنه متصل الآن."
+            text = getString(R.string.direct_messages_list_subtitle)
             textSize = 13f
-            setPadding(8, 0, 8, 12)
+            setPadding(dp(8), 0, dp(8), dp(12))
             setTextColor(ThemeHelper.textSecondary(this@DirectMessageUsersActivity))
         })
 
         emptyState = TextView(this).apply {
-            text = "لا يوجد مستخدمون آخرون متاحون للمراسلة"
+            text = getString(R.string.direct_no_users_available)
             gravity = Gravity.CENTER
             textSize = 16f
             setTextColor(ThemeHelper.textSecondary(this@DirectMessageUsersActivity))
+            setCompoundDrawablesRelativeWithIntrinsicBounds(0, R.drawable.ic_chat_bubble, 0, 0)
+            compoundDrawablePadding = dp(12)
+            TextViewCompat.setCompoundDrawableTintList(
+                this,
+                android.content.res.ColorStateList.valueOf(ThemeHelper.accent(this@DirectMessageUsersActivity))
+            )
             visibility = View.GONE
         }
         root.addView(emptyState, LinearLayout.LayoutParams(-1, 0, 1f))
         usersList = RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@DirectMessageUsersActivity)
             clipToPadding = false
-            setPadding(0, 4, 0, 12)
+            setPadding(0, dp(4), 0, dp(12))
         }
         root.addView(usersList, LinearLayout.LayoutParams(-1, 0, 1f))
         adapter = UserAdapter()
@@ -95,15 +108,40 @@ class DirectMessageUsersActivity : AppCompatActivity() {
 
     private inner class UserAdapter : RecyclerView.Adapter<UserHolder>() {
         private var users: List<User> = emptyList()
-        fun submit(items: List<User>) { users = items; notifyDataSetChanged() }
+        private var onlineStates: Map<String, Boolean> = emptyMap()
+
+        fun submit(items: List<User>) {
+            val newUsers = items.toList()
+            val newOnlineStates = newUsers.associate { user ->
+                user.username.lowercase() to AppRepository.isUserOnline(user.username)
+            }
+            val oldUsers = users
+            val oldOnlineStates = onlineStates
+            val diff = androidx.recyclerview.widget.DiffUtil.calculateDiff(object : androidx.recyclerview.widget.DiffUtil.Callback() {
+                override fun getOldListSize() = oldUsers.size
+                override fun getNewListSize() = newUsers.size
+                override fun areItemsTheSame(oldPosition: Int, newPosition: Int) =
+                    oldUsers[oldPosition].username.equals(newUsers[newPosition].username, ignoreCase = true)
+
+                override fun areContentsTheSame(oldPosition: Int, newPosition: Int): Boolean {
+                    val oldUser = oldUsers[oldPosition]
+                    val newUser = newUsers[newPosition]
+                    return oldUser == newUser &&
+                        oldOnlineStates[oldUser.username.lowercase()] == newOnlineStates[newUser.username.lowercase()]
+                }
+            })
+            users = newUsers
+            onlineStates = newOnlineStates
+            diff.dispatchUpdatesTo(this)
+        }
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UserHolder {
             val card = MaterialCardView(parent.context).apply {
-                radius = 22f
-                strokeWidth = 1
+                radius = dp(22).toFloat()
+                strokeWidth = dp(1)
                 strokeColor = ThemeHelper.cardStroke(parent.context)
                 setCardBackgroundColor(ThemeHelper.surface(parent.context))
                 layoutParams = RecyclerView.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    bottomMargin = 10
+                    bottomMargin = dp(10)
                 }
             }
             return UserHolder(card)
@@ -118,7 +156,7 @@ class DirectMessageUsersActivity : AppCompatActivity() {
             val online = AppRepository.isUserOnline(user.username)
             val row = LinearLayout(context).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(18, 14, 18, 14)
+                setPadding(dp(18), dp(14), dp(18), dp(14))
                 layoutDirection = View.LAYOUT_DIRECTION_RTL
             }
             val dot = View(context).apply {
@@ -126,9 +164,11 @@ class DirectMessageUsersActivity : AppCompatActivity() {
                     shape = GradientDrawable.OVAL
                     setColor(if (online) Color.rgb(44, 174, 92) else Color.rgb(150, 160, 165))
                 }
-                contentDescription = if (online) "متصل الآن" else "غير متصل الآن"
+                contentDescription = getString(
+                    if (online) R.string.direct_presence_online else R.string.direct_presence_offline_now
+                )
             }
-            row.addView(dot, LinearLayout.LayoutParams(12, 12).apply { marginEnd = 12 })
+            row.addView(dot, LinearLayout.LayoutParams(dp(12), dp(12)).apply { marginEnd = dp(12) })
             val textBox = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
             textBox.addView(TextView(context).apply {
                 text = user.username
@@ -137,7 +177,7 @@ class DirectMessageUsersActivity : AppCompatActivity() {
                 setTextColor(ThemeHelper.text(context))
             })
             textBox.addView(TextView(context).apply {
-                text = if (online) "متصل الآن" else "غير متصل"
+                text = getString(if (online) R.string.direct_presence_online else R.string.direct_presence_offline)
                 textSize = 13f
                 setTextColor(if (online) Color.rgb(44, 174, 92) else ThemeHelper.textSecondary(context))
             })
@@ -148,6 +188,7 @@ class DirectMessageUsersActivity : AppCompatActivity() {
             card.isClickable = true
             card.isFocusable = true
             card.setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 startActivity(Intent(this@DirectMessageUsersActivity, DirectMessagesActivity::class.java).apply {
                     putExtra(DirectMessagesActivity.EXTRA_TARGET_USER, user.username)
                 })

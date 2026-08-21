@@ -1,6 +1,7 @@
 package com.masahhisabat.app.data
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
@@ -35,7 +36,12 @@ object CallFeedback {
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
         try {
             activeRingtone = MediaPlayer().apply {
-                setAudioStreamType(AudioManager.STREAM_RING)
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
                 setDataSource(context.applicationContext, uri)
                 isLooping = true
                 prepare()
@@ -89,7 +95,7 @@ object CallFeedback {
 
     private fun vibrate(context: Context, durationMs: Long) {
         if (!shouldVibrate(context)) return
-        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return
+        val vibrator = context.getSystemService(Vibrator::class.java) ?: return
         if (!vibrator.hasVibrator()) return
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

@@ -1,7 +1,6 @@
 package com.masahhisabat.app.ui.invoice
 
 import android.graphics.Color
-import android.os.Build
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.text.SpannableString
@@ -17,6 +16,9 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.button.MaterialButton
 import com.masahhisabat.app.R
@@ -59,16 +61,10 @@ class ImageViewerActivity : AppCompatActivity() {
         window.statusBarColor = Color.BLACK
         if (window.navigationBarColor == Color.TRANSPARENT) window.navigationBarColor = Color.BLACK
         // عارض غامر: إخفاء أشرطة النظام أثناء مشاهدة الصورة مع إبقاء عناصر العارض نفسها.
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            View.SYSTEM_UI_FLAG_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        } else {
-            View.SYSTEM_UI_FLAG_FULLSCREEN
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
 
         groupId = intent.getStringExtra("group_id") ?: ""
@@ -87,7 +83,7 @@ class ImageViewerActivity : AppCompatActivity() {
         }.distinct()
 
         if (images.isEmpty()) {
-            Toast.makeText(this, "لا توجد صورة متاحة للعرض", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.viewer_no_image_available, Toast.LENGTH_SHORT).show()
             finish()
             return
         }
@@ -122,7 +118,7 @@ class ImageViewerActivity : AppCompatActivity() {
 
     private fun updateCounter(index: Int, total: Int) {
         findViewById<TextView>(R.id.viewer_counter)?.apply {
-            text = "${index + 1} / $total"
+            text = context.getString(R.string.viewer_image_counter, index + 1, total)
             setTextColor(ThemeHelper.counterText(this.context))
             val bg = androidx.appcompat.content.res.AppCompatResources
                 .getDrawable(this.context, ThemeHelper.counterBgRes(this.context))?.mutate()
@@ -175,7 +171,7 @@ class ImageViewerActivity : AppCompatActivity() {
         extractingPath = path
         extractionErrorsByPath.remove(path)
         searchButton.isEnabled = false
-        searchStatus.text = "يتم استخراج النص محلياً من الصورة…"
+        searchStatus.text = getString(R.string.viewer_extracting_local_text)
         searchResults.text = ""
         Thread {
             var extractionError: String? = null
@@ -217,31 +213,31 @@ class ImageViewerActivity : AppCompatActivity() {
         val extractingCurrentImage = isExtracting && extractingPath == path
         searchButton.isEnabled = !isExtracting
         searchButton.text = when {
-            isExtracting -> "جارٍ الاستخراج…"
-            extracted == null && extractionError != null -> "إعادة محاولة الاستخراج"
-            extracted == null -> "استخراج النص والبحث"
-            else -> "تحديث النتائج"
+            isExtracting -> getString(R.string.viewer_extracting)
+            extracted == null && extractionError != null -> getString(R.string.viewer_retry_extraction)
+            extracted == null -> getString(R.string.viewer_extract_and_search)
+            else -> getString(R.string.viewer_refresh_results)
         }
 
         when {
             extractingCurrentImage -> {
-                searchStatus.text = "يتم استخراج النص محلياً من الصورة…"
+                searchStatus.text = getString(R.string.viewer_extracting_local_text)
                 searchResults.text = ""
             }
             extractionError != null -> {
-                searchStatus.text = "تعذر استخراج النص من هذه الصورة."
-                searchResults.text = "تأكد من أن ملف الصورة ما زال متاحاً، ثم أعد المحاولة."
+                searchStatus.text = getString(R.string.viewer_extraction_failed)
+                searchResults.text = getString(R.string.viewer_extraction_retry_hint)
             }
             extracted == null -> {
-                searchStatus.text = "ابحث في الصورة ${currentIndex + 1} من ${images.size}: اكتب كلمة ثم اضغط استخراج النص والبحث."
-                searchResults.text = "لن تُرسل الصورة أو النص إلى الإنترنت."
+                searchStatus.text = getString(R.string.viewer_search_instruction, currentIndex + 1, images.size)
+                searchResults.text = getString(R.string.viewer_local_only_notice)
             }
             extracted.isBlank() -> {
-                searchStatus.text = "لم يتم العثور على نص قابل للقراءة في هذه الصورة."
-                searchResults.text = "جرّب صورة أوضح أو استخدم تحسين المستند قبل البحث."
+                searchStatus.text = getString(R.string.viewer_no_readable_text)
+                searchResults.text = getString(R.string.viewer_no_readable_text_hint)
             }
             query.isBlank() -> {
-                searchStatus.text = "تم استخراج النص. اكتب كلمة أو عبارة للبحث داخل الصورة."
+                searchStatus.text = getString(R.string.viewer_text_extracted_instruction)
                 searchResults.text = extracted
             }
             else -> showMatches(extracted, query)
@@ -254,12 +250,12 @@ class ImageViewerActivity : AppCompatActivity() {
             .filter { it.isNotBlank() && it.contains(query, ignoreCase = true) }
             .toList()
         if (matchingLines.isEmpty()) {
-            searchStatus.text = "لا توجد نتيجة مطابقة لـ «$query» في الصورة الحالية."
-            searchResults.text = "يمكنك تغيير العبارة أو قراءة النص المستخرج كاملاً بعد مسح كلمة البحث."
+            searchStatus.text = getString(R.string.viewer_no_matching_result, query)
+            searchResults.text = getString(R.string.viewer_no_matching_result_hint)
             return
         }
         val result = matchingLines.joinToString("\n\n")
-        searchStatus.text = "${matchingLines.size} نتيجة مطابقة لـ «$query» داخل النص المستخرج."
+        searchStatus.text = getString(R.string.viewer_matching_result_count, matchingLines.size, query)
         searchResults.text = highlightMatches(result, query)
     }
 
@@ -297,7 +293,7 @@ class ImageViewerActivity : AppCompatActivity() {
                     holder.img.setImageBitmap(ImageProcessor.loadBitmap(path, 1600))
                 } catch (e: Exception) {
                     holder.img.setImageResource(R.drawable.ic_invoice)
-                    Toast.makeText(this@ImageViewerActivity, "تعذر عرض هذه الصورة", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@ImageViewerActivity, R.string.viewer_image_display_failed, Toast.LENGTH_SHORT).show()
                 }
             } else {
                 holder.img.setImageResource(R.drawable.ic_invoice)

@@ -68,9 +68,9 @@
             android:paddingTop="14dp"
             android:paddingEnd="14dp"
             android:paddingBottom="14dp">
-            <ImageView android:layout_width="36dp" android:layout_height="36dp" android:src="@drawable/ic_key" android:contentDescription="قفل التطبيق" />
+            <ImageView android:layout_width="36dp" android:layout_height="36dp" android:src="@drawable/ic_key" android:contentDescription="@string/app_lock" />
             <TextView android:id="@+id/tv_app_lock_title" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="16dp" android:textSize="16sp" android:includeFontPadding="false" android:fontFamily="@font/tajawal_bold" />
-            <ImageView android:layout_width="28dp" android:layout_height="28dp" android:src="@drawable/ic_close" android:rotation="135" android:contentDescription="قفل التطبيق" />
+            <ImageView android:layout_width="28dp" android:layout_height="28dp" android:src="@drawable/ic_close" android:rotation="135" android:contentDescription="@string/app_lock" />
         </LinearLayout>
 
         <LinearLayout
@@ -192,7 +192,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_delete"
-                android:contentDescription="سلة المحذوفات" />
+                android:contentDescription="@string/trash" />
             <TextView
                 android:id="@+id/tv_trash_title"
                 android:layout_width="0dp"
@@ -207,7 +207,7 @@
                 android:layout_height="28dp"
                 android:src="@drawable/ic_close"
                 android:rotation="135"
-                android:contentDescription="سلة المحذوفات" />
+                android:contentDescription="@string/trash" />
         </LinearLayout>
 
         <LinearLayout
@@ -227,7 +227,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_history"
-                android:contentDescription="الحذف التلقائي للسلة" />
+                android:contentDescription="@string/auto_trash_purge" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -240,7 +240,7 @@
                     android:id="@+id/tv_auto_trash_purge_title"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="الحذف التلقائي للسلة"
+                    android:text="@string/auto_trash_purge"
                     android:textSize="16sp"
                     android:includeFontPadding="false"
                     android:fontFamily="@font/tajawal_bold" />
@@ -250,7 +250,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="احذف العناصر نهائيًا بعد 30 يومًا"
+                    android:text="@string/auto_trash_purge_summary"
                     android:textSize="13sp"
                     android:includeFontPadding="false"
                     android:fontFamily="@font/tajawal_regular" />
@@ -260,7 +260,7 @@
                 android:id="@+id/switch_auto_trash_purge"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:contentDescription="تفعيل الحذف التلقائي للسلة" />
+                android:contentDescription="@string/enable_auto_trash_purge" />
         </LinearLayout>
 
         <LinearLayout
@@ -280,7 +280,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_history"
-                android:contentDescription="تنبيهات الفواتير" />
+                android:contentDescription="@string/invoice_alerts" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -292,7 +292,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="تنبيهات الفواتير"
+                    android:text="@string/invoice_alerts"
                     android:textSize="16sp"
                     android:includeFontPadding="false"
                     android:fontFamily="@font/tajawal_bold" />
@@ -301,7 +301,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="تذكير محلي عند استحقاق فاتورة أو طلب"
+                    android:text="@string/invoice_alerts_summary"
                     android:textSize="13sp"
                     android:includeFontPadding="false"
                     android:fontFamily="@font/tajawal_regular" />
@@ -311,7 +311,7 @@
                 android:id="@+id/switch_invoice_reminders"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:contentDescription="تفعيل تنبيهات الفواتير" />
+                android:contentDescription="@string/enable_invoice_alerts" />
         </LinearLayout>
 
         <LinearLayout
@@ -331,7 +331,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_call"
-                android:contentDescription="نغمات المكالمات" />
+                android:contentDescription="@string/call_ringtones" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -343,7 +343,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="نغمات المكالمات"
+                    android:text="@string/call_ringtones"
                     android:textSize="16sp"
                     android:includeFontPadding="false"
                     android:fontFamily="@font/tajawal_bold" />
@@ -352,7 +352,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="رنين وارد ونغمة انتظار، مع احترام وضع الصوت"
+                    android:text="@string/call_ringtones_summary"
                     android:textSize="13sp"
                     android:includeFontPadding="false"
                     android:fontFamily="@font/tajawal_regular" />
@@ -362,7 +362,7 @@
                 android:id="@+id/switch_call_ringtone"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:contentDescription="تفعيل نغمات المكالمات" />
+                android:contentDescription="@string/enable_call_ringtones" />
         </LinearLayout>
 
         <LinearLayout
@@ -382,7 +382,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_call"
-                android:contentDescription="اهتزاز المكالمات" />
+                android:contentDescription="@string/call_vibration" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -394,7 +394,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="اهتزاز المكالمات"
+                    android:text="@string/call_vibration"
                     android:textSize="16sp"
                     android:includeFontPadding="false"
                     android:fontFamily="@font/tajawal_bold" />
@@ -403,7 +403,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="تنبيه خفيف عند الرد أو الإغلاق، مع احترام الصامت"
+                    android:text="@string/call_vibration_summary"
                     android:textSize="13sp"
                     android:includeFontPadding="false"
                     android:fontFamily="@font/tajawal_regular" />
@@ -413,7 +413,7 @@
                 android:id="@+id/switch_call_vibration"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:contentDescription="تفعيل اهتزاز المكالمات" />
+                android:contentDescription="@string/enable_call_vibration" />
         </LinearLayout>
 
         <LinearLayout
@@ -432,7 +432,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_call"
-                android:contentDescription="اختيار نغمة المكالمة الواردة" />
+                android:contentDescription="@string/choose_incoming_call_ringtone" />
             <TextView
                 android:id="@+id/tv_call_ringtone_picker_title"
                 android:layout_width="0dp"
@@ -447,7 +447,7 @@
                 android:layout_height="28dp"
                 android:src="@drawable/ic_close"
                 android:rotation="135"
-                android:contentDescription="اختيار نغمة المكالمة الواردة" />
+                android:contentDescription="@string/choose_incoming_call_ringtone" />
         </LinearLayout>
 
         <LinearLayout
@@ -467,7 +467,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_call"
-                android:contentDescription="تنبيه فشل اتصال ICE المتكرر" />
+                android:contentDescription="@string/ice_failure_alert" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -479,7 +479,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="تنبيه تكرار تعذر الاتصال"
+                    android:text="@string/repeated_connection_issue_alert"
                     android:textSize="16sp"
                     android:includeFontPadding="false"
                     android:fontFamily="@font/tajawal_bold" />
@@ -488,7 +488,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="تنبيه محلي بعد 3 حالات فشل ICE خلال 15 دقيقة"
+                    android:text="@string/repeated_connection_issue_summary"
                     android:textSize="13sp"
                     android:includeFontPadding="false"
                     android:fontFamily="@font/tajawal_regular" />
@@ -498,7 +498,7 @@
                 android:id="@+id/switch_call_ice_failure_alert"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:contentDescription="تفعيل تنبيه فشل اتصال ICE المتكرر" />
+                android:contentDescription="@string/ice_failure_alert" />
         </LinearLayout>
 
         <LinearLayout
@@ -517,7 +517,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_settings_filled"
-                android:contentDescription="مركز المساعدة" />
+                android:contentDescription="@string/help_center" />
             <TextView
                 android:id="@+id/tv_help_title"
                 android:layout_width="0dp"
@@ -532,7 +532,7 @@
                 android:layout_height="28dp"
                 android:src="@drawable/ic_close"
                 android:rotation="135"
-                android:contentDescription="مركز المساعدة" />
+                android:contentDescription="@string/help_center" />
         </LinearLayout>
 
         <LinearLayout

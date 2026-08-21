@@ -32,7 +32,7 @@
             android:layout_height="42dp"
             android:layout_marginStart="2dp"
             android:background="@drawable/circle_primary"
-            android:contentDescription="صورة المجموعة"
+            android:contentDescription="@string/group_image"
             android:padding="10dp"
             android:src="@drawable/ic_invoice"
             app:tint="#FFFFFF" />
@@ -61,7 +61,7 @@
                 android:ellipsize="end"
                 android:fontFamily="@font/tajawal_regular"
                 android:maxLines="1"
-                android:text="محادثة مجموعة محلية"
+                android:text="@string/local_group_chat"
                 android:textSize="12sp" />
         </LinearLayout>
 
@@ -184,7 +184,7 @@
                 android:layout_width="52dp"
                 android:layout_height="52dp"
                 android:src="@drawable/ic_invoice"
-                android:contentDescription="حالة المجموعة" />
+                android:contentDescription="@string/group_empty_state" />
 
             <TextView
                 android:id="@+id/group_empty_title"
@@ -193,7 +193,7 @@
                 android:layout_marginTop="12dp"
                 android:fontFamily="@font/tajawal_bold"
                 android:gravity="center"
-                android:text="لا توجد رسائل بعد"
+                android:text="@string/no_messages_yet"
                 android:textSize="17sp" />
 
             <TextView
@@ -203,7 +203,7 @@
                 android:layout_marginTop="6dp"
                 android:fontFamily="@font/tajawal_regular"
                 android:gravity="center"
-                android:text="اكتب رسالة أو أضف صورة لبدء المحادثة"
+                android:text="@string/group_empty_hint"
                 android:textSize="13sp" />
         </LinearLayout>
     </FrameLayout>
@@ -224,7 +224,7 @@
             android:id="@+id/attachment_thumb"
             android:layout_width="56dp"
             android:layout_height="56dp"
-            android:contentDescription="معاينة الصورة"
+            android:contentDescription="@string/image_preview"
             android:scaleType="centerCrop" />
 
         <TextView
@@ -234,7 +234,7 @@
             android:layout_weight="1"
             android:layout_marginStart="10dp"
             android:layout_marginEnd="6dp"
-            android:text="الصورة جاهزة — اكتب نصًا اختياريًا ثم أضفها"
+            android:text="@string/attachment_ready_hint"
             android:textSize="13sp"
             android:fontFamily="@font/tajawal_regular" />
 
@@ -243,7 +243,7 @@
             style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="wrap_content"
             android:layout_height="44dp"
-            android:text="إضافة إلى المجموعة"
+            android:text="@string/add_attachment_to_group"
             android:textSize="12sp"
             android:fontFamily="@font/tajawal_bold"
             app:cornerRadius="12dp" />
@@ -255,7 +255,7 @@
             android:padding="10dp"
             android:src="@drawable/ic_close"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="إلغاء الصورة" />
+            android:contentDescription="@string/cancel_image" />
     </LinearLayout>
 
     <!-- شريط الإرسال السفلي (مثل تليجرام/واتساب) -->
@@ -284,7 +284,7 @@
             app:tint="@color/accent"
             android:background="@drawable/circle_primary"
             android:backgroundTint="@color/day_surface_high"
-            android:contentDescription="إضافة صورة" />
+            android:contentDescription="@string/add_image" />
 
         <EditText
             android:id="@+id/et_message"
@@ -294,7 +294,7 @@
             android:layout_marginStart="8dp"
             android:layout_marginEnd="8dp"
             android:background="@drawable/compose_input_bg"
-            android:hint="اكتب رسالة..."
+            android:hint="@string/write_message"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
             android:singleLine="true"
@@ -312,7 +312,7 @@
             android:background="@drawable/scanner_fab_bg"
             android:padding="12dp"
             android:elevation="4dp"
-            android:contentDescription="إرسال" />
+            android:contentDescription="@string/send_message" />
     </LinearLayout>
 
 </LinearLayout>

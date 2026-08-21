@@ -3,6 +3,7 @@ package com.masahhisabat.app.data
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.AtomicFile
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
@@ -24,8 +25,6 @@ object AppRepository {
 
     private const val AUTO_TRASH_PURGE_KEY = "auto_purge_trash_after_30_days"
     private const val TRASH_WARNING_NOTIFIED_IDS_KEY = "trash_warning_notified_ids"
-    private const val TRASH_RETENTION_MS = 30L * 24L * 60L * 60L * 1000L
-    private const val TRASH_WARNING_WINDOW_MS = 3L * 24L * 60L * 60L * 1000L
     private const val INVOICE_REMINDERS_ENABLED_KEY = "invoice_reminders_enabled"
     private const val CALL_RINGTONE_ENABLED_KEY = "call_ringtone_enabled"
     private const val CALL_VIBRATION_ENABLED_KEY = "call_vibration_enabled"
@@ -41,6 +40,12 @@ object AppRepository {
     private var appContext: Context? = null
     /** يمنع كتابة متزامنة من الإرسال المحلي والمزامنة من استبدال ملف رسائل المجموعة. */
     private val groupItemsWriteLock = Any()
+    /** ترتيب حفظ ثابت للأحدث أولًا، مع معرّف حاسم عند تساوي الساعة بين جهازين. */
+    private fun stableGroupItemOrder(items: Collection<InvoiceItem>): List<InvoiceItem> =
+        items.sortedWith(compareByDescending<InvoiceItem> { it.createdAt }.thenByDescending { it.id })
+    /** ترتيب محادثة ثابت للأقدم أولًا، ثم المعرّف عند تساوي ساعة الإنشاء بين جهازين. */
+    internal fun stableDirectMessageOrder(messages: Collection<DirectMessage>): List<DirectMessage> =
+        messages.sortedWith(compareBy<DirectMessage> { it.createdAt }.thenBy { it.id })
     private val prefs: SharedPreferences by lazy {
         val ctx = appContext
             ?: throw IllegalStateException("AppRepository must be initialized with appContext first")
@@ -167,15 +172,46 @@ object AppRepository {
 
     private fun usersInternal(): List<User> = loadList("users.json", User::class.java)
     private fun addUserInternal(u: User) = saveList("users.json", usersInternal().toMutableList().also { it.add(u) })
+    /** يعيد قائمة أسماء فريدة بعد التطبيع، ويحتفظ بالسجل الأقدم عند وجود تكرار تاريخي. */
+    /** يطبّع السجلات الواردة من الحفظ أو المزامنة ويحافظ على أول سجل صحيح لكل اسم. */
+    internal fun canonicalUsersForSync(source: Iterable<User>): List<User> {
+        val unique = LinkedHashMap<String, User>()
+        source.forEach { user ->
+            val normalized = normalizeUsername(user.username)
+            if (normalized.isNotBlank() && normalized !in unique) {
+                unique[normalized] = user.copy(username = normalized)
+            }
+        }
+        return unique.values.toList()
+    }
+    /** نقطة الحفظ الوحيدة لملف المستخدمين؛ تمنع التكرارات عبر الشاشات والمزامنة. */
+    fun saveUsers(source: List<User>) = saveList("users.json", canonicalUsersForSync(source))
     fun addUser(u: User) {
         val normalized = normalizeUsername(u.username)
         require(normalized.isNotBlank()) { "اسم المستخدم مطلوب" }
         require(users().none { sameUsername(it.username, normalized) }) { "اسم المستخدم مستخدم بالفعل" }
-        saveList("users.json", users().toMutableList().also { it.add(u.copy(username = normalized)) })
+        saveUsers(users().toMutableList().also { it.add(u.copy(username = normalized)) })
     }
-    fun removeUser(username: String) = saveList("users.json", users().filterNot { sameUsername(it.username, username) })
+    fun removeUser(username: String) = saveUsers(users().filterNot { sameUsername(it.username, username) })
     fun changePassword(username: String, newHash: String) {
-        saveList("users.json", users().map { if (sameUsername(it.username, username)) it.copy(passwordHash = newHash) else it })
+        saveUsers(users().map { if (sameUsername(it.username, username)) it.copy(passwordHash = newHash) else it })
+    }
+    /**
+     * يعدل مستخدمًا بعملية كتابة واحدة، كي لا تؤدي إعادة التسمية إلى فترة يختفي فيها الحساب
+     * إذا تعذر حفظ الإضافة بعد الحذف. يمنع أيضًا الاسم المكرر بعد تطبيع الحروف والمسافات.
+     */
+    fun updateUser(originalUsername: String, updated: User) {
+        val original = normalizeUsername(originalUsername)
+        val normalized = normalizeUsername(updated.username)
+        require(normalized.isNotBlank()) { "اسم المستخدم مطلوب" }
+        val current = users()
+        require(current.any { sameUsername(it.username, original) }) { "المستخدم غير موجود" }
+        require(current.none { !sameUsername(it.username, original) && sameUsername(it.username, normalized) }) {
+            "اسم المستخدم مستخدم بالفعل"
+        }
+        saveUsers(current.map { user ->
+            if (sameUsername(user.username, original)) updated.copy(username = normalized) else user
+        })
     }
 
     fun authenticate(username: String, password: String): User? {
@@ -207,7 +243,14 @@ object AppRepository {
     fun canSync(role: Role): Boolean = role == Role.ADMIN || role == Role.SUPERVISOR
 
     // ---------- المجموعات والفواتير ----------
-    fun addGroup(g: Group) = saveList("groups.json", groups().toMutableList().also { it.add(g) })
+    private fun cleanGroupName(name: String): String = name.trim()
+
+    fun addGroup(g: Group) {
+        val cleanName = cleanGroupName(g.name)
+        require(cleanName.isNotBlank()) { "اسم المجموعة مطلوب" }
+        require(groups().none { it.id == g.id }) { "معرّف المجموعة مستخدم بالفعل" }
+        saveList("groups.json", groups().toMutableList().also { it.add(g.copy(name = cleanName)) })
+    }
     fun removeGroup(id: String) {
         saveList("groups.json", groups().filter { it.id != id })
         val dir = File(dataDir(), "invoices/$id")
@@ -228,7 +271,9 @@ object AppRepository {
         try { File(dataDir(), "invoices/$id").deleteRecursively() } catch (_: Exception) { }
     }
     fun renameGroup(id: String, name: String) {
-        saveList("groups.json", groups().map { if (it.id == id) it.copy(name = name) else it })
+        val cleanName = cleanGroupName(name)
+        require(cleanName.isNotBlank()) { "اسم المجموعة مطلوب" }
+        saveList("groups.json", groups().map { if (it.id == id) it.copy(name = cleanName) else it })
     }
     /** تحديث بطاقة التاجر دون تغيير المعرّف أو أرشيف الفواتير والطلبات المرتبط به. */
     fun updateTraderDetails(id: String, name: String, phone: String?, notes: String?) {
@@ -272,8 +317,12 @@ object AppRepository {
         if (!file.exists()) return emptyList()
         return try {
             val type = object : TypeToken<List<InvoiceItem>>() {}.type
-            gson.fromJson(file.readText(), type) ?: emptyList()
-        } catch (e: Exception) { emptyList() }
+            stableGroupItemOrder(gson.fromJson(file.readText(), type) ?: emptyList())
+        } catch (e: Exception) {
+            preserveUnreadableList(file)
+            Log.w("MasahRepository", "تعذر قراءة البيانات؛ احتُفظ بنسخة محلية للتحقق", e)
+            emptyList()
+        }
     }
 
     /**
@@ -362,7 +411,7 @@ object AppRepository {
         val list = items(groupId).toMutableList().also { current ->
             if (current.none { it.id == item.id }) current.add(0, item)
         }
-        writeTextAtomically(File(dir, "items.json"), gson.toJson(list))
+        writeTextAtomically(File(dir, "items.json"), gson.toJson(stableGroupItemOrder(list)))
 
         // الإشعار تحسين إضافي فقط؛ لا يجوز لفشله أن يحوّل رسالة محفوظة إلى «إرسال فاشل» في الواجهة.
         runCatching {
@@ -379,7 +428,8 @@ object AppRepository {
     fun updateItem(groupId: String, item: InvoiceItem) {
         val dir = File(dataDir(), "invoices/$groupId")
         val current = items(groupId)
-        writeTextAtomically(File(dir, "items.json"), gson.toJson(current.map { if (it.id == item.id) item else it }))
+        val updated = current.map { if (it.id == item.id) item else it }
+        writeTextAtomically(File(dir, "items.json"), gson.toJson(stableGroupItemOrder(updated)))
     }
 
     /** عناصر دورة المتابعة الموحدة، مرتبة بالأحدث ومن المجموعات غير المؤرشفة فقط. */
@@ -449,20 +499,18 @@ object AppRepository {
     fun removeItem(groupId: String, itemId: String) {
         val current = items(groupId)
         val item = current.find { it.id == itemId }
-        item?.imagePath?.let { File(it).delete() }
-        item?.processedPath?.let { File(it).delete() }
         val dir = File(dataDir(), "invoices/$groupId")
         writeTextAtomically(File(dir, "items.json"), gson.toJson(current.filter { it.id != itemId }))
+        deleteUnreferencedAttachments(listOf(item?.imagePath, item?.processedPath))
     }
 
     fun removeItems(groupId: String, ids: List<String>) {
         val all = items(groupId)
-        all.filter { it.id in ids }.forEach {
-            it.imagePath?.let { p -> File(p).delete() }
-            it.processedPath?.let { p -> File(p).delete() }
-        }
+        val attachmentPaths = all.filter { it.id in ids }
+            .flatMap { listOf(it.imagePath, it.processedPath) }
         val dir = File(dataDir(), "invoices/$groupId")
         writeTextAtomically(File(dir, "items.json"), gson.toJson(all.filter { it.id !in ids }))
+        deleteUnreferencedAttachments(attachmentPaths)
     }
 
     /** ينقل الرسائل المحددة إلى السلة ويُبقي المرفقات الدائمة متاحة للاستعادة. */
@@ -545,8 +593,7 @@ object AppRepository {
         if (!isAutoTrashPurgeEnabled()) return emptyList()
         val notified = prefs.getStringSet(TRASH_WARNING_NOTIFIED_IDS_KEY, emptySet()).orEmpty()
         return trashEntries().filter { entry ->
-            val remaining = (entry.stateChangedAt + TRASH_RETENTION_MS) - now
-            remaining in 1..TRASH_WARNING_WINDOW_MS && entry.id !in notified
+            TrashRetentionPolicy.requiresDeletionWarning(entry.stateChangedAt, now) && entry.id !in notified
         }
     }
 
@@ -567,9 +614,8 @@ object AppRepository {
      */
     fun purgeExpiredTrash(now: Long = System.currentTimeMillis()): Int {
         if (!isAutoTrashPurgeEnabled()) return 0
-        val cutoff = now - TRASH_RETENTION_MS
         return trashEntries()
-            .filter { it.stateChangedAt in 1..cutoff }
+            .filter { TrashRetentionPolicy.isExpired(it.stateChangedAt, now) }
             .count { permanentlyDeleteTrashEntry(it.id) }
     }
 
@@ -581,11 +627,19 @@ object AppRepository {
                 val group = entry.group
                 if (group == null || groups().any { it.id == group.id }) false
                 else {
-                    restoreGroup(group)
                     val dir = File(dataDir(), "invoices/${group.id}")
-                    dir.mkdirs()
-                    writeTextAtomically(File(dir, "items.json"), gson.toJson(entry.items))
-                    true
+                    val itemsPersisted = try {
+                        dir.mkdirs()
+                        writeTextAtomically(File(dir, "items.json"), gson.toJson(entry.items))
+                        true
+                    } catch (e: Exception) {
+                        Log.w("MasahRepository", "تعذر حفظ عناصر المجموعة قبل استعادتها من السلة", e)
+                        false
+                    }
+                    if (TrashRestoreSafetyPolicy.canExposeRestoredGroup(itemsPersisted)) {
+                        restoreGroup(group)
+                        true
+                    } else false
                 }
             }
             "item" -> {
@@ -605,9 +659,7 @@ object AppRepository {
     fun permanentlyDeleteTrashEntry(trashId: String): Boolean {
         val entry = trashEntries().find { it.id == trashId } ?: return false
         updateTrashState(trashId, "purged")
-        if (entry.type == "group") {
-            try { File(dataDir(), "invoices/${entry.groupId}").deleteRecursively() } catch (_: Exception) { }
-        }
+        deleteGroupDirectoryIfSafe(entry)
         deleteUnreferencedAttachments(entry)
         return true
     }
@@ -671,9 +723,7 @@ object AppRepository {
                     removeActiveItemsWithoutAttachments(entry.groupId, entry.items.map { it.id }.toSet())
                 }
                 if (entry.state == "purged") {
-                    if (entry.type == "group") {
-                        try { File(dataDir(), "invoices/${entry.groupId}").deleteRecursively() } catch (_: Exception) { }
-                    }
+                    deleteGroupDirectoryIfSafe(entry)
                     deleteUnreferencedAttachments(entry)
                 }
             }
@@ -686,6 +736,12 @@ object AppRepository {
         }
     }
 
+    private fun deleteGroupDirectoryIfSafe(entry: TrashEntry) {
+        val directoryName = TrashStorageSafetyPolicy.groupDirectoryNameForPurge(entry.type, entry.groupId)
+            ?: return
+        try { File(dataDir(), "invoices/$directoryName").deleteRecursively() } catch (_: Exception) { }
+    }
+
     private fun removeActiveItemsWithoutAttachments(groupId: String, ids: Set<String>) {
         if (ids.isEmpty()) return
         val all = items(groupId)
@@ -695,20 +751,22 @@ object AppRepository {
     }
 
     private fun deleteUnreferencedAttachments(entry: TrashEntry) {
-        entry.items.flatMap { listOfNotNull(it.imagePath, it.processedPath) }
-            .distinct()
-            .filterNot(::isAttachmentReferenced)
-            .forEach { path -> try { File(path).delete() } catch (_: Exception) { } }
+        deleteUnreferencedAttachments(entry.items.flatMap { listOf(it.imagePath, it.processedPath) })
     }
 
-    private fun isAttachmentReferenced(path: String): Boolean {
-        val activeReference = groups().asSequence()
+    private fun deleteUnreferencedAttachments(candidates: Collection<String?>) {
+        val activeReferences = groups().asSequence()
             .flatMap { items(it.id).asSequence() }
-            .any { item -> item.imagePath == path || item.processedPath == path }
-        if (activeReference) return true
-        return trashEntries().asSequence()
+            .flatMap { item -> sequenceOf(item.imagePath, item.processedPath) }
+            .filterNotNull()
+            .toSet()
+        val trashReferences = trashEntries().asSequence()
             .flatMap { it.items.asSequence() }
-            .any { item -> item.imagePath == path || item.processedPath == path }
+            .flatMap { item -> sequenceOf(item.imagePath, item.processedPath) }
+            .filterNotNull()
+            .toSet()
+        AttachmentCleanupPolicy.pathsEligibleForDeletion(candidates, activeReferences, trashReferences)
+            .forEach { path -> try { File(path).delete() } catch (_: Exception) { } }
     }
 
     // ---------- سجل النشاط ----------
@@ -815,10 +873,10 @@ object AppRepository {
         } ?: "recent").apply()
     }
     fun groupFilterMode(): String = prefs.getString("group_filter_mode", "all")
-        ?.takeIf { it in setOf("all", "with_documents", "empty", "pinned", "recent_30d") } ?: "all"
+        ?.takeIf { it in setOf("all", "with_documents", "empty", "pinned", "recent_30d", "archived") } ?: "all"
     fun setGroupFilterMode(mode: String) {
         prefs.edit().putString("group_filter_mode", mode.takeIf {
-            it in setOf("all", "with_documents", "empty", "pinned", "recent_30d")
+            it in setOf("all", "with_documents", "empty", "pinned", "recent_30d", "archived")
         } ?: "all").apply()
     }
     /** تنبيهات المكالمات تحفظ محليًا على الجهاز ولا تُرسل عبر الشبكة. */
@@ -871,7 +929,28 @@ object AppRepository {
             val raw: List<*> = gson.fromJson(file.readText(), type) ?: return emptyList()
             val typed = raw.filterIsInstance(clazz)
             typed
-        } catch (e: Exception) { emptyList() }
+        } catch (e: Exception) {
+            preserveUnreadableList(file)
+            Log.w("MasahRepository", "تعذر قراءة البيانات؛ احتُفظ بنسخة محلية للتحقق", e)
+            emptyList()
+        }
+    }
+
+    /** يحتفظ بدليل محلي للملف غير المقروء قبل أن تستبدله عملية حفظ لاحقة. */
+    private fun preserveUnreadableList(file: File) {
+        if (!file.isFile || file.length() <= 0L) return
+        val backupPrefix = "${file.name}.corrupt-"
+        if (file.parentFile?.listFiles()?.any { candidate ->
+                candidate.isFile && candidate.name.startsWith(backupPrefix)
+            } == true) {
+            return
+        }
+        runCatching {
+            val backup = File(file.parentFile, "$backupPrefix${System.currentTimeMillis()}")
+            file.copyTo(backup, overwrite = false)
+        }.onFailure { backupError ->
+            Log.w("MasahRepository", "تعذر حفظ نسخة الملف غير المقروء ${file.name}", backupError)
+        }
     }
 
     fun <T> saveList(fileName: String, list: List<T>) {
@@ -895,15 +974,21 @@ object AppRepository {
     }
 
     // ---------- دوال قراءة محددة النوع ----------
-    fun users(): List<User> = loadList("users.json", User::class.java)
+    fun users(): List<User> = canonicalUsersForSync(loadList("users.json", User::class.java))
     fun groups(): List<Group> = loadList("groups.json", Group::class.java)
     fun directMessages(): List<DirectMessage> = loadList("direct_messages.json", DirectMessage::class.java)
-        .sortedBy { it.createdAt }
+        .let(::stableDirectMessageOrder)
     fun directConversation(first: String, second: String): List<DirectMessage> = directMessages()
         .filter { (it.fromUser == first && it.toUser == second) || (it.fromUser == second && it.toUser == first) }
-        .sortedBy { it.createdAt }
+        .let(::stableDirectMessageOrder)
     fun addDirectMessage(message: DirectMessage) {
-        saveList("direct_messages.json", (directMessages() + message).distinctBy { it.id }.sortedBy { it.createdAt }.takeLast(2_000))
+        saveList(
+            "direct_messages.json",
+            (directMessages() + message)
+                .distinctBy { it.id }
+                .let(::stableDirectMessageOrder)
+                .takeLast(2_000)
+        )
         logActivity(ActivityEntry(message.fromUser, "أرسل رسالة مباشرة إلى ${message.toUser}"))
     }
     fun notifications(): List<NotificationEvent> = loadList("notifications.json", NotificationEvent::class.java)

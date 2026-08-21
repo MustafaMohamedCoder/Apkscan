@@ -36,7 +36,7 @@
             android:layout_width="42dp"
             android:layout_height="42dp"
             android:background="@drawable/camera_control_bg"
-            android:contentDescription="إغلاق"
+            android:contentDescription="@string/close"
             android:padding="10dp"
             android:src="@drawable/ic_close" />
 
@@ -51,7 +51,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:fontFamily="@font/tajawal_bold"
-                android:text="مسح مستند"
+                android:text="@string/document_camera_title"
                 android:textColor="#FFFFFF"
                 android:textSize="18sp" />
 
@@ -60,7 +60,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:fontFamily="@font/tajawal_medium"
-                android:text="كشف الحواف محليًا"
+                android:text="@string/document_camera_local_edges"
                 android:textColor="#B7D9D5"
                 android:textSize="11sp" />
 
@@ -86,7 +86,7 @@
             android:gravity="center"
             android:paddingStart="13dp"
             android:paddingEnd="13dp"
-            android:text="فلاش"
+            android:text="@string/camera_flash"
             android:textColor="#FFFFFF"
             android:textSize="12sp" />
     </LinearLayout>
@@ -117,7 +117,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:fontFamily="@font/tajawal_medium"
-            android:text="يتم تجهيز الكاميرا…"
+            android:text="@string/camera_preparing"
             android:textColor="#FFFFFF"
             android:textSize="12sp" />
     </LinearLayout>
@@ -151,7 +151,7 @@
                     android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:layout_gravity="center"
-                    android:contentDescription="المعرض"
+                    android:contentDescription="@string/camera_gallery"
                     android:src="@drawable/ic_gallery_white" />
             </FrameLayout>
 
@@ -160,7 +160,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="7dp"
                 android:fontFamily="@font/tajawal_medium"
-                android:text="المعرض"
+                android:text="@string/camera_gallery"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp" />
         </LinearLayout>
@@ -195,7 +195,7 @@
                 android:background="@drawable/camera_control_bg"
                 android:fontFamily="@font/tajawal_bold"
                 android:gravity="center"
-                android:text="AUTO"
+                android:text="@string/camera_auto_badge"
                 android:textColor="#5EEAD4"
                 android:textSize="10sp" />
 
@@ -204,7 +204,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="7dp"
                 android:fontFamily="@font/tajawal_medium"
-                android:text="تلقائي"
+                android:text="@string/camera_auto_mode"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp" />
         </LinearLayout>

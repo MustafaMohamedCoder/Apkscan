@@ -113,10 +113,21 @@ class HomeFragment : Fragment() {
         view.findViewById<TextView>(R.id.subtitle).setTextColor(heroSecondary)
         view.findViewById<android.widget.ImageView>(R.id.welcome_badge).setColorFilter(heroTitle)
 
-        listOf(R.id.home_overview_title, R.id.inbox_title, R.id.notifications_summary, R.id.direct_messages_summary).forEach { id ->
+        listOf(
+            R.id.home_overview_title,
+            R.id.inbox_title,
+            R.id.notifications_title,
+            R.id.direct_messages_title
+        ).forEach { id ->
             view.findViewById<TextView>(id).setTextColor(text)
         }
-        listOf(R.id.groups_label, R.id.invoices_label, R.id.inbox_summary).forEach { id ->
+        listOf(
+            R.id.groups_label,
+            R.id.invoices_label,
+            R.id.inbox_summary,
+            R.id.notifications_summary,
+            R.id.direct_messages_summary
+        ).forEach { id ->
             view.findViewById<TextView>(id).setTextColor(textSecondary)
         }
         view.findViewById<TextView>(R.id.groups_count).setTextColor(ThemeHelper.accent(context))

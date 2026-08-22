@@ -314,9 +314,20 @@
                 app:cardCornerRadius="18dp"
                 app:cardElevation="0dp"
                 app:strokeWidth="1dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="15dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/notifications" android:textSize="15sp" android:fontFamily="@font/tajawal_bold" />
-                    <TextView android:id="@+id/notifications_summary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textSize="12sp" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:padding="15dp">
+                    <ImageView
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:background="@drawable/kpi_icon_blue_bg"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                        android:padding="7dp"
+                        android:src="@drawable/ic_notifications"
+                        app:tint="@color/accent" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:id="@+id/notifications_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/notifications" android:textSize="15sp" android:fontFamily="@font/tajawal_bold" />
+                        <TextView android:id="@+id/notifications_summary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:maxLines="1" android:ellipsize="end" android:textSize="12sp" />
+                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -332,9 +343,20 @@
                 app:cardCornerRadius="18dp"
                 app:cardElevation="0dp"
                 app:strokeWidth="1dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="15dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/user_messages" android:textSize="15sp" android:fontFamily="@font/tajawal_bold" />
-                    <TextView android:id="@+id/direct_messages_summary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="@string/user_messages_summary" android:textSize="12sp" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:padding="15dp">
+                    <ImageView
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:background="@drawable/group_icon_bg"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                        android:padding="7dp"
+                        android:src="@drawable/ic_chat_bubble"
+                        app:tint="@color/primary" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:id="@+id/direct_messages_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/user_messages" android:textSize="15sp" android:fontFamily="@font/tajawal_bold" />
+                        <TextView android:id="@+id/direct_messages_summary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:maxLines="1" android:ellipsize="end" android:text="@string/user_messages_summary" android:textSize="12sp" />
+                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>

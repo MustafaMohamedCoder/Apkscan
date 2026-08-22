@@ -82,6 +82,17 @@ data class ActivityEntry(
     @SerializedName("at") val at: Long = System.currentTimeMillis()
 )
 
+/** بطاقة مرجعية لمحتوى داخلي تتم مشاركته في رسالة مباشرة دون نسخ المرفق الأصلي. */
+data class ShareCard(
+    /** group_message | group */
+    val kind: String,
+    @SerializedName("source_group_id") val sourceGroupId: String,
+    @SerializedName("source_item_id") val sourceItemId: String? = null,
+    val title: String,
+    val preview: String? = null,
+    @SerializedName("image_path") val imagePath: String? = null
+)
+
 /** رسالة مباشرة بين مستخدمين، تعمل محلياً وتنتقل عبر مزامنة الشبكة المحلية. */
 data class DirectMessage(
     val id: String = generateId(),
@@ -89,6 +100,7 @@ data class DirectMessage(
     @SerializedName("to_user") val toUser: String,
     val text: String? = null,
     @SerializedName("image_path") val imagePath: String? = null,
+    @SerializedName("share_card") val shareCard: ShareCard? = null,
     @SerializedName("created_at") val createdAt: Long = System.currentTimeMillis(),
     val seen: Boolean = false
 )
@@ -156,8 +168,10 @@ data class CallSignal(
     val id: String = generateId(),
     val kind: String,
     val callId: String,
+    @SerializedName("room_id") val roomId: String? = null,
     val fromUser: String,
     val toUser: String,
+    val participants: List<String> = emptyList(),
     val sdp: String? = null,
     val candidate: String? = null,
     val sdpMid: String? = null,

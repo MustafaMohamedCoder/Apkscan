@@ -31,7 +31,12 @@ class LocalCallService : Service() {
         }
     }
     private val signalListener: (CallSignal, String) -> Unit = { signal, address ->
-        if (signal.kind == "offer" && signal.toUser == SessionStore.currentUser(this).orEmpty()) showIncomingCall(signal, address)
+        if (signal.toUser == SessionStore.currentUser(this).orEmpty()) {
+            when (signal.kind) {
+                "offer" -> showIncomingCall(signal, address)
+                "room_invite" -> showIncomingRoomInvite(signal, address)
+            }
+        }
     }
 
     override fun onCreate() {
@@ -83,6 +88,32 @@ class LocalCallService : Service() {
             .setContentIntent(pending)
             .build()
         getSystemService(NotificationManager::class.java).notify(signal.callId.hashCode(), notification)
+    }
+
+    private fun showIncomingRoomInvite(signal: CallSignal, address: String) {
+        val intent = Intent(this, LocalCallActivity::class.java).apply {
+            putExtra(LocalCallActivity.EXTRA_CALL_ID, signal.callId)
+            putExtra(LocalCallActivity.EXTRA_ROOM_ID, signal.roomId)
+            putExtra(LocalCallActivity.EXTRA_PEER_USER, signal.fromUser)
+            putExtra(LocalCallActivity.EXTRA_PEER_ADDRESS, address)
+            putExtra(LocalCallActivity.EXTRA_MEDIA_TYPE, signal.mediaType)
+            putExtra(LocalCallActivity.EXTRA_ROOM_PARTICIPANTS, signal.participants.joinToString(","))
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val pending = PendingIntent.getActivity(
+            this, (signal.callId + signal.fromUser).hashCode(), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, CALL_CHANNEL)
+            .setSmallIcon(R.drawable.ic_call)
+            .setContentTitle("دعوة إلى مكالمة جماعية")
+            .setContentText("${signal.fromUser} دعاك إلى غرفة محلية — اضغط للانضمام")
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setAutoCancel(true)
+            .setContentIntent(pending)
+            .build()
+        getSystemService(NotificationManager::class.java).notify((signal.callId + signal.fromUser).hashCode(), notification)
     }
 
     private fun cancelMissedCallTimeout(callId: String) {

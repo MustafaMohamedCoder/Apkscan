@@ -65,6 +65,15 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
+        <ImageView
+            android:id="@+id/btn_share_group"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:padding="10dp"
+            android:src="@drawable/ic_share"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/share_group"
+            app:tint="#0F766E" />
 
     </LinearLayout>
 

@@ -33,7 +33,9 @@ class LocalWebRtcEngine(
     private val onRecoveryState: (LocalCallRecoveryPolicy.Decision) -> Unit = {},
     private val initialLatencyMs: Long? = null,
     private val onDiagnostic: (String) -> Unit = {},
-    private val onCallEnded: (String, String) -> Unit = { _, _ -> }
+    private val onCallEnded: (String, String) -> Unit = { _, _ -> },
+    private val roomId: String = callId,
+    initialParticipants: List<String> = listOf(currentUser, peerUser)
 ) {
     private val egl = EglBase.create()
     private val factory: PeerConnectionFactory
@@ -44,6 +46,7 @@ class LocalWebRtcEngine(
     private var audioSource: org.webrtc.AudioSource? = null
     private val signalListener: (CallSignal, String) -> Unit
     private val streamId = "local-call-$callId"
+    private val roomMembers = CopyOnWriteArrayList(initialParticipants.filter { it.isNotBlank() }.distinct())
     private val diagnosticStartedAt = SystemClock.elapsedRealtime()
     private val diagnostics = CopyOnWriteArrayList<String>()
     @Volatile private var releasing = false
@@ -76,7 +79,7 @@ class LocalWebRtcEngine(
             }
             override fun onIceCandidate(candidate: org.webrtc.IceCandidate) {
                 recordDiagnostic("ICE", "تم إنشاء مرشح محلي")
-                sendSignal(CallSignal(kind = "candidate", callId = callId, fromUser = currentUser, toUser = peerUser, candidate = candidate.sdp, sdpMid = candidate.sdpMid, sdpMLineIndex = candidate.sdpMLineIndex, mediaType = mediaType))
+                sendSignal(CallSignal(kind = "candidate", callId = callId, roomId = roomId, participants = roomMembers.toList(), fromUser = currentUser, toUser = peerUser, candidate = candidate.sdp, sdpMid = candidate.sdpMid, sdpMLineIndex = candidate.sdpMLineIndex, mediaType = mediaType))
             }
             override fun onAddTrack(receiver: RtpReceiver, mediaStreams: Array<out org.webrtc.MediaStream>) {
                 val track = receiver.track() as? VideoTrack ?: return
@@ -193,7 +196,7 @@ class LocalWebRtcEngine(
                         reportNegotiationFailure("تعذر حفظ عرض الاتصال محليًا", "SET_LOCAL_OFFER_FAILED: ${error.orEmpty()}")
                     }
                 }, description)
-                sendSignal(CallSignal(kind = "offer", callId = callId, fromUser = currentUser, toUser = peerUser, sdp = description.description, mediaType = mediaType))
+                sendSignal(CallSignal(kind = "offer", callId = callId, roomId = roomId, participants = roomMembers.toList(), fromUser = currentUser, toUser = peerUser, sdp = description.description, mediaType = mediaType))
             }
             override fun onCreateFailure(error: String?) {
                 reportNegotiationFailure("تعذر إنشاء عرض الاتصال", "CREATE_OFFER_FAILED: ${error.orEmpty()}")
@@ -217,7 +220,7 @@ class LocalWebRtcEngine(
                         reportNegotiationFailure("تعذر حفظ رد الاتصال محليًا", "SET_LOCAL_ANSWER_FAILED: ${error.orEmpty()}")
                     }
                 }, description)
-                sendSignal(CallSignal(kind = "answer", callId = callId, fromUser = currentUser, toUser = peerUser, sdp = description.description, mediaType = mediaType))
+                sendSignal(CallSignal(kind = "answer", callId = callId, roomId = roomId, participants = roomMembers.toList(), fromUser = currentUser, toUser = peerUser, sdp = description.description, mediaType = mediaType))
             }
             override fun onCreateFailure(error: String?) {
                 reportNegotiationFailure("تعذر إنشاء رد الاتصال", "CREATE_ANSWER_FAILED: ${error.orEmpty()}")
@@ -250,6 +253,16 @@ class LocalWebRtcEngine(
         }.start()
     }
 
+    /** يرسل دعوة غرفة إلى مستخدم متصل؛ القناة تبقى داخل شبكة الأجهزة المحلية. */
+    fun inviteParticipant(candidate: String, participants: List<String>): Boolean {
+        if (releasing || candidate.isBlank() || candidate == currentUser) return false
+        roomMembers.clear()
+        roomMembers.addAll(participants.distinct().filter { it.isNotBlank() })
+        sendSignal(CallSignal(kind = "room_invite", callId = callId, roomId = roomId, participants = roomMembers.toList(), fromUser = currentUser, toUser = candidate, mediaType = mediaType))
+        recordDiagnostic("غرفة المكالمة", "تم إرسال دعوة إلى $candidate (${roomMembers.size} مشاركين)")
+        return true
+    }
+
     fun setMicrophoneEnabled(enabled: Boolean): Boolean {
         localAudio.setEnabled(enabled)
         return localAudio.enabled()
@@ -278,7 +291,7 @@ class LocalWebRtcEngine(
     /** يخطر الطرف الآخر صراحةً قبل تحرير الوسائط؛ لا يعتمد على خادم خارجي. */
     fun endLocalCall() {
         applyRecoveryEvent(LocalCallRecoveryPolicy.Event.USER_ENDED)
-        sendSignal(CallSignal(kind = "hangup", callId = callId, fromUser = currentUser, toUser = peerUser, mediaType = mediaType))
+        sendSignal(CallSignal(kind = "hangup", callId = callId, roomId = roomId, participants = roomMembers.toList(), fromUser = currentUser, toUser = peerUser, mediaType = mediaType))
         release()
     }
 

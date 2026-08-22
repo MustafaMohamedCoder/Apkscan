@@ -36,6 +36,7 @@ import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.CallFeedback
 import com.masahhisabat.app.data.CallLog
+import com.masahhisabat.app.data.GroupCallSessionPolicy
 import com.masahhisabat.app.data.LocalCallRecoveryPolicy
 import com.masahhisabat.app.data.LocalWebRtcEngine
 import com.masahhisabat.app.data.NotificationEvent
@@ -65,7 +66,9 @@ class LocalCallActivity : Activity() {
     private var endButton: Button? = null
     private var retryConnectionButton: Button? = null
     private var freshCallButton: Button? = null
+    private var addParticipantButton: Button? = null
     private var recoveryRetryAvailable = false
+    private val roomParticipants = linkedSetOf<String>()
     private var freshCallAvailable = false
     private var freshCallLaunching = false
     private var terminalFailureReason: String? = null
@@ -98,6 +101,11 @@ class LocalCallActivity : Activity() {
         currentUser = SessionStore.currentUser(this).orEmpty()
         peerUser = intent.getStringExtra(EXTRA_PEER_USER).orEmpty().ifBlank { "مستخدم" }
         mediaType = intent.getStringExtra(EXTRA_MEDIA_TYPE).orEmpty().ifBlank { "voice" }
+        roomParticipants += listOf(currentUser, peerUser).filter { it.isNotBlank() }
+        roomParticipants += intent.getStringExtra(EXTRA_ROOM_PARTICIPANTS).orEmpty()
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
         startedAt = System.currentTimeMillis()
         render()
         requestPermissionsIfNeeded()
@@ -162,6 +170,12 @@ class LocalCallActivity : Activity() {
             contentDescription = "إنهاء المكالمة الفاشلة وبدء اتصال محلي جديد"
             visibility = View.GONE
             setOnClickListener { endAndStartFreshLocalCall() }
+        }
+        addParticipantButton = Button(this).apply {
+            text = "إضافة مشارك للمكالمة"
+            contentDescription = "دعوة مستخدم متصل إلى غرفة المكالمة"
+            visibility = View.GONE
+            setOnClickListener { showParticipantPicker() }
         }
         permissionWaitPanel = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -265,6 +279,7 @@ class LocalCallActivity : Activity() {
         root.addView(statusView)
         root.addView(retryConnectionButton)
         root.addView(freshCallButton)
+        root.addView(addParticipantButton)
         root.addView(permissionWaitPanel, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(muteIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(cameraIndicator, LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -349,6 +364,8 @@ class LocalCallActivity : Activity() {
                     current.copy(diagnosticLog = appendDiagnostic(current.diagnosticLog, entry))
                 }
             },
+            roomId = intent.getStringExtra(EXTRA_ROOM_ID).orEmpty().ifBlank { log.id },
+            initialParticipants = roomParticipants.toList(),
             onCallEnded = { reason, diagnostics ->
                 runOnUiThread {
                     if (isFinishing || isDestroyed || ending) return@runOnUiThread
@@ -362,10 +379,39 @@ class LocalCallActivity : Activity() {
             }
         )
         controlsLayout?.isEnabled = true
+        addParticipantButton?.visibility = if (incoming.isNullOrBlank()) View.VISIBLE else View.GONE
         statusView?.text = if (incoming.isNullOrBlank()) "جارٍ الاتصال داخل الشبكة المحلية…" else "تم قبول المكالمة، جارٍ فتح الوسائط…"
         if (incoming.isNullOrBlank()) engine?.startOutgoing() else engine?.acceptIncoming(incoming)
         AppRepository.updateCallLog(log.id) { it.copy(status = "accepted") }
         return true
+    }
+
+    private fun showParticipantPicker() {
+        val session = GroupCallSessionPolicy.Session(currentUser, roomParticipants.toList())
+        val candidates = AppRepository.users()
+            .filter { it.enabled && it.username != currentUser && it.username !in roomParticipants }
+            .filter { AppRepository.isUserOnline(it.username) }
+            .sortedBy { it.username.lowercase() }
+        if (session.isFull || candidates.isEmpty()) {
+            Toast.makeText(this, if (session.isFull) "اكتملت غرفة المكالمة (4 مشاركين كحد أقصى)" else "لا يوجد مستخدمون متصلون متاحون", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = candidates.map { "${it.username}  • متصل الآن" }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("إضافة مشارك للمكالمة")
+            .setItems(labels) { _, index ->
+                val candidate = candidates[index].username
+                val updated = GroupCallSessionPolicy.invite(session, candidate, true)
+                if (updated.participants.size > session.participants.size) {
+                    roomParticipants += candidate
+                    if (engine?.inviteParticipant(candidate, updated.participants) == true) {
+                        statusView?.text = "تمت دعوة $candidate إلى غرفة المكالمة"
+                        addParticipantButton?.visibility = if (updated.isFull) View.GONE else View.VISIBLE
+                    }
+                }
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
     }
 
     private fun startDurationTimer() {
@@ -808,6 +854,8 @@ class LocalCallActivity : Activity() {
 
     companion object {
         const val EXTRA_CALL_ID = "call_id"
+        const val EXTRA_ROOM_ID = "room_id"
+        const val EXTRA_ROOM_PARTICIPANTS = "room_participants"
         const val EXTRA_PEER_USER = "peer_user"
         const val EXTRA_PEER_ADDRESS = "peer_address"
         const val EXTRA_MEDIA_TYPE = "media_type"

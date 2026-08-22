@@ -1331,7 +1331,9 @@ object SyncManager {
                 AppRepository.addNotification(
                     NotificationEvent(
                         title = "رسالة من ${message.fromUser}",
-                        body = message.text?.takeIf { it.isNotBlank() } ?: "تم إرسال صورة",
+                        body = message.shareCard?.let { card ->
+                            if (card.kind == "group") "تمت مشاركة المجموعة: ${card.title}" else "تمت مشاركة رسالة من مجموعة: ${card.title}"
+                        } ?: message.text?.takeIf { it.isNotBlank() } ?: "تم إرسال صورة",
                         type = "direct_message",
                         actor = message.fromUser
                     )

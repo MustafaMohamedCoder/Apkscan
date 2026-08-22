@@ -578,6 +578,43 @@ class DirectMessagesActivity : AppCompatActivity() {
             val box = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
             val who = TextView(context).apply { text = if (message.fromUser == me) "أنت" else message.fromUser; textSize = 12f; setTextColor(ThemeHelper.accent(context)) }
             box.addView(who)
+            message.shareCard?.let { cardData ->
+                val shareCardView = LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(14, 10, 14, 10)
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        cornerRadius = 16f
+                        setColor(Color.argb(34, 20, 184, 166))
+                        setStroke(1, ThemeHelper.accent(context))
+                    }
+                    isClickable = cardData.sourceGroupId.isNotBlank()
+                    setOnClickListener {
+                        if (cardData.sourceGroupId.isNotBlank()) {
+                            context.startActivity(Intent(context, com.masahhisabat.app.ui.invoice.GroupActivity::class.java).apply {
+                                putExtra("group_id", cardData.sourceGroupId)
+                            })
+                        }
+                    }
+                }
+                shareCardView.addView(TextView(context).apply {
+                    text = if (cardData.kind == "group") "مشاركة مجموعة" else "رسالة من مجموعة"
+                    textSize = 12f
+                    setTextColor(ThemeHelper.accent(context))
+                })
+                shareCardView.addView(TextView(context).apply {
+                    text = cardData.title
+                    textSize = 16f
+                    setTextColor(ThemeHelper.text(context))
+                    setPadding(0, 3, 0, 0)
+                })
+                shareCardView.addView(TextView(context).apply {
+                    text = cardData.preview.orEmpty()
+                    textSize = 13f
+                    setTextColor(ThemeHelper.textSecondary(context))
+                    setPadding(0, 2, 0, 0)
+                })
+                box.addView(shareCardView)
+            }
             message.text?.let { box.addView(TextView(context).apply { text = it; textSize = 16f; setTextColor(ThemeHelper.text(context)); setPadding(0, 5, 0, 5) }) }
             message.imagePath?.let { path ->
                 box.addView(ImageView(context).apply {

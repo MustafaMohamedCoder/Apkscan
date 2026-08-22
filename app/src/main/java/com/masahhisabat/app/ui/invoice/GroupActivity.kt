@@ -28,7 +28,11 @@ import com.google.android.material.snackbar.Snackbar
 import com.masahhisabat.app.R
 import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.ActivityEntry
+import com.masahhisabat.app.data.DirectMessage
+import com.masahhisabat.app.data.DirectSharePolicy
 import com.masahhisabat.app.data.InvoiceItem
+import com.masahhisabat.app.data.ShareCard
+import com.masahhisabat.app.data.User
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.SessionStore
 import com.masahhisabat.app.image.ImageProcessor
@@ -88,6 +92,9 @@ class GroupActivity : AppCompatActivity() {
 
         findViewById<TextView>(R.id.group_title).text = groupName
         findViewById<ImageView>(R.id.btn_back).setOnClickListener { finish() }
+        findViewById<ImageView>(R.id.btn_share_group)?.setOnClickListener {
+            adapter.showInternalShareChooser(DirectSharePolicy.fromGroup(group, AppRepository.items(groupId).size))
+        }
 
         recycler = findViewById(R.id.items_list)
         recycler.layoutManager = LinearLayoutManager(this)
@@ -882,6 +889,23 @@ class GroupActivity : AppCompatActivity() {
         }
 
         private fun shareItem(item: InvoiceItem) {
+            val group = AppRepository.groups().firstOrNull { it.id == groupId }
+            if (group != null) {
+                MaterialAlertDialogBuilder(this@GroupActivity)
+                    .setTitle("مشاركة المحتوى")
+                    .setItems(arrayOf("مشاركة إلى مستخدم داخل التطبيق", "مشاركة عبر تطبيق آخر")) { _, which ->
+                        if (which == 0) {
+                            showInternalShareChooser(DirectSharePolicy.fromItem(group, item))
+                        } else {
+                            shareItemExternally(item)
+                        }
+                    }
+                    .setNegativeButton(R.string.cancel, null)
+                    .show()
+            }
+        }
+
+        private fun shareItemExternally(item: InvoiceItem) {
             try {
                 val path = AppRepository.availableImagePath(item)
                 if (path != null) {
@@ -905,6 +929,46 @@ class GroupActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Toast.makeText(this@GroupActivity, "تعذرت المشاركة", Toast.LENGTH_SHORT).show()
             }
+        }
+
+        fun showInternalShareChooser(payload: DirectSharePolicy.Payload) {
+            val me = SessionStore.currentUser(this@GroupActivity).orEmpty()
+            val users = AppRepository.users()
+                .filter { it.enabled && it.username != me }
+                .sortedWith(compareByDescending<User> { AppRepository.isUserOnline(it.username) }.thenBy { it.username.lowercase() })
+            if (users.isEmpty()) {
+                Toast.makeText(this@GroupActivity, "لا يوجد مستخدمون آخرون للمشاركة", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val labels = users.map { user ->
+                if (AppRepository.isUserOnline(user.username)) "${user.username}  • متصل الآن" else user.username
+            }.toTypedArray()
+            MaterialAlertDialogBuilder(this@GroupActivity)
+                .setTitle("اختر مستخدمًا للمشاركة")
+                .setItems(labels) { _, index ->
+                    val target = users[index]
+                    val shareCard = ShareCard(
+                        kind = when (payload.kind) {
+                            DirectSharePolicy.Kind.GROUP_MESSAGE -> "group_message"
+                            DirectSharePolicy.Kind.GROUP -> "group"
+                        },
+                        sourceGroupId = payload.sourceGroupId,
+                        sourceItemId = payload.sourceItemId,
+                        title = payload.title,
+                        preview = payload.preview,
+                        // المرجع يبقى معرفًا فقط؛ لا نكشف مسار ملف محلي لجهاز آخر.
+                        imagePath = null
+                    )
+                    AppRepository.addDirectMessage(DirectMessage(
+                        fromUser = me,
+                        toUser = target.username,
+                        shareCard = shareCard
+                    ))
+                    AppRepository.logActivity(ActivityEntry(me, "شارك ${if (payload.kind == DirectSharePolicy.Kind.GROUP) "مجموعة" else "رسالة من المجموعة"} مع ${target.username}"))
+                    Toast.makeText(this@GroupActivity, "تم إرسال بطاقة المشاركة إلى ${target.username}", Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
         }
     }
 }

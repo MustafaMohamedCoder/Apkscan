@@ -21,4 +21,12 @@ class NotificationCenterStateTest {
         assertEquals("لا توجد إشعارات جديدة", state.unreadLabel)
         assertFalse(state.canMarkAllRead)
     }
+
+    @Test
+    fun `marks the center empty when it has no notification items`() {
+        val state = NotificationCenterState.fromCounts(unreadCount = 0, totalCount = 0)
+
+        assertTrue(state.isEmpty)
+        assertFalse(state.canMarkAllRead)
+    }
 }

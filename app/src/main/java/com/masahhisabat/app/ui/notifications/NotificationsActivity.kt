@@ -3,6 +3,7 @@ package com.masahhisabat.app.ui.notifications
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
@@ -25,11 +26,17 @@ class NotificationsActivity : AppCompatActivity() {
     private lateinit var unreadLabel: TextView
     private lateinit var markAllRead: Button
     private lateinit var contentRefresh: SwipeRefreshLayout
+    private lateinit var emptyState: TextView
     private val refreshState = LocalContentRefreshState()
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         AppRepository.initAppContext(this)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(18, 12, 18, 18); setBackgroundColor(getColor(com.masahhisabat.app.R.color.day_background)) }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(18, 12, 18, 18)
+            setBackgroundColor(ThemeHelper.bg(this@NotificationsActivity))
+        }
         val toolbar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         toolbar.addView(ImageButton(this).apply { setImageResource(R.drawable.ic_arrow_back); background = null; contentDescription = "رجوع"; setOnClickListener { finish() } }, LinearLayout.LayoutParams(48, 48))
         toolbar.addView(TextView(this).apply { text = "الإشعارات"; textSize = 22f; typeface = resources.getFont(R.font.tajawal_bold); setTextColor(ThemeHelper.text(this@NotificationsActivity)) }, LinearLayout.LayoutParams(0, 56, 1f))
@@ -46,7 +53,22 @@ class NotificationsActivity : AppCompatActivity() {
         list.adapter = adapter
         contentRefresh.addView(list)
         root.addView(contentRefresh, LinearLayout.LayoutParams(-1, 0, 1f))
-        val clear = Button(this).apply { markAllRead = this; text = "تمييز الكل كمقروء"; setOnClickListener { AppRepository.markNotificationsRead(); refresh() } }
+        emptyState = TextView(this).apply {
+            text = "لا توجد إشعارات حتى الآن\nستظهر هنا تنبيهات المجموعات والرسائل والمكالمات الفائتة."
+            gravity = Gravity.CENTER
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            textSize = 15f
+            setTextColor(ThemeHelper.textSecondary(this@NotificationsActivity))
+            setPadding(32, 32, 32, 32)
+            visibility = View.GONE
+        }
+        root.addView(emptyState, LinearLayout.LayoutParams(-1, 0, 1f))
+        val clear = Button(this).apply {
+            markAllRead = this
+            text = "تمييز الكل كمقروء"
+            isAllCaps = false
+            setOnClickListener { AppRepository.markNotificationsRead(); refresh() }
+        }
         root.addView(clear, LinearLayout.LayoutParams(-1, 50))
         setContentView(root)
         // فتح المركز يعني أن المستخدم رأى التنبيهات؛ توحّد الشارة والرأس والقائمة من نفس المصدر.
@@ -56,10 +78,17 @@ class NotificationsActivity : AppCompatActivity() {
     override fun onResume() { super.onResume(); if (::adapter.isInitialized) refresh() }
     override fun onDestroy() { refreshState.cancel(); super.onDestroy() }
     private fun refresh() {
-        val centerState = NotificationCenterState.fromUnreadCount(AppRepository.unreadNotificationCount())
+        val notifications = AppRepository.notifications()
+        val centerState = NotificationCenterState.fromCounts(
+            unreadCount = AppRepository.unreadNotificationCount(),
+            totalCount = notifications.size
+        )
         unreadLabel.text = centerState.unreadLabel
         markAllRead.isEnabled = centerState.canMarkAllRead
-        adapter.submit(AppRepository.notifications())
+        markAllRead.visibility = if (centerState.canMarkAllRead) View.VISIBLE else View.GONE
+        contentRefresh.visibility = if (centerState.isEmpty) View.GONE else View.VISIBLE
+        emptyState.visibility = if (centerState.isEmpty) View.VISIBLE else View.GONE
+        adapter.submit(notifications)
     }
 
     private fun refreshFromSwipeGesture() {
@@ -92,7 +121,17 @@ class NotificationsActivity : AppCompatActivity() {
             data = newData
             diff.dispatchUpdatesTo(this)
         }
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = NotificationHolder(MaterialCardView(parent.context).apply { radius = 20f; setContentPadding(16, 12, 16, 12) })
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = NotificationHolder(MaterialCardView(parent.context).apply {
+            radius = 20f
+            cardElevation = 1.5f
+            strokeWidth = 1
+            setStrokeColor(ThemeHelper.cardStroke(parent.context))
+            setContentPadding(16, 12, 16, 12)
+            layoutParams = RecyclerView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = 10 }
+        })
         override fun getItemCount() = data.size
         override fun onBindViewHolder(holder: NotificationHolder, position: Int) = holder.bind(data[position])
     }

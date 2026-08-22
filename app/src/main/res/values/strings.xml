@@ -169,8 +169,8 @@
     <string name="groups_empty_action">لا توجد فواتير بعد. اضغط هنا لإضافة أول فاتورة أو مورد.</string>
     <string name="groups_empty_read_only">لا توجد فواتير متاحة في هذا الحساب حتى الآن.</string>
     <string name="groups_empty_search_and_filter">لا توجد نتائج تطابق البحث والتصفية الحالية. جرّب تغيير أحدهما.</string>
-    <string name="groups_empty_search_result">لا توجد مجموعة تطابق «%1$s». جرّب كلمة أخرى.</string>
-    <string name="groups_empty_filter_result">لا توجد مجموعات ضمن التصفية الحالية. جرّب تصفية أخرى.</string>
+    <string name="groups_empty_search_result">لا توجد فاتورة تطابق «%1$s». جرّب كلمة أخرى.</string>
+    <string name="groups_empty_filter_result">لا توجد فواتير ضمن التصفية الحالية. جرّب تصفية أخرى.</string>
     <string name="no_invoices">لا توجد فواتير أو طلبات لهذه الفاتورة</string>
     <string name="add_text">إضافة نص</string>
     <string name="manual_text">نص يدوي</string>

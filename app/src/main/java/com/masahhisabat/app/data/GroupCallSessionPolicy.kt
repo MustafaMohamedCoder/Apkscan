@@ -14,18 +14,29 @@ object GroupCallSessionPolicy {
         val isFull: Boolean get() = participants.size >= MAX_PARTICIPANTS
     }
 
-    fun create(host: String, initialPeer: String): Session =
-        Session(host = host, participants = listOf(host, initialPeer).distinct())
+    fun create(host: String, initialPeer: String): Session {
+        val participants = listOf(host, initialPeer)
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinctBy(String::lowercase)
+        return Session(host = host.trim(), participants = participants)
+    }
 
-    fun canInvite(session: Session, candidate: String, isOnline: Boolean): Boolean =
-        isOnline && candidate.isNotBlank() && candidate !in session.participants && !session.isFull
+    fun canInvite(session: Session, candidate: String, isOnline: Boolean): Boolean {
+        val normalizedCandidate = candidate.trim()
+        return isOnline && normalizedCandidate.isNotBlank() &&
+            session.participants.none { it.equals(normalizedCandidate, ignoreCase = true) } &&
+            !session.isFull
+    }
 
-    fun invite(session: Session, candidate: String, isOnline: Boolean): Session =
-        if (canInvite(session, candidate, isOnline)) {
-            session.copy(participants = session.participants + candidate)
+    fun invite(session: Session, candidate: String, isOnline: Boolean): Session {
+        val normalizedCandidate = candidate.trim()
+        return if (canInvite(session, normalizedCandidate, isOnline)) {
+            session.copy(participants = session.participants + normalizedCandidate)
         } else {
             session
         }
+    }
 
     /** معرف اتصال ثابت لكل زوج داخل الغرفة حتى لا تختلط إشارات الأزواج المتعددة. */
     fun pairCallId(roomId: String, first: String, second: String): String =

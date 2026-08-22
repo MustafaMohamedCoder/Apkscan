@@ -54,6 +54,8 @@ class SearchFragment : Fragment() {
     private var filterType = "" // image | text | فارغ لكل الأنواع
     /** يمنع نتيجة قديمة من استبدال نتائج الكتابة أو الفلاتر الأحدث. */
     private val searchRequestGate = SearchRequestGate()
+    /** يمنع تراكم خيوط بحث قديمة عند تعديل الاستعلام بسرعة. */
+    private val searchTasks = LatestSearchTaskCoordinator()
 
     private data class SearchFilters(
         val date: String,
@@ -137,8 +139,14 @@ class SearchFragment : Fragment() {
 
     override fun onDestroyView() {
         searchRequestGate.invalidate()
+        searchTasks.cancelPending()
         handler.removeCallbacksAndMessages(null)
         super.onDestroyView()
+    }
+
+    override fun onDestroy() {
+        searchTasks.close()
+        super.onDestroy()
     }
 
     private fun applyTheme(view: View) {
@@ -180,15 +188,19 @@ class SearchFragment : Fragment() {
         loadingBar.visibility = View.VISIBLE
 
         val requestId = searchRequestGate.begin()
-        Thread {
+        searchTasks.submit {
+            if (Thread.currentThread().isInterrupted) return@submit
             val groups = AppRepository.groups()
+            if (Thread.currentThread().isInterrupted) return@submit
             val results = mutableListOf<Pair<String, InvoiceItem>>()
             val groupMatches = groups.filter { group ->
                 q.isNotBlank() && group.name.lowercase().contains(q) &&
                     (filters.group.isBlank() || group.name.lowercase().contains(filters.group.lowercase()))
             }
             for (g in groups) {
+                if (Thread.currentThread().isInterrupted) return@submit
                 for (item in AppRepository.items(g.id)) {
+                    if (Thread.currentThread().isInterrupted) return@submit
                     if ((q.isBlank() || matches(item, q)) && matchesFilters(item, g.name, filters)) {
                         results.add(Pair(g.name, item))
                     }
@@ -197,6 +209,7 @@ class SearchFragment : Fragment() {
 
             // الاقتراحات قد تمر على أرشيف كبير، لذلك تُحسب خارج الخيط الرئيسي كذلك.
             val suggestions = if (q.isNotBlank()) collectSuggestions(groups, q) else emptyList()
+            if (Thread.currentThread().isInterrupted) return@submit
             handler.post {
                 if (!isAdded || !searchRequestGate.accepts(requestId) || !::resultsPanel.isInitialized) return@post
                 loadingBar.visibility = View.GONE
@@ -213,7 +226,7 @@ class SearchFragment : Fragment() {
                 showSuggestions(suggestions)
                 updateSearchState(results.size + groupMatches.size)
             }
-        }.start()
+        }
     }
 
     private fun matches(item: InvoiceItem, q: String): Boolean =

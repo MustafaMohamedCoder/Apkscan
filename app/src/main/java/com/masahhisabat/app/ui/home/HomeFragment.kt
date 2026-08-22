@@ -144,10 +144,20 @@ class HomeFragment : Fragment() {
         val root = view ?: return
         isRefreshing = true
         try {
-            root.findViewById<TextView>(R.id.invoices_count).text = AppRepository.totalInvoiceCount().toString()
-            root.findViewById<TextView>(R.id.groups_count).text = AppRepository.groups().size.toString()
-            root.findViewById<TextView>(R.id.notifications_summary).text = if (AppRepository.unreadNotificationCount() > 0) "${AppRepository.unreadNotificationCount()} إشعارات جديدة" else "لا توجد إشعارات جديدة"
-            root.findViewById<TextView>(R.id.direct_messages_summary).text = if (AppRepository.directMessages().isNotEmpty()) "${AppRepository.directMessages().size} رسالة محفوظة" else "إرسال نصوص وصور"
+            val totalInvoices = AppRepository.totalInvoiceCount()
+            val totalGroups = AppRepository.groups().size
+            val unreadNotifications = AppRepository.unreadNotificationCount()
+            val storedMessages = AppRepository.directMessages().size
+            root.findViewById<TextView>(R.id.invoices_count).text = totalInvoices.toString()
+            root.findViewById<TextView>(R.id.groups_count).text = totalGroups.toString()
+            val notificationsSummary = if (unreadNotifications > 0) "$unreadNotifications إشعارات جديدة" else "لا توجد إشعارات جديدة"
+            val messagesSummary = if (storedMessages > 0) "$storedMessages رسالة محفوظة" else "إرسال نصوص وصور"
+            root.findViewById<TextView>(R.id.notifications_summary).text = notificationsSummary
+            root.findViewById<TextView>(R.id.direct_messages_summary).text = messagesSummary
+            root.findViewById<View>(R.id.card_groups).contentDescription = "$totalGroups فواتير. فتح قائمة الفواتير"
+            root.findViewById<View>(R.id.card_invoices).contentDescription = "$totalInvoices فاتورة محفوظة. فتح صندوق الوارد"
+            root.findViewById<View>(R.id.notifications_card).contentDescription = "$notificationsSummary. فتح الإشعارات"
+            root.findViewById<View>(R.id.direct_messages_card).contentDescription = "$messagesSummary. فتح المراسلات"
             val workflow = AppRepository.invoiceWorkItems(includePaid = false)
             val newCount = workflow.count { (_, item) -> item.status == InvoiceWorkflow.NEW }
             val reviewCount = workflow.count { (_, item) -> item.status == InvoiceWorkflow.IN_REVIEW }
@@ -167,6 +177,8 @@ class HomeFragment : Fragment() {
                 workflow.isNotEmpty() -> "لا توجد فواتير معلّقة للمراجعة"
                 else -> "سيظهر هنا كل مستند جديد بعد مسحه"
             }
+            root.findViewById<View>(R.id.inbox_card).contentDescription =
+                "صندوق الوارد. ${root.findViewById<TextView>(R.id.inbox_summary).text}. فتح صندوق الوارد"
         } finally {
             lastRefreshAt = SystemClock.elapsedRealtime()
             isRefreshing = false

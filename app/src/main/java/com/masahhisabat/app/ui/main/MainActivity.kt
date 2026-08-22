@@ -1,6 +1,7 @@
 package com.masahhisabat.app.ui.main
 
 import android.content.Intent
+import android.animation.ValueAnimator
 import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -136,10 +137,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun switchTab(index: Int, animate: Boolean = true) {
         lastTab = index
+        val motion = NavigationMotionPolicy.resolve(
+            requested = animate,
+            systemAnimationsEnabled = ValueAnimator.areAnimatorsEnabled()
+        )
         // لمس التبويب المفتوح لا يعيد إنشاء Fragment أو يصفّر موضع القوائم.
         if (index != renderedTab) {
             val transaction = supportFragmentManager.beginTransaction()
-            if (animate) {
+            if (motion == NavigationMotion.ANIMATED) {
                 transaction
                     .setCustomAnimations(
                         android.R.anim.fade_in, android.R.anim.fade_out,
@@ -155,7 +160,7 @@ class MainActivity : AppCompatActivity() {
         for (i in tabIds.indices) {
             val iconView = findViewById<View>(tabIds[i])?.let { findIconInView(it) }
             val labelView = findViewById<TextView>(labelIds[i])
-            if (animate) {
+            if (motion == NavigationMotion.ANIMATED) {
                 iconView?.animate()?.scaleX(if (i == index) 1.15f else 1f)?.scaleY(if (i == index) 1.15f else 1f)?.setDuration(180)?.start()
                 labelView?.animate()?.scaleX(if (i == index) 1.08f else 1f)?.scaleY(if (i == index) 1.08f else 1f)?.setDuration(180)?.start()
             } else {

@@ -1241,7 +1241,11 @@ object SyncManager {
 
         // 2) مزامنة المجموعات والعناصر، بما فيها المجموعات الخالية من الرسائل
         for (incomingGroup in payload.groups) {
-            if (incomingGroup.id.isBlank() || AppRepository.isGroupTrashed(incomingGroup.id)) continue
+            if (
+                GroupStorageSafetyPolicy.safeDirectoryName(incomingGroup.id) == null ||
+                incomingGroup.name.isBlank() ||
+                AppRepository.isGroupTrashed(incomingGroup.id)
+            ) continue
             val localGroup = AppRepository.groups().find { it.id == incomingGroup.id }
             if (localGroup == null) AppRepository.addGroup(Group(incomingGroup.id, incomingGroup.name))
             else if (localGroup.name != incomingGroup.name) {
@@ -1250,10 +1254,25 @@ object SyncManager {
         }
         var addedItems = 0
         for (p in payload.items) {
-            if (AppRepository.isGroupTrashed(p.groupId) || AppRepository.isItemTrashed(p.groupId, p.item.id)) continue
+            if (
+                GroupStorageSafetyPolicy.safeDirectoryName(p.groupId) == null ||
+                StorageKeySafetyPolicy.safePart(p.item.id) == null ||
+                AppRepository.isGroupTrashed(p.groupId) ||
+                AppRepository.isItemTrashed(p.groupId, p.item.id)
+            ) continue
             var group = AppRepository.groups().find { it.id == p.groupId }
             if (group == null) {
-                group = Group(p.groupId, p.groupName)
+                val incomingGroupName = p.groupName.trim()
+                if (!SyncPayloadSafetyPolicy.canCreateGroupForItem(incomingGroupName)) {
+                    recordSyncConflict(
+                        payload,
+                        "item",
+                        p.item.id,
+                        "تُرك عنصر وارد لأن اسم مجموعته غير موجود في الحمولة."
+                    )
+                    continue
+                }
+                group = Group(p.groupId, incomingGroupName)
                 AppRepository.addGroup(group)
             } else if (group.name != p.groupName) {
                 recordSyncConflict(
@@ -1303,6 +1322,15 @@ object SyncManager {
             }
         }
         for (incoming in payload.directMessages.orEmpty()) {
+            if (StorageKeySafetyPolicy.safePart(incoming.message.id) == null) {
+                recordSyncConflict(
+                    payload,
+                    "direct_message",
+                    incoming.message.id,
+                    "تُركت رسالة واردة لأن معرّفها غير صالح للتخزين المحلي."
+                )
+                continue
+            }
             if (AppRepository.directMessages().any { it.id == incoming.message.id }) continue
             val imagePath = restoreImageFromSync(incoming.message.id, "direct", incoming.image)
             val attachmentReady = SyncAttachmentIntegrityPolicy.canCommitDirectMessage(

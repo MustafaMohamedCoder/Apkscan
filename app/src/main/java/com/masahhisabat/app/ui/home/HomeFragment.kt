@@ -170,15 +170,16 @@ class HomeFragment : Fragment() {
                     visibility = View.GONE
                 }
             }
-            root.findViewById<TextView>(R.id.inbox_summary).text = when {
+            val inboxSummary = when {
                 newCount > 0 && reviewCount > 0 -> "$newCount جديدة و$reviewCount قيد المراجعة"
                 newCount > 0 -> "$newCount فواتير جديدة تحتاج فرزًا"
                 reviewCount > 0 -> "$reviewCount فواتير تحتاج متابعة"
                 workflow.isNotEmpty() -> "لا توجد فواتير معلّقة للمراجعة"
                 else -> "سيظهر هنا كل مستند جديد بعد مسحه"
             }
+            root.findViewById<TextView>(R.id.inbox_summary).text = inboxSummary
             root.findViewById<View>(R.id.inbox_card).contentDescription =
-                "صندوق الوارد. ${root.findViewById<TextView>(R.id.inbox_summary).text}. فتح صندوق الوارد"
+                "صندوق الوارد. $inboxSummary. فتح صندوق الوارد"
         } finally {
             lastRefreshAt = SystemClock.elapsedRealtime()
             isRefreshing = false

@@ -33,7 +33,7 @@
             android:id="@+id/notifications_badge"
             android:layout_width="wrap_content"
             android:layout_height="20dp"
-            android:layout_gravity="top|right"
+            android:layout_gravity="top|end"
             android:background="@drawable/notification_badge_background"
             android:gravity="center"
             android:minWidth="20dp"

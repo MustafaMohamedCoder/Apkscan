@@ -24,6 +24,7 @@ android {
         targetSdk = 34
         versionCode = 63
         versionName = "1.2.60"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // أجهزة Android الفعلية المستهدفة تعمل بمعماريات ARM؛ استبعاد x86 يزيل نسخ OpenCV غير اللازمة.
         ndk {
@@ -110,4 +111,10 @@ dependencies {
 
     // اختبارات منطق محلي خفيفة لتغطية مسارات المصادقة دون اعتماد على جهاز أو GMS.
     testImplementation("junit:junit:4.13.2")
+    // اختبارات واجهة تعمل عبر AndroidX/Espresso ولا تعتمد على خدمات Google.
+    androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test:rules:1.5.0")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation("androidx.test.espresso:espresso-intents:3.5.1")
 }

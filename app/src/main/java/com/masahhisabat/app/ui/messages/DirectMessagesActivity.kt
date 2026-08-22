@@ -169,6 +169,7 @@ class DirectMessagesActivity : AppCompatActivity() {
         root.addView(contentRefresh, LinearLayout.LayoutParams(-1, 0, 1f))
         val composer = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         input = EditText(this).apply {
+            id = R.id.direct_message_input
             hint = getString(R.string.direct_message_hint)
             setTextColor(ThemeHelper.text(this@DirectMessagesActivity))
             setHintTextColor(ThemeHelper.textSecondary(this@DirectMessagesActivity))
@@ -188,6 +189,7 @@ class DirectMessagesActivity : AppCompatActivity() {
             } }
         composer.addView(attachButton, LinearLayout.LayoutParams(52, 52))
         sendButton = ImageButton(this).apply {
+            id = R.id.direct_message_send
             setImageResource(R.drawable.ic_send)
             background = AppCompatResources.getDrawable(this@DirectMessagesActivity, R.drawable.nav_item_bg)
             contentDescription = getString(R.string.direct_send)
@@ -580,6 +582,7 @@ class DirectMessagesActivity : AppCompatActivity() {
             box.addView(who)
             message.shareCard?.let { cardData ->
                 val shareCardView = LinearLayout(context).apply {
+                    id = R.id.direct_message_share_card
                     orientation = LinearLayout.VERTICAL
                     setPadding(14, 10, 14, 10)
                     background = android.graphics.drawable.GradientDrawable().apply {
@@ -588,6 +591,7 @@ class DirectMessagesActivity : AppCompatActivity() {
                         setStroke(1, ThemeHelper.accent(context))
                     }
                     isClickable = cardData.sourceGroupId.isNotBlank()
+                    contentDescription = "بطاقة مشاركة: ${cardData.title}"
                     setOnClickListener {
                         if (cardData.sourceGroupId.isNotBlank()) {
                             context.startActivity(Intent(context, com.masahhisabat.app.ui.invoice.GroupActivity::class.java).apply {

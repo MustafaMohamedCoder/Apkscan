@@ -3,4 +3,8 @@
     <item name="sync_progress_status" type="id" />
     <item name="sync_progress_bar" type="id" />
     <item name="sync_progress_percent" type="id" />
+    <!-- معرّفات وصول ثابتة لاختبارات واجهة المراسلة؛ لا تغيّر رسم الواجهة. -->
+    <item name="direct_message_input" type="id" />
+    <item name="direct_message_send" type="id" />
+    <item name="direct_message_share_card" type="id" />
 </resources>

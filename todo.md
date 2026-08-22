@@ -1399,5 +1399,5 @@
 - [x] جمع أدلة قابلة لإعادة الإنتاج من اختبارات الوحدة وLint ومراجع الشفرة والسجلات المحلية المتاحة.
 - [x] أصلحنا انحراف شارة الإشعارات الذي يستخدم `right` بدل `end` في RTL، وأزلنا إعادة البحث المكررة عن ملخص صندوق الوارد التي كشف عنها Lint؛ اختفى تحذيرا `RtlHardcoded` و`CutPasteId` بعد الإصلاح.
 - [x] نجحت `testDebugUnitTest` و`lintDebug` و`assembleRelease` تحت JDK 17، وبُني APK v1.2.64 الموقّع ببصمة SHA-256: `08362d16afd022f1316579af65952fc0e54c32da4438a39dc3c276741ee2b8d7`.
-- [ ] نشر APK v1.2.64 على GitHub فقط، من دون موقع معاينة.
+- [x] نُشر APK v1.2.64 على GitHub فقط، من دون موقع معاينة: https://github.com/MustafaMohamedCoder/Apkscan/releases/tag/v1.2.64
 - [ ] اختبار موضع شارة الإشعارات على جهاز Android فعلي في العربية والإنجليزية؛ لا يتوفر جهاز أو محاكي متصل لتشغيل `connectedDebugAndroidTest` حاليًا.

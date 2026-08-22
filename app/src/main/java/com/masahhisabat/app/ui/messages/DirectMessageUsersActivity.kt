@@ -23,6 +23,7 @@ import com.masahhisabat.app.data.AppRepository
 import com.masahhisabat.app.data.User
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.SessionStore
+import com.masahhisabat.app.ui.common.DetailActivityTransition
 import com.masahhisabat.app.ui.common.LocalContentRefreshState
 
 /** قائمة محلية للمراسلة الفردية؛ تعيد استخدام بيانات الحضور المتزامنة داخل الشبكة فقط. */
@@ -54,7 +55,7 @@ class DirectMessageUsersActivity : AppCompatActivity() {
             contentDescription = getString(R.string.direct_back)
             setOnClickListener {
                 it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                finish()
+                DetailActivityTransition.finish(this@DirectMessageUsersActivity)
             }
         }, LinearLayout.LayoutParams(dp(48), dp(48)))
         toolbar.addView(TextView(this).apply {
@@ -221,9 +222,12 @@ class DirectMessageUsersActivity : AppCompatActivity() {
             card.isFocusable = true
             card.setOnClickListener {
                 it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                startActivity(Intent(this@DirectMessageUsersActivity, DirectMessagesActivity::class.java).apply {
-                    putExtra(DirectMessagesActivity.EXTRA_TARGET_USER, user.username)
-                })
+                DetailActivityTransition.start(
+                    this@DirectMessageUsersActivity,
+                    Intent(this@DirectMessageUsersActivity, DirectMessagesActivity::class.java).apply {
+                        putExtra(DirectMessagesActivity.EXTRA_TARGET_USER, user.username)
+                    }
+                )
             }
         }
     }

@@ -37,6 +37,7 @@ import com.masahhisabat.app.data.Group
 import com.masahhisabat.app.data.generateId
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.SessionStore
+import com.masahhisabat.app.ui.common.DetailActivityTransition
 import com.masahhisabat.app.ui.common.LocalContentRefreshState
 import com.masahhisabat.app.ui.invoice.GroupActivity
 
@@ -672,7 +673,10 @@ class GroupsFragment : Fragment() {
 
             // النقر على البطاقة (أو الاسم) يفتح المجموعة
             holder.itemView.setOnClickListener {
-                startActivity(Intent(ctx, GroupActivity::class.java).putExtra("group_id", g.id))
+                DetailActivityTransition.start(
+                    requireActivity(),
+                    Intent(ctx, GroupActivity::class.java).putExtra("group_id", g.id)
+                )
             }
 
             holder.more.setOnClickListener {

@@ -35,6 +35,7 @@ import com.masahhisabat.app.data.ShareCard
 import com.masahhisabat.app.data.User
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.SessionStore
+import com.masahhisabat.app.ui.common.DetailActivityTransition
 import com.masahhisabat.app.image.ImageProcessor
 import com.masahhisabat.app.image.ProcessMode
 import android.os.Build
@@ -91,7 +92,7 @@ class GroupActivity : AppCompatActivity() {
         AppRepository.setLastOpenedGroupId(groupId)
 
         findViewById<TextView>(R.id.group_title).text = groupName
-        findViewById<ImageView>(R.id.btn_back).setOnClickListener { finish() }
+        findViewById<ImageView>(R.id.btn_back).setOnClickListener { DetailActivityTransition.finish(this) }
         findViewById<ImageView>(R.id.btn_share_group)?.setOnClickListener {
             adapter.showInternalShareChooser(DirectSharePolicy.fromGroup(group, AppRepository.items(groupId).size))
         }

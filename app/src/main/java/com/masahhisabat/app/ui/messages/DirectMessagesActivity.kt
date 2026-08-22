@@ -1,5 +1,6 @@
 package com.masahhisabat.app.ui.messages
 
+import android.app.Activity
 import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -30,6 +31,7 @@ import com.masahhisabat.app.data.SyncManager
 import com.masahhisabat.app.data.User
 import com.masahhisabat.app.ui.auth.SessionStore
 import com.masahhisabat.app.ui.ThemeHelper
+import com.masahhisabat.app.ui.common.DetailActivityTransition
 import com.masahhisabat.app.ui.common.LocalContentRefreshState
 import java.io.File
 import java.text.SimpleDateFormat
@@ -91,7 +93,7 @@ class DirectMessagesActivity : AppCompatActivity() {
             setBackgroundColor(Color.TRANSPARENT)
             setOnClickListener {
                 it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                finish()
+                DetailActivityTransition.finish(this@DirectMessagesActivity)
             }
             contentDescription = getString(R.string.direct_back)
         }
@@ -594,9 +596,15 @@ class DirectMessagesActivity : AppCompatActivity() {
                     contentDescription = "بطاقة مشاركة: ${cardData.title}"
                     setOnClickListener {
                         if (cardData.sourceGroupId.isNotBlank()) {
-                            context.startActivity(Intent(context, com.masahhisabat.app.ui.invoice.GroupActivity::class.java).apply {
+                            val detailIntent = Intent(context, com.masahhisabat.app.ui.invoice.GroupActivity::class.java).apply {
                                 putExtra("group_id", cardData.sourceGroupId)
-                            })
+                            }
+                            val hostActivity = context as? Activity
+                            if (hostActivity != null) {
+                                DetailActivityTransition.start(hostActivity, detailIntent)
+                            } else {
+                                context.startActivity(detailIntent)
+                            }
                         }
                     }
                 }

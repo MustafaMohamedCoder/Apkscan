@@ -1,5 +1,6 @@
 package com.masahhisabat.app.ui.groups
 
+import android.animation.ValueAnimator
 import android.content.Intent
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -38,6 +39,8 @@ import com.masahhisabat.app.data.generateId
 import com.masahhisabat.app.ui.ThemeHelper
 import com.masahhisabat.app.ui.auth.SessionStore
 import com.masahhisabat.app.ui.common.DetailActivityTransition
+import com.masahhisabat.app.ui.common.ListItemMotion
+import com.masahhisabat.app.ui.common.ListItemMotionPolicy
 import com.masahhisabat.app.ui.common.LocalContentRefreshState
 import com.masahhisabat.app.ui.invoice.GroupActivity
 
@@ -572,6 +575,7 @@ class GroupsFragment : Fragment() {
     private inner class GroupsAdapter :
         RecyclerView.Adapter<GroupsAdapter.VH>() {
         private var rows: List<GroupRow> = emptyList()
+        private val presentedGroupIds = mutableSetOf<String>()
 
         fun submit(
             newGroups: List<Group>,
@@ -615,30 +619,64 @@ class GroupsFragment : Fragment() {
             val pin: ImageView = view.findViewById(R.id.group_pin)
             val itemCount: TextView = view.findViewById(R.id.group_items_count)
             val more: ImageView = view.findViewById(R.id.group_more)
+            private var entryPending = false
+
+            fun prepareEntry(motion: ListItemMotion) {
+                itemView.animate().cancel()
+                entryPending = motion == ListItemMotion.ANIMATED
+                if (entryPending) {
+                    itemView.alpha = 0f
+                    itemView.translationY = 16f
+                    if (itemView.isAttachedToWindow) playEntryIfPending()
+                } else {
+                    itemView.alpha = 1f
+                    itemView.translationY = 0f
+                }
+            }
+
+            fun playEntryIfPending() {
+                if (!entryPending) return
+                entryPending = false
+                itemView.animate()
+                    .alpha(1f)
+                    .translationY(0f)
+                    .setDuration(180)
+                    .setInterpolator(android.view.animation.DecelerateInterpolator())
+                    .start()
+            }
+
+            fun resetEntry() {
+                entryPending = false
+                itemView.animate().cancel()
+                itemView.alpha = 1f
+                itemView.translationY = 0f
+            }
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
             val view = LayoutInflater.from(parent.context).inflate(R.layout.item_group, parent, false)
-            // حركة دخول ناعمة للعناصر
-            view.alpha = 0f
-            view.translationY = 30f
             return VH(view)
         }
 
         override fun onViewAttachedToWindow(holder: VH) {
             super.onViewAttachedToWindow(holder)
-            holder.itemView.animate()
-                .alpha(1f)
-                .translationY(0f)
-                .setDuration(320)
-                .setInterpolator(android.view.animation.DecelerateInterpolator())
-                .start()
+            holder.playEntryIfPending()
+        }
+
+        override fun onViewRecycled(holder: VH) {
+            holder.resetEntry()
+            super.onViewRecycled(holder)
         }
 
         override fun onBindViewHolder(holder: VH, position: Int) {
             val row = rows[position]
             val g = row.group
             val ctx = requireContext()
+            val motion = ListItemMotionPolicy.resolve(
+                animationsEnabled = ValueAnimator.areAnimatorsEnabled(),
+                isFirstPresentation = presentedGroupIds.add(g.id)
+            )
+            holder.prepareEntry(motion)
             val surface = ThemeHelper.surface(ctx)
             val text = ThemeHelper.text(ctx)
             val textSec = ThemeHelper.textSecondary(ctx)

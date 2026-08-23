@@ -5,6 +5,7 @@ import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -58,6 +59,7 @@ class DirectMessagesActivity : AppCompatActivity() {
     private lateinit var previousSearchResultButton: ImageButton
     private lateinit var nextSearchResultButton: ImageButton
     private lateinit var clearSearchButton: ImageButton
+    private lateinit var archivePanel: LinearLayout
     private lateinit var input: EditText
     private lateinit var attachButton: ImageButton
     private lateinit var removeAttachmentButton: ImageButton
@@ -68,6 +70,7 @@ class DirectMessagesActivity : AppCompatActivity() {
     private var currentUser = ""
     private var targetUser = ""
     private var searchQuery = ""
+    private var selectedArchiveFilter = DirectMessageArchiveFilter.ALL
     private var selectedSearchResultIndex: Int? = null
     private var searchResultCount = 0
     private var shouldScrollToSearchResult = false
@@ -75,6 +78,7 @@ class DirectMessagesActivity : AppCompatActivity() {
     private var lastCallFailure: String? = null
     private var lastLatencyMs: Long? = null
     private var pendingDiagnosticExport: String? = null
+    private val archiveFilterButtons = mutableMapOf<DirectMessageArchiveFilter, MaterialButton>()
     private val refreshState = LocalContentRefreshState()
     private val imagePreparationGate = DirectImagePreparationRequestGate()
 
@@ -229,6 +233,48 @@ class DirectMessagesActivity : AppCompatActivity() {
         }
         searchPanel.addView(clearSearchButton, LinearLayout.LayoutParams(52, 52))
         root.addView(searchPanel)
+        archivePanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(4, 0, 4, 8)
+            visibility = if (targetUser.isBlank()) View.GONE else View.VISIBLE
+        }
+        archivePanel.addView(TextView(this).apply {
+            text = getString(R.string.direct_archive_title)
+            textSize = 12f
+            typeface = resources.getFont(R.font.tajawal_bold)
+            setTextColor(ThemeHelper.textSecondary(this@DirectMessagesActivity))
+            textDirection = View.TEXT_DIRECTION_RTL
+            setPadding(8, 4, 8, 4)
+        })
+        val archiveFilterRow = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            textDirection = View.TEXT_DIRECTION_RTL
+        }
+        DirectMessageArchiveFilter.entries.forEachIndexed { index, filter ->
+            val filterButton = MaterialButton(this).apply {
+                isAllCaps = false
+                text = getString(archiveFilterLabel(filter))
+                minHeight = 0
+                minWidth = 0
+                insetTop = 0
+                insetBottom = 0
+                setOnClickListener {
+                    it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    if (selectedArchiveFilter != filter) {
+                        selectedArchiveFilter = filter
+                        selectedSearchResultIndex = null
+                        shouldScrollToSearchResult = searchQuery.isNotBlank()
+                        refresh()
+                    }
+                }
+            }
+            archiveFilterButtons[filter] = filterButton
+            archiveFilterRow.addView(filterButton, LinearLayout.LayoutParams(0, 42, 1f).apply {
+                if (index > 0) marginStart = 6
+            })
+        }
+        archivePanel.addView(archiveFilterRow)
+        root.addView(archivePanel)
         val callBar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         val history = MaterialButton(this).apply {
             text = getString(R.string.direct_call_history)
@@ -340,6 +386,7 @@ class DirectMessagesActivity : AppCompatActivity() {
     private fun refresh() {
         if (!::adapter.isInitialized || targetUser.isBlank()) {
             updateSearchControls()
+            updateArchiveFilterControls()
             return
         }
         val online = AppRepository.isUserOnline(targetUser)
@@ -347,7 +394,8 @@ class DirectMessagesActivity : AppCompatActivity() {
         val latency = lastLatencyMs?.let { getString(R.string.direct_connection_latency, it) }.orEmpty()
         val failure = lastCallFailure?.let { getString(R.string.direct_last_call_failure, it) }.orEmpty()
         val sourceMessages = AppRepository.directConversation(currentUser, targetUser)
-        val filteredMessages = DirectMessageSearchPolicy.filter(sourceMessages, searchQuery)
+        val archivedMessages = DirectMessageArchiveFilterPolicy.filter(sourceMessages, selectedArchiveFilter)
+        val filteredMessages = DirectMessageSearchPolicy.filter(archivedMessages, searchQuery)
         searchResultCount = filteredMessages.size
         selectedSearchResultIndex = if (searchQuery.isBlank()) {
             null
@@ -355,17 +403,29 @@ class DirectMessagesActivity : AppCompatActivity() {
             selectedSearchResultIndex?.takeIf { it in filteredMessages.indices }
                 ?: DirectMessageSearchNavigationPolicy.initialIndex(searchResultCount)
         }
+        val archiveSummary = if (selectedArchiveFilter == DirectMessageArchiveFilter.ALL) {
+            ""
+        } else {
+            getString(
+                R.string.direct_archive_filter_summary,
+                getString(archiveFilterLabel(selectedArchiveFilter)),
+                archivedMessages.size,
+                sourceMessages.size
+            )
+        }
         val searchSummary = when {
+            searchQuery.isBlank() && archivedMessages.isEmpty() && selectedArchiveFilter != DirectMessageArchiveFilter.ALL ->
+                getString(R.string.direct_archive_filter_empty, getString(archiveFilterLabel(selectedArchiveFilter)))
             searchQuery.isBlank() -> ""
             filteredMessages.isEmpty() -> getString(R.string.direct_search_no_results, searchQuery.trim())
-            else -> getString(R.string.direct_search_result_summary, filteredMessages.size, sourceMessages.size) +
+            else -> getString(R.string.direct_search_result_summary, filteredMessages.size, archivedMessages.size) +
                 getString(
                     R.string.direct_search_result_position,
                     selectedSearchResultIndex!! + 1,
                     searchResultCount
                 )
         }
-        status.text = "$presence$latency$failure$searchSummary"
+        status.text = "$presence$latency$failure$archiveSummary$searchSummary"
         status.setTextColor(if (online) Color.rgb(35, 160, 85) else ThemeHelper.textSecondary(this))
         headerPresence.text = presence
         headerPresence.setTextColor(if (online) Color.rgb(35, 160, 85) else ThemeHelper.textSecondary(this))
@@ -379,6 +439,7 @@ class DirectMessagesActivity : AppCompatActivity() {
             shouldScrollToSearchResult = false
         }
         updateSearchControls()
+        updateArchiveFilterControls()
         updateComposerState()
     }
 
@@ -412,6 +473,31 @@ class DirectMessagesActivity : AppCompatActivity() {
         clearSearchButton.contentDescription = getString(
             if (hasQuery) R.string.direct_clear_search else R.string.direct_close_search
         )
+    }
+
+    private fun updateArchiveFilterControls() {
+        if (!::archivePanel.isInitialized) return
+        val hasConversation = targetUser.isNotBlank()
+        archivePanel.visibility = if (hasConversation) View.VISIBLE else View.GONE
+        archiveFilterButtons.forEach { (filter, button) ->
+            val active = filter == selectedArchiveFilter
+            button.backgroundTintList = ColorStateList.valueOf(
+                if (active) ThemeHelper.accent(this) else ThemeHelper.chipBgColor(this)
+            )
+            button.setTextColor(if (active) Color.WHITE else ThemeHelper.chipTextColor(this))
+            button.contentDescription = getString(
+                R.string.direct_archive_filter_description,
+                getString(archiveFilterLabel(filter)),
+                getString(if (active) R.string.direct_archive_filter_active else R.string.direct_archive_filter_inactive)
+            )
+        }
+    }
+
+    private fun archiveFilterLabel(filter: DirectMessageArchiveFilter): Int = when (filter) {
+        DirectMessageArchiveFilter.ALL -> R.string.direct_archive_filter_all
+        DirectMessageArchiveFilter.TEXT -> R.string.direct_archive_filter_text
+        DirectMessageArchiveFilter.IMAGES -> R.string.direct_archive_filter_images
+        DirectMessageArchiveFilter.SHARED_ITEMS -> R.string.direct_archive_filter_shared
     }
 
     private fun moveSearchResult(forward: Boolean) {

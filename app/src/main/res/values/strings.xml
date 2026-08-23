@@ -289,6 +289,16 @@
     <string name="direct_previous_search_result">النتيجة السابقة</string>
     <string name="direct_next_search_result">النتيجة التالية</string>
     <string name="direct_search_no_results">\nلا توجد رسائل تطابق «%1$s».</string>
+    <string name="direct_archive_title">أرشيف المحادثة</string>
+    <string name="direct_archive_filter_all">الكل</string>
+    <string name="direct_archive_filter_text">نصوص</string>
+    <string name="direct_archive_filter_images">صور</string>
+    <string name="direct_archive_filter_shared">بطاقات</string>
+    <string name="direct_archive_filter_description">فلتر %1$s، %2$s</string>
+    <string name="direct_archive_filter_active">مفعّل</string>
+    <string name="direct_archive_filter_inactive">غير مفعّل</string>
+    <string name="direct_archive_filter_summary">\nأرشيف %1$s: %2$d من أصل %3$d رسالة</string>
+    <string name="direct_archive_filter_empty">\nلا توجد رسائل ضمن فلتر %1$s.</string>
     <string name="direct_message_hint">اكتب رسالة…</string>
     <string name="direct_attach_image">إضافة صورة</string>
     <string name="direct_attachment_ready_description">صورة مرفقة وجاهزة للإرسال</string>

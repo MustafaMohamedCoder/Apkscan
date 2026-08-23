@@ -297,8 +297,14 @@
     <string name="direct_archive_filter_description">فلتر %1$s، %2$s</string>
     <string name="direct_archive_filter_active">مفعّل</string>
     <string name="direct_archive_filter_inactive">غير مفعّل</string>
-    <string name="direct_archive_filter_summary">\nأرشيف %1$s: %2$d من أصل %3$d رسالة</string>
-    <string name="direct_archive_filter_empty">\nلا توجد رسائل ضمن فلتر %1$s.</string>
+    <string name="direct_archive_time_title">الفترة</string>
+    <string name="direct_archive_time_all">كل الوقت</string>
+    <string name="direct_archive_time_last_24_hours">آخر 24 ساعة</string>
+    <string name="direct_archive_time_last_7_days">آخر 7 أيام</string>
+    <string name="direct_archive_time_last_30_days">آخر 30 يومًا</string>
+    <string name="direct_archive_time_range_description">الفترة %1$s، %2$s</string>
+    <string name="direct_archive_filter_summary">\nأرشيف النوع: %1$s · الفترة: %2$s — %3$d من أصل %4$d رسالة</string>
+    <string name="direct_archive_filter_empty">\nلا توجد رسائل ضمن النوع: %1$s · الفترة: %2$s.</string>
     <string name="direct_message_hint">اكتب رسالة…</string>
     <string name="direct_attach_image">إضافة صورة</string>
     <string name="direct_attachment_ready_description">صورة مرفقة وجاهزة للإرسال</string>

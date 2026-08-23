@@ -41,4 +41,53 @@ class DirectMessageArchiveFilterPolicyTest {
         )
         assertEquals(messages, DirectMessageArchiveFilterPolicy.filter(messages, DirectMessageArchiveFilter.ALL))
     }
+
+    @Test
+    fun `intersects message type time range and Arabic search while keeping original order`() {
+        val now = 1_700_000_000_000L
+        val day = 24L * 60L * 60L * 1000L
+        val messages = listOf(
+            DirectMessage(
+                id = "old-image",
+                fromUser = "mustafa",
+                toUser = "ahmed",
+                text = "فاتورة قديمة",
+                imagePath = "/images/old.jpg",
+                createdAt = now - 8 * day
+            ),
+            DirectMessage(
+                id = "matching-image",
+                fromUser = "mustafa",
+                toUser = "ahmed",
+                text = "إيصال مصور",
+                imagePath = "/images/recent.jpg",
+                createdAt = now - day
+            ),
+            DirectMessage(
+                id = "boundary-image",
+                fromUser = "ahmed",
+                toUser = "mustafa",
+                text = "ايصال عند الحد",
+                imagePath = "/images/boundary.jpg",
+                createdAt = now - 7 * day
+            ),
+            DirectMessage(
+                id = "recent-share",
+                fromUser = "ahmed",
+                toUser = "mustafa",
+                shareCard = ShareCard(kind = "group", sourceGroupId = "group-1", title = "إيصال مشاركة"),
+                createdAt = now - day
+            )
+        )
+
+        val archive = DirectMessageArchiveFilterPolicy.filter(
+            messages = messages,
+            type = DirectMessageArchiveFilter.IMAGES,
+            timeRange = DirectMessageArchiveTimeRange.LAST_7_DAYS,
+            nowMillis = now
+        )
+        val result = DirectMessageSearchPolicy.filter(archive, "ايصال")
+
+        assertEquals(listOf("matching-image", "boundary-image"), result.map { it.id })
+    }
 }

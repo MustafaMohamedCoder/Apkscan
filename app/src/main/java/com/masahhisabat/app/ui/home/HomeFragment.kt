@@ -150,12 +150,14 @@ class HomeFragment : Fragment() {
             val storedMessages = AppRepository.directMessages().size
             root.findViewById<TextView>(R.id.invoices_count).text = totalInvoices.toString()
             root.findViewById<TextView>(R.id.groups_count).text = totalGroups.toString()
-            val notificationsSummary = if (unreadNotifications > 0) "$unreadNotifications إشعارات جديدة" else "لا توجد إشعارات جديدة"
-            val messagesSummary = if (storedMessages > 0) "$storedMessages رسالة محفوظة" else "إرسال نصوص وصور"
+            val notificationsSummary = HomeOverviewTextPolicy.notificationsSummary(unreadNotifications)
+            val messagesSummary = HomeOverviewTextPolicy.messagesSummary(storedMessages)
             root.findViewById<TextView>(R.id.notifications_summary).text = notificationsSummary
             root.findViewById<TextView>(R.id.direct_messages_summary).text = messagesSummary
-            root.findViewById<View>(R.id.card_groups).contentDescription = "$totalGroups فواتير. فتح قائمة الفواتير"
-            root.findViewById<View>(R.id.card_invoices).contentDescription = "$totalInvoices فاتورة محفوظة. فتح صندوق الوارد"
+            root.findViewById<View>(R.id.card_groups).contentDescription =
+                HomeOverviewTextPolicy.groupsCardDescription(totalGroups)
+            root.findViewById<View>(R.id.card_invoices).contentDescription =
+                HomeOverviewTextPolicy.invoicesCardDescription(totalInvoices)
             root.findViewById<View>(R.id.notifications_card).contentDescription = "$notificationsSummary. فتح الإشعارات"
             root.findViewById<View>(R.id.direct_messages_card).contentDescription = "$messagesSummary. فتح المراسلات"
             val workflow = AppRepository.invoiceWorkItems(includePaid = false)

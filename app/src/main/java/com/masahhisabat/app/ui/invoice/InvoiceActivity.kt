@@ -69,6 +69,7 @@ class InvoiceActivity : AppCompatActivity() {
     private var currentGroupId: String? = null
     private var invoiceStatus = "new"
     private var reminderAt: Long? = null
+    private val extractionRequestGate = InvoiceExtractionRequestGate()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         com.masahhisabat.app.data.AppRepository.initAppContext(this)
@@ -96,12 +97,16 @@ class InvoiceActivity : AppCompatActivity() {
 
         // نسخة واحدة متوازنة للمعاينة والمعالجة وOCR تمنع وجود صورتين كبيرتين في الذاكرة.
         val bmp = ImageProcessor.loadBitmap(imagePath, 1800)
+        val extractionRequestId = extractionRequestGate.begin()
         imgPreview.setImageBitmap(bmp)
 
         val lastMode = try { ProcessMode.valueOf(AppRepository.lastProcessMode()) } catch (e: Exception) { ProcessMode.AUTO }
         ImageProcessor.process(lastMode, bmp, object : ImageProcessor.Callback {
             override fun onDone(bitmap: android.graphics.Bitmap) {
-                imgPreview.setImageBitmap(bitmap)
+                imgPreview.post {
+                    if (!extractionRequestGate.accepts(extractionRequestId) || isFinishing || isDestroyed) return@post
+                    imgPreview.setImageBitmap(bitmap)
+                }
             }
             override fun onError() {}
         })
@@ -136,8 +141,10 @@ class InvoiceActivity : AppCompatActivity() {
         // الاستخراج الذكي
         loadingPanel.visibility = View.VISIBLE
         Thread {
-            val result = InvoiceExtractor.extract(this, bmp)
+            // يستخدم سياق التطبيق كي لا يحتاج محرك OCR إلى الاحتفاظ بالنشاط بعد مغادرة المستخدم للشاشة.
+            val result = InvoiceExtractor.extract(applicationContext, bmp)
             runOnUiThread {
+                if (!extractionRequestGate.accepts(extractionRequestId) || isFinishing || isDestroyed) return@runOnUiThread
                 loadingPanel.visibility = View.GONE
                 if (result.rawText.isBlank()) {
                     Toast.makeText(this, R.string.extract_failed, Toast.LENGTH_LONG).show()
@@ -152,7 +159,7 @@ class InvoiceActivity : AppCompatActivity() {
                 extractPanel.visibility = View.VISIBLE
                 saveBtn.visibility = View.VISIBLE
             }
-        }.start()
+        }.apply { name = "invoice-data-extraction" }.start()
 
         saveBtn.setOnClickListener {
             val name = etName.text.toString().trim()
@@ -277,6 +284,13 @@ class InvoiceActivity : AppCompatActivity() {
             it.backgroundTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.accent))
             it.setTextColor(getColor(R.color.white))
         }
+    }
+
+    override fun onDestroy() {
+        // قد تستمر معالجة OCR أو الصورة لإكمال موردها؛ نمنع فقط تسليم نتيجتها إلى واجهة منتهية.
+        extractionRequestGate.invalidate()
+        if (::imgPreview.isInitialized) imgPreview.setImageDrawable(null)
+        super.onDestroy()
     }
 
     private fun applyTheme() {

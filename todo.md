@@ -1446,5 +1446,5 @@
 ## إصدار تطبيق لإصلاح دورة حياة الفاتورة
 - [x] تثبيت حالة الفرع البعيد والإصلاح الملتزم قبل تغيير رقم النسخة.
 - [x] رفع `versionCode` إلى 71 و`versionName` إلى `1.2.68` لتسليم إصلاح نتيجة OCR المتأخرة.
-- [ ] تشغيل اختبارات الوحدة وLint وبناء Release موقّع، ثم حساب SHA-256 للـAPK.
-- [ ] إنشاء إصدار GitHub وإرفاق APK الموقّع والتحقق من تطابق البصمة، من دون أي موقع معاينة.
+- [x] نجحت `testDebugUnitTest` و`lintDebug` و`assembleDebug` و`assembleRelease` تحت JDK 17؛ بُني APK Release موقّع وبصمته SHA-256 هي `4b5da4ce2d8e0581a95d6a4e5eeddbfd3d3cd8814a2de4e5bc40fda36b975b4f`.
+- [x] نُشر APK v1.2.68 على GitHub فقط، من دون موقع معاينة: https://github.com/MustafaMohamedCoder/Apkscan/releases/tag/v1.2.68. أُعيد تنزيل الإرفاق وتطابق ثنائيًا مع الملف المحلي.

@@ -280,6 +280,12 @@
     <string name="direct_video_call_description">بدء مكالمة فيديو مع %1$s</string>
     <string name="direct_call_history">سجل المكالمات</string>
     <string name="direct_view_call_history">عرض سجل المكالمات</string>
+    <string name="direct_search_messages">بحث داخل المحادثة</string>
+    <string name="direct_search_hint">ابحث في الرسائل وبطاقات المشاركة…</string>
+    <string name="direct_clear_search">مسح عبارة البحث</string>
+    <string name="direct_close_search">إغلاق البحث</string>
+    <string name="direct_search_result_summary">\nبحث محلي: %1$d نتيجة من أصل %2$d رسالة</string>
+    <string name="direct_search_no_results">\nلا توجد رسائل تطابق «%1$s».</string>
     <string name="direct_message_hint">اكتب رسالة…</string>
     <string name="direct_attach_image">إضافة صورة</string>
     <string name="direct_attachment_ready_description">صورة مرفقة وجاهزة للإرسال</string>

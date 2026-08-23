@@ -49,6 +49,10 @@ class DirectMessagesActivity : AppCompatActivity() {
     private lateinit var recipient: Spinner
     private lateinit var status: TextView
     private lateinit var headerPresence: TextView
+    private lateinit var searchPanel: LinearLayout
+    private lateinit var searchInput: EditText
+    private lateinit var searchButton: ImageButton
+    private lateinit var clearSearchButton: ImageButton
     private lateinit var input: EditText
     private lateinit var attachButton: ImageButton
     private lateinit var removeAttachmentButton: ImageButton
@@ -58,6 +62,7 @@ class DirectMessagesActivity : AppCompatActivity() {
     private var imagePreparationInProgress = false
     private var currentUser = ""
     private var targetUser = ""
+    private var searchQuery = ""
     private var callCheckInProgress = false
     private var lastCallFailure: String? = null
     private var lastLatencyMs: Long? = null
@@ -120,6 +125,17 @@ class DirectMessagesActivity : AppCompatActivity() {
         }
         titleBlock.addView(headerPresence)
         toolbar.addView(titleBlock, LinearLayout.LayoutParams(0, 60, 1f))
+        searchButton = ImageButton(this).apply {
+            setImageResource(R.drawable.ic_search)
+            setColorFilter(ThemeHelper.accent(this@DirectMessagesActivity))
+            setBackgroundColor(Color.TRANSPARENT)
+            contentDescription = getString(R.string.direct_search_messages)
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                toggleSearch()
+            }
+        }
+        toolbar.addView(searchButton, LinearLayout.LayoutParams(48, 48))
         toolbar.addView(ImageButton(this).apply {
             setImageResource(R.drawable.ic_call)
             setColorFilter(ThemeHelper.accent(this@DirectMessagesActivity))
@@ -146,6 +162,42 @@ class DirectMessagesActivity : AppCompatActivity() {
             recipient = Spinner(this)
             root.addView(recipient, LinearLayout.LayoutParams(-1, 52))
         }
+        searchPanel = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(4, 0, 4, 8)
+            visibility = View.GONE
+        }
+        searchInput = EditText(this).apply {
+            hint = getString(R.string.direct_search_hint)
+            setSingleLine(true)
+            textDirection = View.TEXT_DIRECTION_RTL
+            setTextColor(ThemeHelper.text(this@DirectMessagesActivity))
+            setHintTextColor(ThemeHelper.textSecondary(this@DirectMessagesActivity))
+            background = AppCompatResources.getDrawable(this@DirectMessagesActivity, R.drawable.compose_bar_bg)
+            setPadding(14, 0, 14, 0)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(value: CharSequence?, start: Int, count: Int, after: Int) = Unit
+
+                override fun onTextChanged(value: CharSequence?, start: Int, before: Int, count: Int) {
+                    searchQuery = value?.toString().orEmpty()
+                    updateSearchControls()
+                    refresh()
+                }
+
+                override fun afterTextChanged(value: Editable?) = Unit
+            })
+        }
+        searchPanel.addView(searchInput, LinearLayout.LayoutParams(0, 52, 1f))
+        clearSearchButton = ImageButton(this).apply {
+            setImageResource(R.drawable.ic_close)
+            background = AppCompatResources.getDrawable(this@DirectMessagesActivity, R.drawable.nav_item_bg)
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                if (searchQuery.isBlank()) closeSearch() else searchInput.setText("")
+            }
+        }
+        searchPanel.addView(clearSearchButton, LinearLayout.LayoutParams(52, 52))
+        root.addView(searchPanel)
         val callBar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         val history = MaterialButton(this).apply {
             text = getString(R.string.direct_call_history)
@@ -234,6 +286,7 @@ class DirectMessagesActivity : AppCompatActivity() {
         }
         adapter = MessageAdapter(currentUser)
         list.adapter = adapter
+        updateSearchControls()
         updateComposerState()
         if (users.isEmpty()) status.text = getString(R.string.direct_no_users_available)
         else if (targetUser.isBlank()) status.text = getString(R.string.direct_select_user_to_start)
@@ -254,18 +307,60 @@ class DirectMessagesActivity : AppCompatActivity() {
     }
 
     private fun refresh() {
-        if (!::adapter.isInitialized || targetUser.isBlank()) return
+        if (!::adapter.isInitialized || targetUser.isBlank()) {
+            updateSearchControls()
+            return
+        }
         val online = AppRepository.isUserOnline(targetUser)
         val presence = getString(if (online) R.string.direct_presence_online_bullet else R.string.direct_presence_offline_bullet)
         val latency = lastLatencyMs?.let { getString(R.string.direct_connection_latency, it) }.orEmpty()
         val failure = lastCallFailure?.let { getString(R.string.direct_last_call_failure, it) }.orEmpty()
-        status.text = "$presence$latency$failure"
+        val sourceMessages = AppRepository.directConversation(currentUser, targetUser)
+        val filteredMessages = DirectMessageSearchPolicy.filter(sourceMessages, searchQuery)
+        val searchSummary = when {
+            searchQuery.isBlank() -> ""
+            filteredMessages.isEmpty() -> getString(R.string.direct_search_no_results, searchQuery.trim())
+            else -> getString(R.string.direct_search_result_summary, filteredMessages.size, sourceMessages.size)
+        }
+        status.text = "$presence$latency$failure$searchSummary"
         status.setTextColor(if (online) Color.rgb(35, 160, 85) else ThemeHelper.textSecondary(this))
         headerPresence.text = presence
         headerPresence.setTextColor(if (online) Color.rgb(35, 160, 85) else ThemeHelper.textSecondary(this))
-        adapter.submit(AppRepository.directConversation(currentUser, targetUser))
-        list.post { list.scrollToPosition((adapter.itemCount - 1).coerceAtLeast(0)) }
+        adapter.submit(filteredMessages)
+        if (searchQuery.isBlank()) {
+            list.post { list.scrollToPosition((adapter.itemCount - 1).coerceAtLeast(0)) }
+        }
+        updateSearchControls()
         updateComposerState()
+    }
+
+    private fun toggleSearch() {
+        if (targetUser.isBlank()) return
+        if (searchPanel.visibility == View.VISIBLE) {
+            closeSearch()
+        } else {
+            searchPanel.visibility = View.VISIBLE
+            searchInput.requestFocus()
+            updateSearchControls()
+        }
+    }
+
+    private fun closeSearch() {
+        searchInput.setText("")
+        searchPanel.visibility = View.GONE
+        updateSearchControls()
+    }
+
+    private fun updateSearchControls() {
+        if (!::searchButton.isInitialized || !::searchPanel.isInitialized || !::clearSearchButton.isInitialized) return
+        val hasConversation = targetUser.isNotBlank()
+        searchButton.visibility = if (hasConversation) View.VISIBLE else View.GONE
+        if (!hasConversation) searchPanel.visibility = View.GONE
+        val hasQuery = searchQuery.isNotBlank()
+        clearSearchButton.alpha = if (hasQuery) 1f else 0.72f
+        clearSearchButton.contentDescription = getString(
+            if (hasQuery) R.string.direct_clear_search else R.string.direct_close_search
+        )
     }
 
     private fun refreshFromSwipeGesture() {

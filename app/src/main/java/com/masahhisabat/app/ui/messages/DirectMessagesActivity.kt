@@ -51,6 +51,7 @@ class DirectMessagesActivity : AppCompatActivity() {
     private lateinit var headerPresence: TextView
     private lateinit var input: EditText
     private lateinit var attachButton: ImageButton
+    private lateinit var removeAttachmentButton: ImageButton
     private lateinit var sendButton: ImageButton
     private lateinit var contentRefresh: SwipeRefreshLayout
     private var selectedImage: String? = null
@@ -191,6 +192,18 @@ class DirectMessagesActivity : AppCompatActivity() {
                 chooseImage()
             } }
         composer.addView(attachButton, LinearLayout.LayoutParams(52, 52))
+        removeAttachmentButton = ImageButton(this).apply {
+            setImageResource(R.drawable.ic_close)
+            background = AppCompatResources.getDrawable(this@DirectMessagesActivity, R.drawable.nav_item_bg)
+            contentDescription = getString(R.string.direct_remove_attachment)
+            setColorFilter(ThemeHelper.textSecondary(this@DirectMessagesActivity))
+            visibility = View.GONE
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                clearSelectedImage(showFeedback = true)
+            }
+        }
+        composer.addView(removeAttachmentButton, LinearLayout.LayoutParams(52, 52))
         sendButton = ImageButton(this).apply {
             id = R.id.direct_message_send
             setImageResource(R.drawable.ic_send)
@@ -232,6 +245,11 @@ class DirectMessagesActivity : AppCompatActivity() {
     override fun onDestroy() {
         imagePreparationGate.invalidate()
         refreshState.cancel()
+        // لا نحذف مرفقًا بسبب إعادة إنشاء الواجهة؛ الحذف مخصص لمغادرة المحادثة نهائيًا.
+        if (isFinishing) {
+            selectedImage?.let(::deleteUnsentImage)
+            selectedImage = null
+        }
         super.onDestroy()
     }
 
@@ -264,7 +282,7 @@ class DirectMessagesActivity : AppCompatActivity() {
     }
 
     private fun updateComposerState() {
-        if (!::sendButton.isInitialized || !::attachButton.isInitialized || !::input.isInitialized) return
+        if (!::sendButton.isInitialized || !::attachButton.isInitialized || !::removeAttachmentButton.isInitialized || !::input.isInitialized) return
         val state = MessageComposerState(
             hasRecipient = targetUser.isNotBlank(),
             hasTypedText = !input.text.isNullOrBlank(),
@@ -279,6 +297,7 @@ class DirectMessagesActivity : AppCompatActivity() {
             getString(R.string.direct_attach_image)
         }
         attachButton.setColorFilter(if (state.hasPreparedImage) ThemeHelper.accent(this) else ThemeHelper.textSecondary(this))
+        removeAttachmentButton.visibility = if (state.canRemoveAttachment) View.VISIBLE else View.GONE
     }
 
     private data class CallHistoryFilter(
@@ -537,6 +556,8 @@ class DirectMessagesActivity : AppCompatActivity() {
                 attachButton.isEnabled = true
                 attachButton.alpha = 1f
                 if (imagePath != null) {
+                    // المرفق السابق لم يُرسل بعد؛ استبداله بصورة جديدة يجب ألا يتركه ملفًا يتيمًا.
+                    selectedImage?.takeIf { it != imagePath }?.let(::deleteUnsentImage)
                     selectedImage = imagePath
                     updateComposerState()
                     refresh()
@@ -548,6 +569,23 @@ class DirectMessagesActivity : AppCompatActivity() {
                 }
             }
         }.apply { name = "direct-message-image-copy"; start() }
+    }
+
+    /** يزيل فقط ملف الصورة الذي لم يُربط بعد برسالة محفوظة. */
+    private fun clearSelectedImage(showFeedback: Boolean) {
+        val imagePath = selectedImage ?: return
+        selectedImage = null
+        deleteUnsentImage(imagePath)
+        updateComposerState()
+        if (showFeedback) {
+            status.text = getString(R.string.direct_attachment_removed)
+            status.setTextColor(ThemeHelper.textSecondary(this))
+            Toast.makeText(this, R.string.direct_attachment_removed, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun deleteUnsentImage(imagePath: String) {
+        runCatching { File(imagePath).delete() }
     }
 
     private fun writeCallDiagnostic(uri: Uri, details: String) {

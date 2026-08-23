@@ -12,4 +12,8 @@ data class MessageComposerState(
 ) {
     val canSend: Boolean
         get() = hasRecipient && !isImagePreparationInProgress && (hasTypedText || hasPreparedImage)
+
+    /** يسمح بإزالة المرفق المكتمل قبل الإرسال، ولا يعرض إجراءً مضللًا أثناء النسخ المحلي. */
+    val canRemoveAttachment: Boolean
+        get() = hasPreparedImage && !isImagePreparationInProgress
 }

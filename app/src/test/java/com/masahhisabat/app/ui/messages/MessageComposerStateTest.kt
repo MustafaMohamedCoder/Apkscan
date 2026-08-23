@@ -48,4 +48,34 @@ class MessageComposerStateTest {
             ).canSend
         )
     }
+
+    @Test
+    fun canRemoveAttachment_requiresPreparedImageAndNoActivePreparation() {
+        assertTrue(
+            MessageComposerState(
+                hasRecipient = false,
+                hasTypedText = false,
+                hasPreparedImage = true,
+                isImagePreparationInProgress = false
+            ).canRemoveAttachment
+        )
+
+        assertFalse(
+            MessageComposerState(
+                hasRecipient = true,
+                hasTypedText = true,
+                hasPreparedImage = false,
+                isImagePreparationInProgress = false
+            ).canRemoveAttachment
+        )
+
+        assertFalse(
+            MessageComposerState(
+                hasRecipient = true,
+                hasTypedText = false,
+                hasPreparedImage = true,
+                isImagePreparationInProgress = true
+            ).canRemoveAttachment
+        )
+    }
 }

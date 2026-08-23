@@ -283,6 +283,8 @@
     <string name="direct_message_hint">اكتب رسالة…</string>
     <string name="direct_attach_image">إضافة صورة</string>
     <string name="direct_attachment_ready_description">صورة مرفقة وجاهزة للإرسال</string>
+    <string name="direct_remove_attachment">إزالة الصورة المرفقة</string>
+    <string name="direct_attachment_removed">أزيلت الصورة المرفقة</string>
     <string name="direct_send">إرسال</string>
     <string name="direct_wait_for_image">انتظر حتى يكتمل تجهيز الصورة</string>
     <string name="direct_image_preparing">جارٍ تجهيز الصورة محليًا…</string>

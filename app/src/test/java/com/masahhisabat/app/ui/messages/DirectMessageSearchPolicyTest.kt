@@ -20,6 +20,22 @@ class DirectMessageSearchPolicyTest {
     }
 
     @Test
+    fun `matches Arabic text despite tatweel formatting marks and nonbreaking spaces`() {
+        val messages = listOf(
+            DirectMessage(
+                id = "decorated",
+                fromUser = "mustafa",
+                toUser = "ahmed",
+                text = "فـاتورة\u200F\u00A0المورد"
+            )
+        )
+
+        val result = DirectMessageSearchPolicy.filter(messages, "فاتورة المورد")
+
+        assertEquals(listOf("decorated"), result.map { it.id })
+    }
+
+    @Test
     fun `matches a shared card title or preview while keeping chronological order`() {
         val messages = listOf(
             DirectMessage(id = "text", fromUser = "mustafa", toUser = "ahmed", text = "فاتورة الشهر"),

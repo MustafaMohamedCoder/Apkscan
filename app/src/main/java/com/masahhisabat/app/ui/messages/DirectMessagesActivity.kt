@@ -52,6 +52,8 @@ class DirectMessagesActivity : AppCompatActivity() {
     private lateinit var searchPanel: LinearLayout
     private lateinit var searchInput: EditText
     private lateinit var searchButton: ImageButton
+    private lateinit var previousSearchResultButton: ImageButton
+    private lateinit var nextSearchResultButton: ImageButton
     private lateinit var clearSearchButton: ImageButton
     private lateinit var input: EditText
     private lateinit var attachButton: ImageButton
@@ -63,6 +65,9 @@ class DirectMessagesActivity : AppCompatActivity() {
     private var currentUser = ""
     private var targetUser = ""
     private var searchQuery = ""
+    private var selectedSearchResultIndex: Int? = null
+    private var searchResultCount = 0
+    private var shouldScrollToSearchResult = false
     private var callCheckInProgress = false
     private var lastCallFailure: String? = null
     private var lastLatencyMs: Long? = null
@@ -180,6 +185,8 @@ class DirectMessagesActivity : AppCompatActivity() {
 
                 override fun onTextChanged(value: CharSequence?, start: Int, before: Int, count: Int) {
                     searchQuery = value?.toString().orEmpty()
+                    selectedSearchResultIndex = null
+                    shouldScrollToSearchResult = searchQuery.isNotBlank()
                     updateSearchControls()
                     refresh()
                 }
@@ -188,6 +195,27 @@ class DirectMessagesActivity : AppCompatActivity() {
             })
         }
         searchPanel.addView(searchInput, LinearLayout.LayoutParams(0, 52, 1f))
+        previousSearchResultButton = ImageButton(this).apply {
+            setImageResource(R.drawable.ic_arrow_back)
+            background = AppCompatResources.getDrawable(this@DirectMessagesActivity, R.drawable.nav_item_bg)
+            contentDescription = getString(R.string.direct_previous_search_result)
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                moveSearchResult(forward = false)
+            }
+        }
+        searchPanel.addView(previousSearchResultButton, LinearLayout.LayoutParams(44, 52))
+        nextSearchResultButton = ImageButton(this).apply {
+            setImageResource(R.drawable.ic_arrow_back)
+            rotation = 180f
+            background = AppCompatResources.getDrawable(this@DirectMessagesActivity, R.drawable.nav_item_bg)
+            contentDescription = getString(R.string.direct_next_search_result)
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                moveSearchResult(forward = true)
+            }
+        }
+        searchPanel.addView(nextSearchResultButton, LinearLayout.LayoutParams(44, 52))
         clearSearchButton = ImageButton(this).apply {
             setImageResource(R.drawable.ic_close)
             background = AppCompatResources.getDrawable(this@DirectMessagesActivity, R.drawable.nav_item_bg)
@@ -317,10 +345,22 @@ class DirectMessagesActivity : AppCompatActivity() {
         val failure = lastCallFailure?.let { getString(R.string.direct_last_call_failure, it) }.orEmpty()
         val sourceMessages = AppRepository.directConversation(currentUser, targetUser)
         val filteredMessages = DirectMessageSearchPolicy.filter(sourceMessages, searchQuery)
+        searchResultCount = filteredMessages.size
+        selectedSearchResultIndex = if (searchQuery.isBlank()) {
+            null
+        } else {
+            selectedSearchResultIndex?.takeIf { it in filteredMessages.indices }
+                ?: DirectMessageSearchNavigationPolicy.initialIndex(searchResultCount)
+        }
         val searchSummary = when {
             searchQuery.isBlank() -> ""
             filteredMessages.isEmpty() -> getString(R.string.direct_search_no_results, searchQuery.trim())
-            else -> getString(R.string.direct_search_result_summary, filteredMessages.size, sourceMessages.size)
+            else -> getString(R.string.direct_search_result_summary, filteredMessages.size, sourceMessages.size) +
+                getString(
+                    R.string.direct_search_result_position,
+                    selectedSearchResultIndex!! + 1,
+                    searchResultCount
+                )
         }
         status.text = "$presence$latency$failure$searchSummary"
         status.setTextColor(if (online) Color.rgb(35, 160, 85) else ThemeHelper.textSecondary(this))
@@ -329,6 +369,11 @@ class DirectMessagesActivity : AppCompatActivity() {
         adapter.submit(filteredMessages)
         if (searchQuery.isBlank()) {
             list.post { list.scrollToPosition((adapter.itemCount - 1).coerceAtLeast(0)) }
+        } else if (shouldScrollToSearchResult) {
+            selectedSearchResultIndex?.let { selectedIndex ->
+                list.post { list.scrollToPosition(selectedIndex) }
+            }
+            shouldScrollToSearchResult = false
         }
         updateSearchControls()
         updateComposerState()
@@ -352,15 +397,29 @@ class DirectMessagesActivity : AppCompatActivity() {
     }
 
     private fun updateSearchControls() {
-        if (!::searchButton.isInitialized || !::searchPanel.isInitialized || !::clearSearchButton.isInitialized) return
+        if (!::searchButton.isInitialized || !::searchPanel.isInitialized || !::previousSearchResultButton.isInitialized || !::nextSearchResultButton.isInitialized || !::clearSearchButton.isInitialized) return
         val hasConversation = targetUser.isNotBlank()
         searchButton.visibility = if (hasConversation) View.VISIBLE else View.GONE
         if (!hasConversation) searchPanel.visibility = View.GONE
         val hasQuery = searchQuery.isNotBlank()
+        val hasResults = hasQuery && searchResultCount > 0
+        previousSearchResultButton.visibility = if (hasResults) View.VISIBLE else View.GONE
+        nextSearchResultButton.visibility = if (hasResults) View.VISIBLE else View.GONE
         clearSearchButton.alpha = if (hasQuery) 1f else 0.72f
         clearSearchButton.contentDescription = getString(
             if (hasQuery) R.string.direct_clear_search else R.string.direct_close_search
         )
+    }
+
+    private fun moveSearchResult(forward: Boolean) {
+        if (searchQuery.isBlank() || searchResultCount <= 0) return
+        selectedSearchResultIndex = if (forward) {
+            DirectMessageSearchNavigationPolicy.nextIndex(selectedSearchResultIndex, searchResultCount)
+        } else {
+            DirectMessageSearchNavigationPolicy.previousIndex(selectedSearchResultIndex, searchResultCount)
+        }
+        shouldScrollToSearchResult = selectedSearchResultIndex != null
+        refresh()
     }
 
     private fun refreshFromSwipeGesture() {

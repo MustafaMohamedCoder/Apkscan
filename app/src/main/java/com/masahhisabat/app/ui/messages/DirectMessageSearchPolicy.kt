@@ -25,13 +25,17 @@ object DirectMessageSearchPolicy {
 
     private fun normalize(value: String): String = value
         .lowercase(Locale("ar"))
+        .replace(ARABIC_SEARCH_IGNORABLES, "")
         .replace(ARABIC_DIACRITICS, "")
         .replace('أ', 'ا')
         .replace('إ', 'ا')
         .replace('آ', 'ا')
         .replace('ى', 'ي')
         .replace('ة', 'ه')
+        .replace(WHITESPACE, " ")
         .trim()
 
+    private val ARABIC_SEARCH_IGNORABLES = Regex("[\\u0640\\p{Cf}]")
     private val ARABIC_DIACRITICS = Regex("[\\u064B-\\u0652]")
+    private val WHITESPACE = Regex("[\\s\\u00A0]+")
 }

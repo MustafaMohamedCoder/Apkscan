@@ -285,6 +285,9 @@
     <string name="direct_clear_search">مسح عبارة البحث</string>
     <string name="direct_close_search">إغلاق البحث</string>
     <string name="direct_search_result_summary">\nبحث محلي: %1$d نتيجة من أصل %2$d رسالة</string>
+    <string name="direct_search_result_position"> — النتيجة %1$d من %2$d</string>
+    <string name="direct_previous_search_result">النتيجة السابقة</string>
+    <string name="direct_next_search_result">النتيجة التالية</string>
     <string name="direct_search_no_results">\nلا توجد رسائل تطابق «%1$s».</string>
     <string name="direct_message_hint">اكتب رسالة…</string>
     <string name="direct_attach_image">إضافة صورة</string>

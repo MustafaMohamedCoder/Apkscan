@@ -9,7 +9,10 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
+import android.text.Spannable
+import android.text.SpannableString
 import android.text.TextWatcher
+import android.text.style.BackgroundColorSpan
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -366,7 +369,7 @@ class DirectMessagesActivity : AppCompatActivity() {
         status.setTextColor(if (online) Color.rgb(35, 160, 85) else ThemeHelper.textSecondary(this))
         headerPresence.text = presence
         headerPresence.setTextColor(if (online) Color.rgb(35, 160, 85) else ThemeHelper.textSecondary(this))
-        adapter.submit(filteredMessages)
+        adapter.submit(filteredMessages, searchQuery)
         if (searchQuery.isBlank()) {
             list.post { list.scrollToPosition((adapter.itemCount - 1).coerceAtLeast(0)) }
         } else if (shouldScrollToSearchResult) {
@@ -762,9 +765,17 @@ class DirectMessagesActivity : AppCompatActivity() {
 
     private class MessageAdapter(private val me: String) : RecyclerView.Adapter<MessageHolder>() {
         private var data = emptyList<DirectMessage>()
-        fun submit(items: List<DirectMessage>) {
+        private var searchQuery = ""
+
+        fun submit(items: List<DirectMessage>, query: String) {
             val newData = items.toList()
             val oldData = data
+            if (searchQuery != query) {
+                data = newData
+                searchQuery = query
+                notifyDataSetChanged()
+                return
+            }
             val diff = androidx.recyclerview.widget.DiffUtil.calculateDiff(object : androidx.recyclerview.widget.DiffUtil.Callback() {
                 override fun getOldListSize() = oldData.size
                 override fun getNewListSize() = newData.size
@@ -779,10 +790,10 @@ class DirectMessagesActivity : AppCompatActivity() {
         }
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = MessageHolder(MaterialCardView(parent.context).apply { radius = 18f; setContentPadding(14, 10, 14, 10) })
         override fun getItemCount() = data.size
-        override fun onBindViewHolder(holder: MessageHolder, position: Int) = holder.bind(data[position], me)
+        override fun onBindViewHolder(holder: MessageHolder, position: Int) = holder.bind(data[position], me, searchQuery)
     }
     private class MessageHolder(private val card: MaterialCardView) : RecyclerView.ViewHolder(card) {
-        fun bind(message: DirectMessage, me: String) {
+        fun bind(message: DirectMessage, me: String, searchQuery: String) {
             val context = card.context
             val box = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
             val who = TextView(context).apply { text = if (message.fromUser == me) "أنت" else message.fromUser; textSize = 12f; setTextColor(ThemeHelper.accent(context)) }
@@ -819,20 +830,27 @@ class DirectMessagesActivity : AppCompatActivity() {
                     setTextColor(ThemeHelper.accent(context))
                 })
                 shareCardView.addView(TextView(context).apply {
-                    text = cardData.title
+                    text = highlightedText(cardData.title, searchQuery, context)
                     textSize = 16f
                     setTextColor(ThemeHelper.text(context))
                     setPadding(0, 3, 0, 0)
                 })
                 shareCardView.addView(TextView(context).apply {
-                    text = cardData.preview.orEmpty()
+                    text = highlightedText(cardData.preview.orEmpty(), searchQuery, context)
                     textSize = 13f
                     setTextColor(ThemeHelper.textSecondary(context))
                     setPadding(0, 2, 0, 0)
                 })
                 box.addView(shareCardView)
             }
-            message.text?.let { box.addView(TextView(context).apply { text = it; textSize = 16f; setTextColor(ThemeHelper.text(context)); setPadding(0, 5, 0, 5) }) }
+            message.text?.let { messageText ->
+                box.addView(TextView(context).apply {
+                    text = highlightedText(messageText, searchQuery, context)
+                    textSize = 16f
+                    setTextColor(ThemeHelper.text(context))
+                    setPadding(0, 5, 0, 5)
+                })
+            }
             message.imagePath?.let { path ->
                 box.addView(ImageView(context).apply {
                     layoutParams = LinearLayout.LayoutParams(-1, 220)
@@ -864,6 +882,24 @@ class DirectMessagesActivity : AppCompatActivity() {
             }
             box.addView(TextView(context).apply { text = SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.getDefault()).format(Date(message.createdAt)); textSize = 11f; setTextColor(ThemeHelper.textSecondary(context)) })
             card.removeAllViews(); card.addView(box)
+        }
+
+        private fun highlightedText(value: String, query: String, context: android.content.Context): CharSequence {
+            val ranges = DirectMessageSearchHighlightPolicy.matchRanges(value, query)
+            if (ranges.isEmpty()) return value
+
+            val accent = ThemeHelper.accent(context)
+            val highlightColor = Color.argb(72, Color.red(accent), Color.green(accent), Color.blue(accent))
+            return SpannableString(value).apply {
+                ranges.forEach { range ->
+                    setSpan(
+                        BackgroundColorSpan(highlightColor),
+                        range.first,
+                        range.last + 1,
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                }
+            }
         }
     }
 }

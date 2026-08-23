@@ -657,6 +657,9 @@ class GroupActivity : AppCompatActivity() {
 
             if (item.type == "text") {
                 // فقاعة نص فقط
+                // صف الصورة قد يُعاد استخدامه لرسالة نصية؛ مسح الـ Drawable يحرر مرجع
+                // البت-ماب السابق بدل إبقائه محتجزًا داخل View مخفي في ذاكرة RecyclerView.
+                img.setImageDrawable(null)
                 img.visibility = View.GONE
                 tvName.text = item.text ?: ""
                 tvName.setTextColor(ThemeHelper.bubbleText(ctx))
@@ -778,6 +781,18 @@ class GroupActivity : AppCompatActivity() {
 
             // أيقونة المشاركة أسفل الرسالة
             share.setOnClickListener { shareItem(item) }
+        }
+
+        override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+            // لا تعِد تدوير Bitmap يدويًا: قد يكون مرتبطًا بعرض آخر لحظيًا. إزالة الـ Drawable
+            // تكفي لفك المرجع من الصف المخبأ، وتسمح لجامع القمامة باستعادة الذاكرة بأمان.
+            holder.itemView.findViewById<ImageView>(R.id.item_image)?.apply {
+                setImageDrawable(null)
+                setOnClickListener(null)
+            }
+            holder.itemView.setOnClickListener(null)
+            holder.itemView.setOnLongClickListener(null)
+            super.onViewRecycled(holder)
         }
 
         override fun getItemCount() = items.size

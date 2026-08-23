@@ -22,8 +22,8 @@ android {
         applicationId = "com.masahhisabat.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 70
-        versionName = "1.2.67"
+        versionCode = 71
+        versionName = "1.2.68"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // أجهزة Android الفعلية المستهدفة تعمل بمعماريات ARM؛ استبعاد x86 يزيل نسخ OpenCV غير اللازمة.

@@ -1522,4 +1522,4 @@
 ### إصدار النسخة الثامنة على GitHub
 - [x] رُوجعت حالة المستودع وإعداد التوقيع؛ رُفع الإصدار إلى `versionCode 74` و`versionName 1.2.71`، وثبت توقيع Release المحلي بالشهادة المعتمدة.
 - [x] نجحت `testDebugUnitTest` و`lintDebug` و`assembleRelease` تحت JDK 17. تحقق APK الموقّع بـ v2 وبشهادة RSA-4096، وبصمته SHA-256: `bd847aed0fbe31b24224e3b32e786e5935d3cb0f5497423433205679af7c20ab`.
-- [ ] إنشاء إصدار GitHub جديد ورفع APK وملف SHA-256 وتوثيق رابط الإصدار.
+- [x] أُنشئ إصدار GitHub [`v1.2.71`](https://github.com/MustafaMohamedCoder/Apkscan/releases/tag/v1.2.71) المرتبط بالالتزام `12a6ff18175086d06e86d303285ddd2fdf3aeb3a`، ورُفع `masah-hisabat-v1.2.71.apk` وملف `masah-hisabat-v1.2.71.apk.sha256` بنجاح.

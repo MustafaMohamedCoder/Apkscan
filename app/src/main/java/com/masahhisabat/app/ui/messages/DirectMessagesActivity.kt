@@ -62,6 +62,7 @@ class DirectMessagesActivity : AppCompatActivity() {
     private var lastLatencyMs: Long? = null
     private var pendingDiagnosticExport: String? = null
     private val refreshState = LocalContentRefreshState()
+    private val imagePreparationGate = DirectImagePreparationRequestGate()
 
     private val imagePickerLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(::prepareImageForSend)
@@ -229,6 +230,7 @@ class DirectMessagesActivity : AppCompatActivity() {
     override fun onResume() { super.onResume(); if (currentUser.isNotBlank()) { AppRepository.touchPresence(currentUser); refresh() } }
 
     override fun onDestroy() {
+        imagePreparationGate.invalidate()
         refreshState.cancel()
         super.onDestroy()
     }
@@ -499,6 +501,7 @@ class DirectMessagesActivity : AppCompatActivity() {
 
     private fun prepareImageForSend(uri: Uri) {
         if (imagePreparationInProgress) return
+        val request = imagePreparationGate.beginRequest()
         imagePreparationInProgress = true
         attachButton.isEnabled = false
         attachButton.alpha = 0.55f
@@ -513,13 +516,23 @@ class DirectMessagesActivity : AppCompatActivity() {
                         temp.outputStream().use { output -> input.copyTo(output) }
                     } ?: error("تعذر قراءة الصورة")
                     AppRepository.persistAppImage(temp.absolutePath)
-                } catch (e: Exception) {
+                } finally {
+                    // نُسخت الصورة إلى مخزن التطبيق الدائم قبل إرجاع مسارها؛ لا تُبقِ نسخة
+                    // cache غير لازمة بعد نجاح التحضير أو فشله.
                     temp.delete()
-                    throw e
                 }
             }.getOrNull()
+            if (!imagePreparationGate.canDeliver(request)) {
+                // اسم الملف المؤقت فريد لهذا الطلب؛ لا توجد رسالة استطاعت الإشارة إلى الصورة
+                // لأن نتيجة الطلب أُلغيت قبل تسليمها إلى الواجهة.
+                imagePath?.let { File(it).delete() }
+                return@Thread
+            }
             runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (!imagePreparationGate.canDeliver(request) || isFinishing || isDestroyed) {
+                    imagePath?.let { File(it).delete() }
+                    return@runOnUiThread
+                }
                 imagePreparationInProgress = false
                 attachButton.isEnabled = true
                 attachButton.alpha = 1f

@@ -21,6 +21,16 @@ object HomeOverviewTextPolicy {
         else -> "$count إشعارًا جديدًا"
     }
 
+    fun messagesCardDescription(rawCount: Int): String {
+        val count = rawCount.coerceAtLeast(0)
+        val status = if (count == 0) {
+            "لا توجد رسائل محفوظة بعد. ${messagesSummary(count)}"
+        } else {
+            messagesSummary(count)
+        }
+        return "المراسلات. $status. فتح المراسلات"
+    }
+
     fun groupsCardDescription(rawCount: Int): String = "${groupsSummary(rawCount)}. فتح قائمة المجموعات"
 
     fun invoicesCardDescription(rawCount: Int): String = "${invoicesSummary(rawCount)}. فتح صندوق الوارد"

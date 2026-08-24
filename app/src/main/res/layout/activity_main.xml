@@ -53,7 +53,7 @@
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="24dp"
         android:layout_marginBottom="132dp"
-        android:contentDescription="فتح المراسلات"
+        android:contentDescription="@string/direct_open_messages"
         android:elevation="14dp"
         app:backgroundTint="@color/accent"
         app:srcCompat="@drawable/ic_chat_bubble"

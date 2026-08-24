@@ -258,6 +258,7 @@
     <!-- Direct messages -->
     <string name="direct_messages_title">رسائل المستخدمين</string>
     <string name="direct_messages_list_title">المراسلات</string>
+    <string name="direct_open_messages">فتح المراسلات</string>
     <string name="direct_messages_list_subtitle">اختر مستخدمًا لبدء محادثة محلية. النقطة الخضراء تعني أنه متصل الآن.</string>
     <string name="direct_select_conversation">اختر محادثة</string>
     <string name="direct_checking_presence">جارٍ فحص الحضور…</string>

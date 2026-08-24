@@ -27,4 +27,16 @@ class HomeOverviewTextPolicyTest {
         assertEquals("إشعاران جديدان", HomeOverviewTextPolicy.notificationsSummary(2))
         assertEquals("12 إشعارًا جديدًا", HomeOverviewTextPolicy.notificationsSummary(12))
     }
+
+    @Test
+    fun `يوضح وصف بطاقة المراسلات الإجراء وحالة الفراغ أو العدد`() {
+        assertEquals(
+            "المراسلات. لا توجد رسائل محفوظة بعد. إرسال نصوص وصور. فتح المراسلات",
+            HomeOverviewTextPolicy.messagesCardDescription(0)
+        )
+        assertEquals(
+            "المراسلات. 3 رسائل محفوظة. فتح المراسلات",
+            HomeOverviewTextPolicy.messagesCardDescription(3)
+        )
+    }
 }

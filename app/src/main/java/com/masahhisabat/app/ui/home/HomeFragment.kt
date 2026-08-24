@@ -136,6 +136,9 @@ class HomeFragment : Fragment() {
             setTextColor(ThemeHelper.chipTextColor(context))
             backgroundTintList = ColorStateList.valueOf(ThemeHelper.chipBgColor(context))
         }
+        listOf(R.id.notifications_open_affordance, R.id.direct_messages_open_affordance).forEach { id ->
+            view.findViewById<android.widget.ImageView>(id).setColorFilter(textSecondary)
+        }
     }
 
     private fun refresh(force: Boolean = false) {
@@ -159,7 +162,8 @@ class HomeFragment : Fragment() {
             root.findViewById<View>(R.id.card_invoices).contentDescription =
                 HomeOverviewTextPolicy.invoicesCardDescription(totalInvoices)
             root.findViewById<View>(R.id.notifications_card).contentDescription = "$notificationsSummary. فتح الإشعارات"
-            root.findViewById<View>(R.id.direct_messages_card).contentDescription = "$messagesSummary. فتح المراسلات"
+            root.findViewById<View>(R.id.direct_messages_card).contentDescription =
+                HomeOverviewTextPolicy.messagesCardDescription(storedMessages)
             val workflow = AppRepository.invoiceWorkItems(includePaid = false)
             val newCount = workflow.count { (_, item) -> item.status == InvoiceWorkflow.NEW }
             val reviewCount = workflow.count { (_, item) -> item.status == InvoiceWorkflow.IN_REVIEW }

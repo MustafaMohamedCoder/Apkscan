@@ -191,9 +191,15 @@ class SettingsFragment : Fragment() {
         val toggle = row.findViewById<MaterialSwitch>(R.id.switch_auto_trash_purge)
         toggle.setOnCheckedChangeListener(null)
         toggle.isChecked = AppRepository.isAutoTrashPurgeEnabled()
+        updateToggleAccessibility(
+            row, toggle, R.string.auto_trash_purge, R.string.auto_trash_purge_summary, toggle.isChecked
+        )
         toggle.setOnCheckedChangeListener { _, enabled ->
             AppRepository.setAutoTrashPurgeEnabled(enabled)
             TrashCleanupScheduler.update(context)
+            updateToggleAccessibility(
+                row, toggle, R.string.auto_trash_purge, R.string.auto_trash_purge_summary, enabled
+            )
             if (enabled) {
                 Thread { try { AppRepository.purgeExpiredTrash() } catch (_: Exception) { } }.start()
             }
@@ -214,9 +220,15 @@ class SettingsFragment : Fragment() {
         val toggle = row.findViewById<MaterialSwitch>(R.id.switch_invoice_reminders)
         toggle.setOnCheckedChangeListener(null)
         toggle.isChecked = AppRepository.areInvoiceRemindersEnabled()
+        updateToggleAccessibility(
+            row, toggle, R.string.invoice_alerts, R.string.invoice_alerts_summary, toggle.isChecked
+        )
         toggle.setOnCheckedChangeListener { _, enabled ->
             AppRepository.setInvoiceRemindersEnabled(enabled)
             InvoiceReminderScheduler.update(context)
+            updateToggleAccessibility(
+                row, toggle, R.string.invoice_alerts, R.string.invoice_alerts_summary, enabled
+            )
             val text = if (enabled) "تم تفعيل تنبيهات الفواتير المحلية" else "تم إيقاف تنبيهات الفواتير المحلية"
             Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
         }
@@ -230,8 +242,14 @@ class SettingsFragment : Fragment() {
         val ringtoneSwitch = ringtoneRow.findViewById<MaterialSwitch>(R.id.switch_call_ringtone)
         ringtoneSwitch.setOnCheckedChangeListener(null)
         ringtoneSwitch.isChecked = AppRepository.isCallRingtoneEnabled()
+        updateToggleAccessibility(
+            ringtoneRow, ringtoneSwitch, R.string.call_ringtones, R.string.call_ringtones_summary, ringtoneSwitch.isChecked
+        )
         ringtoneSwitch.setOnCheckedChangeListener { _, enabled ->
             AppRepository.setCallRingtoneEnabled(enabled)
+            updateToggleAccessibility(
+                ringtoneRow, ringtoneSwitch, R.string.call_ringtones, R.string.call_ringtones_summary, enabled
+            )
             Toast.makeText(context, if (enabled) "تم تفعيل نغمات المكالمات" else "تم إيقاف نغمات المكالمات", Toast.LENGTH_SHORT).show()
         }
         ringtoneRow.setOnClickListener { ringtoneSwitch.performClick() }
@@ -240,8 +258,14 @@ class SettingsFragment : Fragment() {
         val vibrationSwitch = vibrationRow.findViewById<MaterialSwitch>(R.id.switch_call_vibration)
         vibrationSwitch.setOnCheckedChangeListener(null)
         vibrationSwitch.isChecked = AppRepository.isCallVibrationEnabled()
+        updateToggleAccessibility(
+            vibrationRow, vibrationSwitch, R.string.call_vibration, R.string.call_vibration_summary, vibrationSwitch.isChecked
+        )
         vibrationSwitch.setOnCheckedChangeListener { _, enabled ->
             AppRepository.setCallVibrationEnabled(enabled)
+            updateToggleAccessibility(
+                vibrationRow, vibrationSwitch, R.string.call_vibration, R.string.call_vibration_summary, enabled
+            )
             Toast.makeText(context, if (enabled) "تم تفعيل اهتزاز المكالمات" else "تم إيقاف اهتزاز المكالمات", Toast.LENGTH_SHORT).show()
         }
         vibrationRow.setOnClickListener { vibrationSwitch.performClick() }
@@ -254,8 +278,14 @@ class SettingsFragment : Fragment() {
             val toggle = row.findViewById<MaterialSwitch>(R.id.switch_call_ice_failure_alert)
             toggle.setOnCheckedChangeListener(null)
             toggle.isChecked = AppRepository.isIceFailureAlertEnabled()
+            updateToggleAccessibility(
+                row, toggle, R.string.repeated_connection_issue_alert, R.string.repeated_connection_issue_summary, toggle.isChecked
+            )
             toggle.setOnCheckedChangeListener { _, enabled ->
                 AppRepository.setIceFailureAlertEnabled(enabled)
+                updateToggleAccessibility(
+                    row, toggle, R.string.repeated_connection_issue_alert, R.string.repeated_connection_issue_summary, enabled
+                )
                 val message = if (enabled) {
                     "تم تفعيل تنبيه تكرار تعذر الاتصال"
                 } else {
@@ -265,6 +295,22 @@ class SettingsFragment : Fragment() {
             }
             row.setOnClickListener { toggle.performClick() }
         }
+    }
+
+    private fun updateToggleAccessibility(
+        row: View,
+        toggle: MaterialSwitch,
+        titleRes: Int,
+        summaryRes: Int,
+        isEnabled: Boolean,
+    ) {
+        val description = SettingsToggleAccessibilityPolicy.describe(
+            title = getString(titleRes),
+            summary = getString(summaryRes),
+            isEnabled = isEnabled,
+        )
+        row.contentDescription = description
+        toggle.contentDescription = description
     }
 
     private fun callRingtoneTitle(): String {

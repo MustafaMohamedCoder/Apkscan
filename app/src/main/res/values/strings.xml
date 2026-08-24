@@ -171,6 +171,9 @@
     <string name="groups_empty_search_and_filter">لا توجد نتائج تطابق البحث والتصفية الحالية. جرّب تغيير أحدهما.</string>
     <string name="groups_empty_search_result">لا توجد فاتورة تطابق «%1$s». جرّب كلمة أخرى.</string>
     <string name="groups_empty_filter_result">لا توجد فواتير ضمن التصفية الحالية. جرّب تصفية أخرى.</string>
+    <string name="group_open_indicator">فتح الفاتورة</string>
+    <string name="group_pin_indicator">فاتورة مثبتة</string>
+    <string name="group_more_actions">إجراءات الفاتورة</string>
     <string name="no_invoices">لا توجد فواتير أو طلبات لهذه الفاتورة</string>
     <string name="add_text">إضافة نص</string>
     <string name="manual_text">نص يدوي</string>

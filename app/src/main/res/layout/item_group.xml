@@ -66,9 +66,9 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:layout_marginStart="6dp"
-                    android:src="@drawable/ic_pin"
-                    android:visibility="gone"
-                android:contentDescription="فاتورة مثبتة" />
+                android:src="@drawable/ic_pin"
+                android:visibility="gone"
+                android:contentDescription="@string/group_pin_indicator" />
                 <TextView
                     android:id="@+id/group_date"
                     android:layout_width="wrap_content"
@@ -112,6 +112,16 @@
         </LinearLayout>
 
         <ImageView
+            android:id="@+id/group_open_indicator"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="4dp"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_arrow_back"
+            app:tint="?attr/colorOnSurfaceVariant" />
+
+        <ImageView
             android:id="@+id/group_more"
             android:layout_width="38dp"
             android:layout_height="38dp"
@@ -121,6 +131,6 @@
             android:clickable="true"
             android:focusable="true"
             android:foreground="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="إجراءات الفاتورة" />
+            android:contentDescription="@string/group_more_actions" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

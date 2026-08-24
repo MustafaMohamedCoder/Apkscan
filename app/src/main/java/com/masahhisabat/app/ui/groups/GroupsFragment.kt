@@ -404,7 +404,9 @@ class GroupsFragment : Fragment() {
                 empty?.text = emptyStateText(emptyState.message, query)
                 empty?.isEnabled = emptyState.canCreate
                 empty?.isClickable = emptyState.canCreate
-                empty?.isFocusable = emptyState.canCreate
+                // تبقى حالة الفراغ قابلة للتركيز حتى يقرأها TalkBack، حتى إن لم يكن إنشاء فاتورة متاحًا.
+                empty?.isFocusable = true
+                empty?.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
                 empty?.visibility = View.VISIBLE
                 recycler.visibility = View.GONE
             } else {
@@ -706,7 +708,14 @@ class GroupsFragment : Fragment() {
             holder.more.setColorFilter(textSec)
             holder.pin.visibility = if (row.isPinned) View.VISIBLE else View.GONE
             holder.pin.setColorFilter(ThemeHelper.accent(ctx))
-            holder.itemView.contentDescription = "فتح أرشيف الفاتورة ${g.name}"
+            holder.itemView.contentDescription = GroupCardAccessibilityPolicy.description(
+                groupName = g.name,
+                documentCount = snapshot.documentCount,
+                openOrders = snapshot.openOrders,
+                unpaidInvoices = snapshot.unpaidInvoices,
+                isPinned = row.isPinned,
+                isArchived = g.archivedAt != null
+            )
             holder.more.contentDescription = "إجراءات الفاتورة ${g.name}"
 
             // النقر على البطاقة (أو الاسم) يفتح المجموعة

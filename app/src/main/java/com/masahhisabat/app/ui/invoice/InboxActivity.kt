@@ -68,6 +68,7 @@ class InboxActivity : AppCompatActivity() {
         val items = AppRepository.invoiceWorkItems().filter { (_, item) -> item.status == selectedStatus }
         binding.empty.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
         binding.list.visibility = if (items.isEmpty()) View.GONE else View.VISIBLE
+        binding.empty.text = InvoiceCardAccessibilityPolicy.emptyMessage(InvoiceWorkflow.label(selectedStatus))
         binding.summary.text = when (selectedStatus) {
             InvoiceWorkflow.NEW -> "${items.size} فواتير جديدة بانتظار الفرز أو المراجعة"
             InvoiceWorkflow.IN_REVIEW -> "${items.size} فواتير تحتاج قرارًا أو متابعة"
@@ -174,11 +175,22 @@ class InboxActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: Holder, position: Int) {
             val (group, item) = rows[position]
             val context = holder.itemView.context
-            holder.binding.title.text = item.storeName ?: item.text ?: "فاتورة بدون عنوان"
+            val title = item.storeName ?: item.text ?: "فاتورة بدون عنوان"
+            holder.binding.title.text = title
             val date = item.date ?: SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(item.createdAt))
-            val total = item.total?.let { " • $it ${item.currency ?: ""}" } ?: ""
+            val totalLabel = item.total?.let { "$it ${item.currency.orEmpty()}".trim() }
+            val total = totalLabel?.let { " • $it" }.orEmpty()
+            val statusLabel = InvoiceWorkflow.label(item.status)
             holder.binding.detail.text = "${group.name} • $date$total"
-            holder.binding.status.text = InvoiceWorkflow.label(item.status)
+            holder.binding.status.text = statusLabel
+            holder.binding.root.contentDescription = InvoiceCardAccessibilityPolicy.cardDescription(
+                invoiceTitle = title,
+                groupName = group.name,
+                date = date,
+                total = totalLabel,
+                statusLabel = statusLabel
+            )
+            holder.binding.status.contentDescription = InvoiceCardAccessibilityPolicy.statusDescription(title, statusLabel)
             holder.binding.status.backgroundTintList = ColorStateList.valueOf(ThemeHelper.surfaceHigh(context))
             holder.binding.status.setTextColor(ThemeHelper.accent(context))
             holder.binding.root.setOnClickListener { onOpen(group) }
